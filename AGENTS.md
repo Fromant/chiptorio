@@ -7,7 +7,7 @@ Factorio 2.1 total-conversion mod (Lua, no Space Age, Nauvis only). `DESIGN.md` 
 - There is no build, lint, typecheck, or test-runner step. Verification is headless Factorio:
   - `powershell -ExecutionPolicy Bypass -File tools\test-mod.ps1` copies the mod to `%TEMP%\chipotrio-test`, loads the data stage, creates a map, runs 600 ticks, and scans `%APPDATA%\Factorio\factorio-current.log`.
   - `powershell -ExecutionPolicy Bypass -File tools\test-gate.ps1` runs the throughput-gate regression. Its `-Ticks` value must be a multiple of 60.
-- Both scripts default to the Windows Steam Factorio path; pass `-Factorio <path>` when installed elsewhere. Use `-Keep` to inspect the temporary save and log.
+- Both scripts resolve Factorio from `-Factorio`, `FACTORIO_EXE`, a repository-root `.env`, then auto-detected Steam/common install paths. Keep path logic in `tools/common.ps1`; do not hardcode a local install. `.env` is gitignored and `.env.example` is the tracked template. Use `-Keep` to inspect the temporary save and log.
 - `test-gate.ps1` hard-codes the technologies needed to start `photolithography`; update that seed list when changing its prerequisites. If you intentionally change gate-decay behavior, update both the assertion and the docs.
 
 ## Load-stage rules

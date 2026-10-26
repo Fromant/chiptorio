@@ -75,12 +75,14 @@ powershell -ExecutionPolicy Bypass -File tools\test-mod.ps1
 powershell -ExecutionPolicy Bypass -File tools\test-gate.ps1
 ```
 
-Both scripts default to the Windows Steam install. Pass `-Factorio` if your copy lives elsewhere:
+Both scripts resolve the Factorio executable automatically:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\test-mod.ps1 `
-  -Factorio "D:\SteamLibrary\steamapps\common\Factorio\bin\x64\factorio.exe"
-```
+1. `-Factorio <path>` if provided
+2. the `FACTORIO_EXE` environment variable
+3. `FACTORIO_EXE` in a repository-root `.env` file
+4. common Steam library and install locations
+
+If automatic detection fails, copy `.env.example` to `.env` and set its `FACTORIO_EXE` value. The `.env` file is gitignored, so it can stay machine-specific.
 
 `test-gate.ps1` requires `-Ticks` to be a multiple of 60. Both scripts support `-Keep` to retain the temporary save for inspection.
 
@@ -102,7 +104,8 @@ data.lua / data-updates.lua   prototype stages
 control.lua                   runtime entry point and tick dispatcher
 scripts/                      data-stage and runtime modules
 graphics/, sound/             generated assets
-tools/                        headless tests and asset generators
+tools/                        headless tests, path resolution, asset generators
+.env.example                  template for local Factorio path overrides
 ```
 
 More detail, including the 2.1 API pitfalls and module map, is in DESIGN §8. [`AGENTS.md`](AGENTS.md) contains the conventions for coding agents working in this repository, and [`changelog.txt`](changelog.txt) tracks releases.

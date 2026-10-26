@@ -10,20 +10,27 @@
   This is the fastest way to catch prototype and control-stage mistakes without
   clicking through the menu.
 
+  The Factorio executable is resolved from -Factorio, the FACTORIO_EXE
+  environment variable, .env, or common Steam install locations.
+
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File tools\test-mod.ps1
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File tools\test-mod.ps1 -Keep -Ticks 1200
+
+.EXAMPLE
+  powershell -ExecutionPolicy Bypass -File tools\test-mod.ps1 -Factorio "D:\Games\Factorio\bin\x64\factorio.exe"
 #>
 
 param(
-  [string]$Factorio = "C:\Program Files (X86)\Steam\steamapps\common\Factorio\bin\x64\factorio.exe",
+  [string]$Factorio,
   [int]$Ticks = 600,
   [switch]$Keep
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "common.ps1")
 
 $root = Split-Path -Parent $PSScriptRoot
 $work = Join-Path $env:TEMP "chipotrio-test"
@@ -38,13 +45,14 @@ foreach ($required in @("info.json", "data.lua", "data-updates.lua", "control.lu
   }
 }
 
+$Factorio = Resolve-FactorioExecutable -Factorio $Factorio
+Write-Host "Factorio: $Factorio"
+
 if (Test-Path $work) { Remove-Item $work -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $mods | Out-Null
 
 robocopy $root $dest /E /XD .git tools dist /NFL /NDL /NJH /NJS | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed with code $LASTEXITCODE" }
-
-if (-not (Test-Path $Factorio)) { throw "factorio.exe not found at $Factorio" }
 
 function Get-LogProblems {
   param([string]$LogPath)

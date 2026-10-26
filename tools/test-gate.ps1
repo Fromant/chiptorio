@@ -9,20 +9,27 @@
   2%-per-minute decay. The script asserts that slope, so a change from
   "0.02 per minute" to "0.02 per second" cannot slip through again.
 
+  The Factorio executable is resolved from -Factorio, the FACTORIO_EXE
+  environment variable, .env, or common Steam install locations.
+
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File tools\test-gate.ps1
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File tools\test-gate.ps1 -Ticks 600 -Keep
+
+.EXAMPLE
+  powershell -ExecutionPolicy Bypass -File tools\test-gate.ps1 -Factorio "D:\Games\Factorio\bin\x64\factorio.exe"
 #>
 
 param(
-  [string]$Factorio = "C:\Program Files (X86)\Steam\steamapps\common\Factorio\bin\x64\factorio.exe",
+  [string]$Factorio,
   [int]$Ticks = 300,
   [switch]$Keep
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "common.ps1")
 
 $root = Split-Path -Parent $PSScriptRoot
 $work = Join-Path $env:TEMP "chipotrio-gate-test"
@@ -35,7 +42,9 @@ $logPath = Join-Path $env:APPDATA "Factorio\factorio-current.log"
 if ($Ticks -lt 60 -or ($Ticks % 60) -ne 0) {
   throw "Ticks must be a positive multiple of 60"
 }
-if (-not (Test-Path $Factorio)) { throw "factorio.exe not found at $Factorio" }
+
+$Factorio = Resolve-FactorioExecutable -Factorio $Factorio
+Write-Host "Factorio: $Factorio"
 
 if (Test-Path $work) { Remove-Item $work -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $mods | Out-Null
