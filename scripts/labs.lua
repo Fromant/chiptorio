@@ -109,8 +109,8 @@ make_lab({
 })
 
 make_lab({
-  name = "datacenter",
-  order = "d[datacenter]",
+  name = "datacenter-lab",
+  order = "d[datacenter-lab]",
   speed = 2.5,
   power = "1.5MW",
   modules = 6,
@@ -136,7 +136,7 @@ make_lab({
   enabled = false,
   tint = { r = 0.55, g = 0.80, b = 1.0 },
   ingredients = {
-    M.item("datacenter", 1),
+    M.item("datacenter-lab", 1),
     M.item("cooling-unit", 8),
     M.item("superconductor", 8),
     M.item("steel-plate", 40),
@@ -150,12 +150,15 @@ make_lab({
 -- researched. This is the same anti-deadlock rule as for the vanilla packs:
 -- the Cryostat is faster and more module-hungry, not the only machine that
 -- accepts a given input.
+--
+-- `microprocessor` is a module prototype, so the existence check must look in
+-- `data.raw.module` too; a plain `data.raw.item` lookup would reject it.
 local EXTRA_INPUTS = {
   "quantum-science-pack",
   "microprocessor",
 }
 for _, extra in ipairs(EXTRA_INPUTS) do
-  if not data.raw.item[extra] then
+  if not M.item_exists(extra) then
     error("chiptorio: lab input item '" .. extra .. "' is missing")
   end
 end
@@ -164,7 +167,7 @@ for _, name in ipairs({
   "analytical-engine",
   "tube-mainframe",
   "mainframe-cluster",
-  "datacenter",
+  "datacenter-lab",
   "cryostat",
 }) do
   local lab = data.raw.lab[name]

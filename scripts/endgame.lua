@@ -48,7 +48,7 @@ local ingredient_names = {
   "steel-plate",
 }
 for _, name in ipairs(ingredient_names) do
-  if not data.raw.item[name] then
+  if not M.item_exists(name) then
     error("chiptorio: answer-engine ingredient '" .. name .. "' is missing")
   end
 end
@@ -105,7 +105,7 @@ item.hidden_in_factoriopedia = false
 M.set_icon(item, "answer-engine")
 data:extend({ item })
 
--- Built in a Server Rack from every previous era. The ingredient list is
+-- Built in an Assembly Fab from every previous era. The ingredient list is
 -- deliberately broad: one of every major tier of the factory.
 M.recipe({
   name = "answer-engine",

@@ -11,6 +11,7 @@
 -- script.on_event themselves or one module silently replaces another.
 
 local graph_builder = require("scripts.runtime.network_graph")
+local meta = require("scripts.research_meta")
 
 local M = {}
 
@@ -23,19 +24,40 @@ local SWITCH = "network-switch"
 local ROUTER = "network-router"
 local MONITOR = "network-monitor"
 
-local NETWORK_NAMES = { CABLE, SWITCH, ROUTER, MONITOR }
+local PROVIDER_NAMES = { "server-rack", "memory-bank", "datacenter" }
 
--- Which graph role an entity has. Everything else a future phase registers
--- (server racks, datacenters, memory banks, labs) is an ordinary device.
+local LAB_NAMES = {}
+for name in pairs(meta.LAB_DEMAND) do
+  LAB_NAMES[#LAB_NAMES + 1] = name
+end
+table.sort(LAB_NAMES)
+
+local NETWORK_NAMES = { CABLE, SWITCH, ROUTER, MONITOR }
+for _, name in ipairs(PROVIDER_NAMES) do
+  NETWORK_NAMES[#NETWORK_NAMES + 1] = name
+end
+for _, name in ipairs(LAB_NAMES) do
+  NETWORK_NAMES[#NETWORK_NAMES + 1] = name
+end
+
+-- Which graph role an entity has. A provider contributes compute, memory and
+-- bandwidth; a lab is a client that consumes compute. Everything else is
+-- wiring.
 local NETWORK_KINDS = {
   [CABLE] = "cable",
   [SWITCH] = "switch",
   [ROUTER] = "router",
   [MONITOR] = "monitor",
 }
+for _, name in ipairs(PROVIDER_NAMES) do
+  NETWORK_KINDS[name] = "provider"
+end
+for _, name in ipairs(LAB_NAMES) do
+  NETWORK_KINDS[name] = "lab"
+end
 
--- Capacity a prototype contributes to its subnet. Phase 1 only has wiring, so
--- these are the wiring numbers; Phase 2 adds compute, memory and demand.
+-- Capacity a prototype contributes to its subnet. Providers are built from
+-- their module inventory in provider_descriptor() instead of a static profile.
 local PROFILES = {
   [SWITCH] = { bandwidth = 100 },
   [ROUTER] = { bandwidth = 250 },
@@ -74,6 +96,7 @@ local function init_storage()
   network.overlay = network.overlay or false
   network.render_ids = network.render_ids or {}
   network.monitors = network.monitors or {}
+  network.module_signatures = network.module_signatures or {}
 end
 
 local function track(entity)
@@ -100,10 +123,110 @@ local function scan_surface(surface)
   return graph or empty_graph()
 end
 
+local COMPUTE_KINDS = { "scalar", "vector", "tensor", "quantum" }
+local POWER_FIELDS = { "power", "heat", "cooling" }
+
+local function new_device(entity, kind)
+  return {
+    id = entity.unit_number,
+    kind = kind,
+    name = entity.name,
+    force_index = entity.force and entity.force.index or nil,
+    x = entity.position.x,
+    y = entity.position.y,
+    compute = 0,
+    scalar = 0,
+    vector = 0,
+    tensor = 0,
+    quantum = 0,
+    memory = 0,
+    bandwidth = 0,
+    power = 0,
+    heat = 0,
+    cooling = 0,
+    demand_compute = 0,
+    demand_memory = 0,
+    demand_bandwidth = 0,
+    entity = entity,
+  }
+end
+
+local function add_profile(device, profile, count)
+  for _, field in ipairs(COMPUTE_KINDS) do
+    local value = (profile[field] or 0) * count
+    device[field] = device[field] + value
+    device.compute = device.compute + value
+  end
+  device.memory = device.memory + (profile.capacity or 0) * count
+  device.bandwidth = device.bandwidth + (profile.bandwidth or 0) * count
+  for _, field in ipairs(POWER_FIELDS) do
+    device[field] = device[field] + (profile[field] or 0) * count
+  end
+end
+
+--- Read a provider's module inventory and turn it into capacities. Only the
+--- first `chip_slots` chips and `memory_slots` memory modules count; extra
+--- modules are stored but ignored, so the physical slot count is the limit.
+local function provider_descriptor(entity)
+  local profile = meta.PROVIDERS[entity.name]
+  if not profile then
+    return nil
+  end
+
+  local device = new_device(entity, "provider")
+  device.bandwidth = profile.bandwidth or 0
+  device.power = profile.power or 0
+  device.heat = profile.heat or 0
+  device.cooling = profile.cooling or 0
+  device.chip_slots = profile.chip_slots or 0
+  device.memory_slots = profile.memory_slots or 0
+  device.chips = 0
+  device.memory_modules = 0
+
+  local inventory = entity.get_module_inventory()
+  if not inventory then
+    return device
+  end
+
+  for _, item in ipairs(inventory.get_contents()) do
+    local chip = meta.CHIP_PROFILES[item.name]
+    local memory = meta.MEMORY_PROFILES[item.name]
+    if chip and device.chips < device.chip_slots then
+      local count = item.count
+      if count > device.chip_slots - device.chips then
+        count = device.chip_slots - device.chips
+      end
+      device.chips = device.chips + count
+      add_profile(device, chip, count)
+    elseif memory and device.memory_modules < device.memory_slots then
+      local count = item.count
+      if count > device.memory_slots - device.memory_modules then
+        count = device.memory_slots - device.memory_modules
+      end
+      device.memory_modules = device.memory_modules + count
+      add_profile(device, memory, count)
+    end
+  end
+
+  return device
+end
+
+local function lab_descriptor(entity)
+  local base = meta.LAB_DEMAND[entity.name]
+  if not base then
+    return nil
+  end
+  local device = new_device(entity, "lab")
+  device.demand_compute = base
+  device.base_demand = base
+  return device
+end
+
 local function rebuild_surface(surface)
   local chunks = storage.network.chunks[surface.index]
   local cables = {}
   local devices = {}
+  local seen = {}
 
   if chunks then
     for _, chunk in pairs(chunks) do
@@ -112,26 +235,26 @@ local function rebuild_surface(surface)
         { (chunk.cx + 1) * CHUNK, (chunk.cy + 1) * CHUNK },
       }
       for _, entity in ipairs(surface.find_entities_filtered({ area = area, name = NETWORK_NAMES })) do
-        if entity.valid and NETWORK_KINDS[entity.name] then
+        if entity.valid and NETWORK_KINDS[entity.name] and not seen[entity.unit_number] then
+          seen[entity.unit_number] = true
           if entity.name == CABLE then
             cables[#cables + 1] = { x = entity.position.x, y = entity.position.y }
           else
-            local profile = PROFILES[entity.name] or {}
-            devices[#devices + 1] = {
-              id = entity.unit_number,
-              kind = NETWORK_KINDS[entity.name],
-              x = entity.position.x,
-              y = entity.position.y,
-              compute = profile.compute,
-              memory = profile.memory,
-              bandwidth = profile.bandwidth,
-              power = profile.power,
-              heat = profile.heat,
-              cooling = profile.cooling,
-              demand_compute = profile.demand_compute,
-              demand_memory = profile.demand_memory,
-              demand_bandwidth = profile.demand_bandwidth,
-            }
+            local kind = NETWORK_KINDS[entity.name]
+            local device
+            if kind == "provider" then
+              device = provider_descriptor(entity)
+            elseif kind == "lab" then
+              device = lab_descriptor(entity)
+            else
+              local profile = PROFILES[entity.name] or {}
+              device = new_device(entity, kind)
+              device.bandwidth = profile.bandwidth or 0
+              device.power = profile.power or 0
+            end
+            if device then
+              devices[#devices + 1] = device
+            end
           end
         end
       end
@@ -139,6 +262,28 @@ local function rebuild_surface(surface)
   end
 
   return graph_builder.build({ cables = cables, devices = devices })
+end
+
+--- Stable signature of every provider's module contents. Modules can change
+--- without an event (inserters, manual transfer), so the tick polls this instead
+--- of listening to every inventory event. Only a change marks the graph dirty.
+local function provider_signature(surface)
+  local parts = {}
+  for _, entity in ipairs(surface.find_entities_filtered({ name = PROVIDER_NAMES })) do
+    if entity.valid then
+      local inventory = entity.get_module_inventory()
+      local contents = {}
+      if inventory then
+        for _, item in ipairs(inventory.get_contents()) do
+          contents[#contents + 1] = item.name .. "=" .. item.count
+        end
+      end
+      table.sort(contents)
+      parts[#parts + 1] = tostring(entity.unit_number) .. ":" .. table.concat(contents, ",")
+    end
+  end
+  table.sort(parts)
+  return table.concat(parts, "|")
 end
 
 local function clear_overlay()
@@ -260,14 +405,55 @@ end
 local function rebuild_all()
   init_storage()
   local graphs = {}
+  local signatures = {}
   for index, _ in pairs(storage.network.chunks) do
     local surface = game.get_surface(index)
     if surface and surface.valid then
       graphs[index] = rebuild_surface(surface)
+      signatures[index] = provider_signature(surface)
     end
   end
   storage.network.graphs = graphs
+  storage.network.module_signatures = signatures
   storage.network.dirty = false
+end
+
+--- Poll provider module contents. Returns true when anything changed.
+function M.poll_modules()
+  init_storage()
+  local changed = false
+  local signatures = {}
+  for index in pairs(storage.network.chunks) do
+    local surface = game.get_surface(index)
+    if surface and surface.valid then
+      local signature = provider_signature(surface)
+      signatures[index] = signature
+      if storage.network.module_signatures[index] ~= signature then
+        changed = true
+      end
+    end
+  end
+  storage.network.module_signatures = signatures
+  if changed then
+    storage.network.dirty = true
+  end
+  return changed
+end
+
+--- Cached graphs, keyed by surface index. Read-only for other runtime modules.
+--- Rebuilds first if the topology or a module inventory changed, so a remote
+--- debug call sees the same graph the next tick would.
+function M.graphs()
+  init_storage()
+  -- Module inventories change without an event; polling here means a remote
+  -- debug call (and the research tick) sees the current chips, not last
+  -- second's.
+  M.poll_modules()
+  if storage.network.dirty then
+    rebuild_all()
+    draw_overlay()
+  end
+  return storage.network.graphs
 end
 
 function M.init_storage()
@@ -322,6 +508,7 @@ end
 --- The 60-tick job. Rebuilds at most once per second, never per entity.
 function M.tick()
   init_storage()
+  M.poll_modules()
   if storage.network.dirty then
     rebuild_all()
     draw_overlay()
@@ -439,9 +626,26 @@ local function rebuild_monitor(player)
     })
     title.style.font = "default-bold"
     add_stat(body, { "chiptorio.network-compute" }, format_number(network.compute))
+    if network.scalar > 0 then
+      add_stat(body, { "chiptorio.network-scalar" }, format_number(network.scalar))
+    end
+    if network.vector > 0 then
+      add_stat(body, { "chiptorio.network-vector" }, format_number(network.vector))
+    end
+    if network.tensor > 0 then
+      add_stat(body, { "chiptorio.network-tensor" }, format_number(network.tensor))
+    end
+    if network.quantum > 0 then
+      add_stat(body, { "chiptorio.network-quantum" }, format_number(network.quantum))
+    end
     add_stat(body, { "chiptorio.network-memory" }, format_number(network.memory))
     add_stat(body, { "chiptorio.network-bandwidth" }, format_number(network.bandwidth))
     add_stat(body, { "chiptorio.network-latency" }, format_number(network.latency))
+    add_stat(
+      body,
+      { "chiptorio.network-devices" },
+      tostring(#(network.providers or {})) .. " / " .. tostring(#(network.labs or {}))
+    )
 
     for index, subnet in ipairs(network.subnets) do
       if index > MAX_MONITOR_SUBNETS then
@@ -568,13 +772,32 @@ function M.summary(surface_index)
     return nil
   end
   local graph = M.graph_for(surface)
-  return {
+  local summary = {
     cable_count = graph.cable_count,
     subnets = #graph.subnets,
     networks = #graph.networks,
     unconnected = #graph.unconnected,
     contested = #graph.contested,
+    compute = 0,
+    scalar = 0,
+    vector = 0,
+    quantum = 0,
+    memory = 0,
+    bandwidth = 0,
+    labs = 0,
+    providers = 0,
   }
+  for _, network in ipairs(graph.networks) do
+    summary.compute = summary.compute + network.compute
+    summary.scalar = summary.scalar + network.scalar
+    summary.vector = summary.vector + network.vector
+    summary.quantum = summary.quantum + network.quantum
+    summary.memory = summary.memory + network.memory
+    summary.bandwidth = summary.bandwidth + network.bandwidth
+    summary.labs = summary.labs + #(network.labs or {})
+    summary.providers = summary.providers + #(network.providers or {})
+  end
+  return summary
 end
 
 --- /c remote.call("chiptorio-network", "status")

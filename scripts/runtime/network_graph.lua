@@ -30,6 +30,10 @@ M.CABLE_BANDWIDTH = 10
 
 local CAPACITY_FIELDS = {
   "compute",
+  "scalar",
+  "vector",
+  "tensor",
+  "quantum",
   "memory",
   "bandwidth",
   "power",
@@ -258,8 +262,10 @@ function M.build(spec)
   local cable_list, cable_at = collect_cables(spec.cables or {})
 
   local positions = {}
+  local device_by_id = {}
   for _, device in ipairs(spec.devices or {}) do
     positions[device.id] = { x = device.x, y = device.y }
+    device_by_id[device.id] = device
   end
 
   local switches = {}
@@ -421,6 +427,8 @@ function M.build(spec)
     network.id = id
     network.subnets = group.subnets
     network.routers = group.routers
+    network.labs = {}
+    network.providers = {}
     table.sort(network.routers)
     network.router_bandwidth = nil
 
@@ -457,6 +465,24 @@ function M.build(spec)
     end
   end
 
+  -- 9. Keep the lab and provider lists per network, so the allocator does not
+  --    have to walk every device on every tick.
+  for _, device in ipairs(spec.devices or {}) do
+    local network_id = device_network[device.id]
+    if network_id then
+      local network = networks[network_id]
+      if device.kind == "lab" then
+        network.labs[#network.labs + 1] = device.id
+      elseif device.kind == "provider" then
+        network.providers[#network.providers + 1] = device.id
+      end
+    end
+  end
+  for _, network in ipairs(networks) do
+    table.sort(network.labs)
+    table.sort(network.providers)
+  end
+
   table.sort(unconnected)
 
   return {
@@ -467,10 +493,19 @@ function M.build(spec)
     device_subnet = device_subnet,
     device_network = device_network,
     positions = positions,
+    devices = device_by_id,
     router_subnets = router_subnets,
     contested = contested,
     unconnected = unconnected,
   }
+end
+
+--- The input descriptor for a device id, or nil.
+function M.device(graph, device_id)
+  if not graph then
+    return nil
+  end
+  return graph.devices[device_id]
 end
 
 --- Subnet id at a tile, or nil.

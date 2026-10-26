@@ -3,8 +3,11 @@
 -- Three machines split the chip process across purpose-built shells:
 --   wafer-fab      fluid-capable cleanroom (cloned from chemical plant)
 --   crystal-puller high-temperature furnace (cloned from electric furnace)
---   server-rack    packaging / compute assembly (cloned from AM3)
+--   assembly-fab   packaging / compute assembly (cloned from AM3)
 --
+-- Compute providers (server rack, memory bank, datacenter) are lab clones and
+-- live in scripts/providers.lua, not here: they hold chips as modules instead
+-- of crafting recipes.
 -- Every machine is a deep copy of a base prototype with only identity, stats,
 -- category and a tint changed. That keeps all 2.1 sprite/fluid-box plumbing
 -- valid without shipping entity art.
@@ -110,7 +113,7 @@ make_machine({
 })
 
 make_machine({
-  name = "server-rack",
+  name = "assembly-fab",
   base_type = "assembling-machine",
   base = "assembling-machine-3",
   category = "chiptorio-compute",
@@ -118,7 +121,7 @@ make_machine({
   power = "420kW",
   modules = 4,
   craft_time = 12,
-  order = "c[server-rack]",
+  order = "c[assembly-fab]",
   tint = { r = 0.55, g = 0.70, b = 0.95 },
   ingredients = {
     M.item("steel-plate", 30),

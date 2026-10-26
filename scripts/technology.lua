@@ -140,7 +140,12 @@ local techs = {
     },
     prerequisites = { "microarchitecture" },
     effects = {
+      -- The internet is also the first compute tier: the packaging machine,
+      -- the first provider and the first memory module all arrive together.
+      "assembly-fab",
       "server-rack",
+      "memory-bank",
+      "sram-module",
       "network-cable",
       "network-switch",
       "network-router",
@@ -157,7 +162,8 @@ local techs = {
       ["production-science-pack"] = 1,
       ["utility-science-pack"] = 1,
     },
-    prerequisites = { "microarchitecture" },
+    -- The first compute-gated technology, so the network must exist first.
+    prerequisites = { "microarchitecture", "internet" },
     effects = {
       "vlsi-fab",
       "cooling-tower",
@@ -183,6 +189,8 @@ local techs = {
     prerequisites = { "vlsi-process" },
     effects = {
       "datacenter",
+      "datacenter-lab",
+      "dram-module",
     },
   },
   {

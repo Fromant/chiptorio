@@ -74,8 +74,28 @@ local LABS = {
   "analytical-engine",
   "tube-mainframe",
   "mainframe-cluster",
-  "datacenter",
+  "datacenter-lab",
   "cryostat",
+}
+
+local PROVIDERS = {
+  "server-rack",
+  "memory-bank",
+  "datacenter",
+}
+
+local COMPUTE_MODULES = {
+  "integrated-circuit",
+  "microprocessor",
+  "system-on-chip",
+  "multi-core-cpu",
+  "gpu",
+  "quantum-processor",
+}
+
+local MEMORY_MODULES = {
+  "sram-module",
+  "dram-module",
 }
 
 local EXPECTED_HIDDEN_ITEMS = {}
@@ -335,6 +355,69 @@ check(
   "missing chiptorio-cable collision layer"
 )
 
+-- Compute chips and memory are modules, not plain items. The research runtime
+-- reads them from a provider's module inventory, so a regression to an item
+-- would silently remove all compute.
+check(data.raw["module-category"]["chiptorio-chip"], "missing chiptorio-chip module category")
+check(data.raw["module-category"]["chiptorio-memory"], "missing chiptorio-memory module category")
+for _, name in ipairs(COMPUTE_MODULES) do
+  local proto = data.raw.module[name]
+  check(proto, "missing compute module " .. name)
+  if proto then
+    check(proto.category == "chiptorio-chip", "compute module " .. name .. " has the wrong category")
+    check(proto.effect and next(proto.effect) == nil, "compute module " .. name .. " must have an empty effect")
+    check(not proto.hidden, "compute module is hidden: " .. name)
+  end
+end
+for _, name in ipairs(MEMORY_MODULES) do
+  local proto = data.raw.module[name]
+  check(proto, "missing memory module " .. name)
+  if proto then
+    check(proto.category == "chiptorio-memory", "memory module " .. name .. " has the wrong category")
+    check(proto.effect and next(proto.effect) == nil, "memory module " .. name .. " must have an empty effect")
+    check(not proto.hidden, "memory module is hidden: " .. name)
+  end
+  local recipe = data.raw.recipe[name]
+  check(recipe, "missing memory module recipe " .. name)
+  check(recipe and recipe.enabled == false, "memory module recipe should start locked: " .. name)
+end
+
+-- Providers are lab clones with no science inputs and a readable module
+-- inventory. A provider that accepts a science pack would become an ordinary
+-- lab and bypass the network.
+for _, name in ipairs(PROVIDERS) do
+  local proto = data.raw.lab[name]
+  check(proto, "missing provider entity " .. name)
+  if proto then
+    check(not proto.hidden, "provider is hidden: " .. name)
+    check(#(proto.inputs or {}) == 0, "provider " .. name .. " must have no science inputs")
+    check((proto.module_slots or 0) > 0, "provider " .. name .. " has no module slots")
+    local categories = {}
+    for _, category in ipairs(proto.allowed_module_categories or {}) do
+      categories[category] = true
+    end
+    check(categories["chiptorio-chip"], "provider " .. name .. " does not accept chips")
+    check(categories["chiptorio-memory"], "provider " .. name .. " does not accept memory modules")
+    check(
+      not (data.raw["assembling-machine"] and data.raw["assembling-machine"][name]),
+      "provider " .. name .. " must not be a crafting machine"
+    )
+  end
+  local item = data.raw.item[name]
+  check(item, "missing provider item " .. name)
+  check(item and item.place_result == name, "provider item " .. name .. " does not place itself")
+  local recipe = data.raw.recipe[name]
+  check(recipe, "missing provider recipe " .. name)
+  check(recipe and recipe.enabled == false, "provider recipe should start locked: " .. name)
+end
+
+check(data.raw.item["assembly-fab"], "missing assembly-fab item")
+check(data.raw.recipe["assembly-fab"], "missing assembly-fab recipe")
+check(
+  data.raw["assembling-machine"] and data.raw["assembling-machine"]["assembly-fab"],
+  "missing assembly-fab entity"
+)
+
 local internet = data.raw.technology["internet"]
 check(internet, "missing internet technology")
 if internet then
@@ -348,7 +431,34 @@ if internet then
   for name in pairs(NETWORK_ENTITIES) do
     check(unlocked[name], "internet does not unlock " .. name)
   end
-  check(unlocked["server-rack"], "internet does not unlock server-rack")
+  check(unlocked["server-rack"], "internet does not unlock the server-rack provider")
+  check(unlocked["memory-bank"], "internet does not unlock the memory bank")
+  check(unlocked["sram-module"], "internet does not unlock SRAM")
+  check(unlocked["assembly-fab"], "internet does not unlock the assembly fab")
+end
+
+local datacenter_tech = data.raw.technology["datacenter"]
+check(datacenter_tech, "missing datacenter technology")
+if datacenter_tech then
+  local unlocked = {}
+  for _, effect in ipairs(datacenter_tech.effects or {}) do
+    if effect.type == "unlock-recipe" then
+      unlocked[effect.recipe] = true
+    end
+  end
+  check(unlocked["datacenter"], "datacenter technology does not unlock the provider")
+  check(unlocked["datacenter-lab"], "datacenter technology does not unlock the lab")
+  check(unlocked["dram-module"], "datacenter technology does not unlock DRAM")
+end
+
+local vlsi = data.raw.technology["vlsi-process"]
+check(vlsi, "missing vlsi-process technology")
+if vlsi then
+  local prerequisites = {}
+  for _, name in ipairs(vlsi.prerequisites or {}) do
+    prerequisites[name] = true
+  end
+  check(prerequisites["internet"], "vlsi-process must require the internet")
 end
 
 local overlay_input = data.raw["custom-input"]["chiptorio-network-overlay"]

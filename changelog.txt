@@ -1,4 +1,23 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.7.0
+Date: 2026-10-27
+  Features:
+    - Research now runs on network compute, memory and bandwidth. Every lab is a network client: it pauses when the network cannot feed it, and the research bar decays while it is starved.
+    - Added the Server Rack and Datacenter compute providers, and the Memory Bank storage provider. Each holds chips or memory modules in its module slots; installed modules are summed into the network's compute, memory and bandwidth.
+    - Added six compute modules: integrated circuit, microprocessor, system on a chip, multi-core CPU, GPU and quantum processor. They are module prototypes with an empty vanilla effect, so the script owns their value.
+    - Added SRAM and DRAM memory modules. SRAM is cheap and small; DRAM is the datacenter-scale generation.
+    - Added per-technology compute gates: VLSI Process, Datacenter, Advanced Packaging, Heterogeneous Compute, Quantum Computing, Quantum Error Correction, Quantum Advantage and The Question each require a compute floor, a memory dataset and bus bandwidth. Mixed scalar/vector/quantum profiles cannot be covered by surplus of one kind.
+    - Added a pure allocation and decay module with unit tests, and a research runtime that pauses labs, applies decay and exposes a debug remote interface.
+    - The Assembly Fab (formerly the Server Rack crafting machine) packages chips, systems, GPUs and multi-core CPUs, so the Server Rack can be a compute provider instead of a crafting machine.
+  Balance:
+    - The Internet technology now also unlocks the Assembly Fab, the Server Rack, the Memory Bank, SRAM and the wiring. It remains free of compute.
+    - VLSI Process is the first compute-gated technology and requires the Internet.
+    - The Datacenter technology unlocks the Datacenter provider, the Datacenter Lab and DRAM.
+    - Decay is capped at 2% of the research bar per minute. A pure compute shortfall decays in proportion to the gap; memory and bandwidth shortfalls are hard stops.
+  Bugfixes:
+    - A lab that fails the network gate no longer keeps consuming science packs.
+    - Module inventories are polled once per second, so inserting a chip takes effect without a rebuild event.
+---------------------------------------------------------------------------------------------------
 Version: 0.6.0
 Date: 2026-10-27
   Features:

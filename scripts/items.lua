@@ -1,6 +1,23 @@
 -- All new intermediate items and the mod's own item groups.
+--
+-- Two kinds of prototype live here:
+--   * ordinary items - feedstock, packaged devices and packaging components
+--   * modules        - the compute and memory modules a provider can hold
+--
+-- Chips are modules rather than items because a provider's module inventory is
+-- the only machine-readable "what is installed" surface in 2.1. The module
+-- effect is empty; scripts/runtime/research_runtime.lua reads the prototype
+-- names and turns them into compute with scripts/research_meta.lua.
 
 local M = require("scripts.util")
+
+-- Module categories. These are the Ctrl+click upgrade families and the
+-- categories a provider accepts. Keep them separate: a memory module must
+-- never silently replace a chip in a module slot.
+data:extend({
+  { type = "module-category", name = "chiptorio-chip" },
+  { type = "module-category", name = "chiptorio-memory" },
+})
 
 do
   -- 2.1 requires an icon on item groups. Clone an existing one so we inherit
@@ -30,15 +47,27 @@ data:extend({
   },
   {
     type = "item-subgroup",
+    name = "chiptorio-memory",
+    group = "chiptorio",
+    order = "c[memory]",
+  },
+  {
+    type = "item-subgroup",
     name = "chiptorio-computers",
     group = "chiptorio",
-    order = "c[computers]",
+    order = "d[computers]",
   },
   {
     type = "item-subgroup",
     name = "chiptorio-machines",
     group = "chiptorio",
-    order = "d[machines]",
+    order = "e[machines]",
+  },
+  {
+    type = "item-subgroup",
+    name = "chiptorio-providers",
+    group = "chiptorio",
+    order = "f[providers]",
   },
 })
 
@@ -50,6 +79,18 @@ end
 
 local function make_chip(name, base, order)
   local proto = M.item_from(base, name, "chiptorio-chips", order)
+  M.set_icon(proto, name)
+  return proto
+end
+
+local function make_chip_module(name, base, order, tier)
+  local proto = M.module_from(base, name, "chiptorio-chip", tier, "chiptorio-chips", order)
+  M.set_icon(proto, name)
+  return proto
+end
+
+local function make_memory_module(name, base, order, tier)
+  local proto = M.module_from(base, name, "chiptorio-memory", tier, "chiptorio-memory", order)
   M.set_icon(proto, name)
   return proto
 end
@@ -80,20 +121,31 @@ make_material("vlsi-die", "p[vlsi-die]")
 
 make_material("superconductor", "q[superconductor]")
 
--- Devices ---------------------------------------------------------------
+-- Components and packages ------------------------------------------------
 
 make_chip("vacuum-tube", "electronic-circuit", "a[tube]")
 make_chip("discrete-transistor", "electronic-circuit", "b[transistor]")
-make_chip("integrated-circuit", "processing-unit", "c[ic]")
-make_chip("microprocessor", "processing-unit", "d[cpu]")
-make_chip("system-on-chip", "processing-unit", "e[soc]")
 make_chip("chiplet", "processing-unit", "f[chiplet]")
 make_chip("hbm-stack", "processing-unit", "g[hbm]")
-make_chip("gpu", "processing-unit", "h[gpu]")
-make_chip("multi-core-cpu", "processing-unit", "i[multi-core]")
 make_chip("qubit", "processing-unit", "j[qubit]")
 make_chip("error-corrected-qubit", "processing-unit", "k[logical-qubit]")
-make_chip("quantum-processor", "processing-unit", "l[quantum-cpu]")
+
+-- Compute modules --------------------------------------------------------
+--
+-- One module = one chip. The provider's slot count is the physical limit; the
+-- profiles in scripts/research_meta.lua decide what each name contributes.
+
+make_chip_module("integrated-circuit", "processing-unit", "c[ic]", 1)
+make_chip_module("microprocessor", "processing-unit", "d[cpu]", 2)
+make_chip_module("system-on-chip", "processing-unit", "e[soc]", 3)
+make_chip_module("multi-core-cpu", "processing-unit", "i[multi-core]", 4)
+make_chip_module("gpu", "processing-unit", "h[gpu]", 5)
+make_chip_module("quantum-processor", "processing-unit", "l[quantum-cpu]", 6)
+
+-- Memory modules ---------------------------------------------------------
+
+make_memory_module("sram-module", "processing-unit", "a[sram]", 1)
+make_memory_module("dram-module", "processing-unit", "b[dram]", 2)
 
 -- The seventh workload. It is a tool item because labs consume it exactly
 -- like a science pack; only the name and recipe are ours.

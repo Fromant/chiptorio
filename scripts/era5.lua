@@ -6,7 +6,7 @@
 --   Chemistry      slurry, low-k dielectric, coolant, cooling units
 --   Cooling Tower  water + steam -> coolant
 --   VLSI Fab       exposure, planarisation, dicing, GPU assembly
---   Server Rack    SoC packaging, chiplets, HBM stacks, multi-core CPUs
+--   Assembly Fab   SoC packaging, chiplets, HBM stacks, multi-core CPUs
 --
 -- Coolant is not a GUI switch. It is manufactured, piped into the VLSI Fab and
 -- consumed by every wafer/die/GPU step, so the cooling loop is part of the

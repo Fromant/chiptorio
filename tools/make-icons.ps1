@@ -577,6 +577,66 @@ for ($y = 3; $y -le 11; $y += 3) {
 Rect $g 9 12 3 2 $line
 Save-Icon $b "server-rack"
 
+$b, $g = New-Canvas
+Rect $g 2 1 12 14 $panel
+Rect $g 2 1 12 1 $line
+# bare die going in, packaged chip coming out
+Rect $g 3 3 4 4 $ink
+Rect $g 4 4 2 2 $cyan
+Rect $g 9 3 4 4 $ink
+Rect $g 10 4 2 2 $gold
+Rect $g 3 8 10 1 $line
+Rect $g 5 9 6 4 $steel
+Rect $g 6 10 4 2 $green
+for ($i = 5; $i -le 10; $i += 2) { Rect $g $i 13 1 1 $steel }
+Save-Icon $b "assembly-fab"
+
+$b, $g = New-Canvas
+Rect $g 2 3 6 10 $ink
+for ($y = 4; $y -le 11; $y += 2) { Rect $g 3 $y 4 1 $cyan }
+Rect $g 9 3 5 7 $panel
+Rect $g 10 4 3 2 $cyan
+Rect $g 10 7 1 1 $gold
+Rect $g 9 11 5 2 $line
+Save-Icon $b "memory-bank"
+
+$b, $g = New-Canvas
+Rect $g 1 5 14 7 $green
+Rect $g 1 5 14 1 $gold
+Rect $g 1 11 14 1 $line
+for ($x = 3; $x -le 11; $x += 4) {
+  Rect $g $x 6 2 4 $ink
+  Rect $g ($x + 1) 7 1 1 $cyan
+}
+for ($x = 2; $x -le 13; $x += 2) { Rect $g $x 13 1 1 $gold }
+Save-Icon $b "sram-module"
+
+$b, $g = New-Canvas
+Rect $g 1 3 14 9 $green
+Rect $g 1 3 14 1 $gold
+Rect $g 1 11 14 1 $line
+for ($y = 4; $y -le 8; $y += 2) {
+  for ($x = 3; $x -le 11; $x += 3) {
+    Rect $g $x $y 2 1 $ink
+    Rect $g ($x + 1) $y 1 1 $purple
+  }
+}
+for ($x = 2; $x -le 13; $x += 2) { Rect $g $x 13 1 1 $gold }
+Save-Icon $b "dram-module"
+
+$b, $g = New-Canvas
+Rect $g 1 2 14 12 $ink
+Rect $g 1 2 14 1 $line
+Rect $g 2 3 12 6 $panel
+Rect $g 3 4 4 3 $cyan
+Rect $g 8 4 5 3 $gold
+for ($x = 3; $x -le 11; $x += 3) {
+  Rect $g $x 10 2 2 $panel
+  Rect $g $x 11 1 1 $green
+}
+Rect $g 2 13 12 1 $gold
+Save-Icon $b "datacenter-lab"
+
 # --- computers ---------------------------------------------------------
 
 $b, $g = New-Canvas
@@ -666,15 +726,16 @@ $order = @(
   "litho-mask", "exposed-wafer", "etched-wafer", "processed-wafer",
   "bare-die", "vacuum-tube", "discrete-transistor", "integrated-circuit",
   "microprocessor", "photoresist", "etchant", "wafer-fab",
-  "crystal-puller", "server-rack", "analytical-engine", "tube-mainframe",
+  "crystal-puller", "server-rack", "assembly-fab", "memory-bank",
+  "sram-module", "dram-module", "analytical-engine", "tube-mainframe",
   "mainframe-cluster", "phase-shift-mask", "cmp-slurry", "low-k-dielectric",
   "cooling-unit", "vlsi-wafer", "vlsi-die", "system-on-chip",
   "chiplet", "hbm-stack", "gpu", "multi-core-cpu",
-  "vlsi-fab", "cooling-tower", "datacenter", "coolant",
-  "superconductor", "qubit", "error-corrected-qubit", "quantum-processor",
-  "qubit-array", "quantum-fab", "cryostat", "cryogen",
-  "answer-engine", "network-cable", "network-switch", "network-router",
-  "network-monitor"
+  "vlsi-fab", "cooling-tower", "datacenter", "datacenter-lab",
+  "coolant", "superconductor", "qubit", "error-corrected-qubit",
+  "quantum-processor", "qubit-array", "quantum-fab", "cryostat",
+  "cryogen", "answer-engine", "network-cable", "network-switch",
+  "network-router", "network-monitor"
 )
 
 $cols = 8

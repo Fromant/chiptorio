@@ -1,6 +1,6 @@
 # chiptorio — Design Specification
 
-Status: authoritative design; Phase 1 complete, Phase 2 next  
+Status: authoritative design; Phases 0-2 complete, Phase 3 next  
 Date: 2026-10-26  
 Mod ID: `chiptorio`  
 Target: Factorio 2.1, no Space Age, Nauvis only  
@@ -340,19 +340,26 @@ Per network:
 - research demand
 - QLN storage and item throughput
 
-Allocation:
+Allocation (implemented in `scripts/runtime/research_alloc.lua`):
 
 ```
-usable_compute = min(total_compute, total_bandwidth)
-lab_demand     = tech.compute_per_lab * lab.compute_multiplier
-active_labs    = min(labs_with_packs, floor(usable_compute / lab_demand))
+profile_compute = min over required profiles of (available[profile] / share[profile])
+effective       = min(profile_compute, total_bandwidth)
+lab_demand      = max(lab.base_demand, tech.per_lab)
+active_labs     = greedy by unit_number while used + lab_demand <= effective
 ```
 
-- Each active lab consumes its compute demand and researches normally.
-- Inactive labs are switched off so they do not consume packs.
-- If `active_labs == 0`, research freezes and decays.
-- If memory is below `tech.memory`, research freezes and decays.
-- If usable compute is below `tech.compute_floor`, progress decays proportionally.
+- Profiles are relative shares. A technology with `{ scalar = 0.5, vector = 0.5 }` and a
+  floor of 128 needs 64 scalar **and** 64 vector; surplus of one kind cannot cover a
+  shortfall of the other.
+- Every network is evaluated independently. The technology runs if at least one network
+  satisfies the compute floor, the memory requirement and the bandwidth requirement.
+- A network that qualifies enables labs greedily by `unit_number` (oldest first). A lab
+  that does not fit is paused whole, never partially fed.
+- Inactive labs are switched off with `disabled_by_script`, so they do not consume packs
+  and are visibly idle.
+- If no network qualifies, memory and bandwidth failures are hard stops (maximum decay);
+  a pure compute shortfall decays in proportion to the gap.
 - Above the floor, speed is determined by how many labs the network supports.
 
 ### 5.4 Power and cooling
@@ -392,39 +399,44 @@ Early techs need scalar only. Later techs require mixed profiles. A network must
 ### 6.2 Server Rack
 
 - 4 chip slots.
+- 25 bandwidth backplane, 150 kW draw.
 - Base power draw and heat.
 - Base network port.
-- Compute is the sum of installed chips × power × cooling × infinite multipliers.
+- Compute is the sum of the installed chips.
 
 ### 6.3 Datacenter
 
 - 8 chip slots.
 - 4 memory slots.
 - Built-in cooling.
-- Higher bandwidth port.
+- 100 bandwidth backplane, 1 MW draw.
 - Much higher power draw.
 - Mid/late-game concentration of compute.
 
 ### 6.4 Chips
 
 Chips are custom module items with zero vanilla module effect. The script reads the module inventory.
+They live in `data.raw.module` under the `chiptorio-chip` category, so a provider's module
+inventory is the single machine-readable "what is installed" surface.
 
-Example profiles (first-pass):
+Implemented profiles:
 
 | Chip | Scalar | Vector | Tensor | Quantum | Power | Heat |
 |---|---:|---:|---:|---:|---:|---:|
-| 10 µm CPU | 1 | 0 | 0 | 0 | 10 kW | 1 |
-| 1 µm CPU | 4 | 0 | 0 | 0 | 25 kW | 2 |
-| 90 nm CPU | 16 | 0 | 0 | 0 | 60 kW | 4 |
-| GPU | 0 | 4× CPU | 0 | 0 | 100 kW | 6 |
-| NPU | 0 | 0 | 8× CPU | 0 | 120 kW | 7 |
-| QPU | 0 | 0 | 0 | 64× CPU | 500 kW | 20 |
+| Integrated Circuit | 1 | 0 | 0 | 0 | 5 kW | 0.5 |
+| Microprocessor | 2 | 0 | 0 | 0 | 10 kW | 1 |
+| System on a Chip | 8 | 0 | 0 | 0 | 25 kW | 2 |
+| Multi-Core CPU | 32 | 0 | 0 | 0 | 60 kW | 4 |
+| GPU | 2 | 16 | 0 | 0 | 100 kW | 6 |
+| Quantum Processor | 0 | 0 | 0 | 64 | 500 kW | 20 |
 
 ### 6.5 Memory Bank
 
 - 4 memory module slots.
+- 25 bandwidth backplane, 80 kW draw.
 - Each module adds capacity and bandwidth.
-- Memory generations differ in capacity, bandwidth, and power.
+- SRAM: 16 capacity, 8 bandwidth. DRAM: 128 capacity, 16 bandwidth.
+- QLN item storage will reuse the same modules in a later phase.
 - ECC is optional later.
 
 ---
@@ -446,45 +458,37 @@ A lab must be connected to a cable within 2 tiles. Pre-internet techs work offli
 ### 7.2 Technology schema
 
 ```lua
-{
-  name = "process-7nm",
-  chapter = "nanoscale",
-  node = "7nm",
-  prerequisites = { ... },
-  unit = {
-    ingredients = { ... },
-    time = 60,
-    count = 500,
-  },
-  compute = {
-    floor = 400,
-    per_lab = 100,
-    profiles = { scalar = 0.4, vector = 0.4, tensor = 0.2 },
-  },
-  memory = 512,
-  bandwidth = 400,
-  effects = { ... },
-  qualification = nil, -- or the half-node table
-}
+-- scripts/research_meta.lua, the single source of truth
+["vlsi-process"] = {
+  floor = 8,             -- minimum profile compute for any network
+  per_lab = 2,           -- minimum compute demand of one lab
+  memory = 16,           -- dataset size
+  bandwidth = 8,         -- bus bandwidth
+  profiles = { scalar = 1 },          -- relative shares, not capacities
+},
 ```
 
 The data stage generates tooltips from this table. Runtime uses the same table. One source of truth.
 
 ### 7.3 Decay
 
-- At zero usable compute or insufficient memory: 2%/min progress decay.
-- Below the compute floor: proportional decay, max 2%/min.
-- Above the floor: no decay.
-- If labs are active but below full speed: slower progress, no decay unless below the floor.
-- Setting `chiptorio-strict-network`; default on.
+- The research bar is `LuaForce.research_progress`, a fraction in `[0, 1]`.
+- Maximum decay is 2% of the bar per minute (`research_meta.MAX_DECAY_PER_MINUTE`).
+- Supported with at least one active lab: no decay.
+- No network at all, memory shortfall, bandwidth shortfall, zero effective compute, or
+  capacity but no connected lab: maximum decay.
+- Pure compute shortfall: `2%/min * (1 - profile_compute / floor)`, so the player can see
+  the gap closing as they add chips.
+- Decay is applied by the 60-tick dispatcher; `remote.call("chiptorio-research", "step", n)`
+  exists for tests.
+- No `chiptorio-strict-network` setting: the network gate is always on.
 
 ### 7.4 Internet unlock
 
-- Unlocks after the first microprocessor.
-- The internet technology requires no compute.
-- It unlocks Cable, Switch, Network Monitor, and the first Server Rack.
-- First Server Rack uses microprocessors, circuits, steel, and cooling.
-- First memory module is SRAM; first memory-gated tech is small.
+- The Internet technology requires only `microarchitecture` (the first microprocessor).
+- It requires no compute: it is the technology that creates compute.
+- It unlocks the Assembly Fab, the Server Rack, the Memory Bank, SRAM, and the wiring.
+- `vlsi-process` is the first compute-gated technology and requires `internet`.
 - No deadlock: the player can always build the first network with pre-internet tech.
 
 ### 7.5 Anti-deadlock
@@ -804,64 +808,45 @@ Yield multiplies dies per wafer. Metrology, cleanroom, half-node qualifications,
 info.json
 data.lua
 data-updates.lua
-settings.lua
 control.lua
+graphics/                 -- generated icons, technology icons, ending art
+locale/en/locale.cfg
 scripts/
-  core/
-    util.lua
-    events.lua
-    storage.lua
-  data/
-    items.lua
-    fluids.lua
-    machines.lua
-    labs.lua
-    network.lua
-    memory.lua
-    chips.lua
-    logistics.lua
-    endgame.lua
-    vanilla.lua
-  tech/
-    schema.lua
-    foundation.lua
-    process.lua
-    lithography.lua
-    compute.lua
-    memory.lua
-    network.lua
-    packaging.lua
-    software.lua
-    infinite.lua
-    endgame.lua
+  util.lua                -- prototype cloning, icons, recipes
+  items.lua               -- items, module categories, chip and memory modules
+  fluids.lua
+  machines.lua            -- wafer fab, crystal puller, VLSI fab, assembly fab
+  labs.lua                -- analytical engine .. cryostat
+  providers.lua           -- server rack, memory bank, datacenter (lab clones)
+  memory.lua              -- SRAM/DRAM recipes
+  network.lua             -- cable, switch, router, monitor
+  chips.lua, silicon.lua, era5.lua, era7.lua, workloads.lua, endgame.lua
+  research_meta.lua       -- PURE: labs, chips, memory, providers, tech gates
+  answer_meta.lua, rates.lua
+  technology.lua          -- the chiptorio tech tree
+  prune.lua               -- enemies, robots, combat removal
+  enemy_cleanup.lua
+  answer_engine.lua
   runtime/
-    network_graph.lua      -- pure logic
-    network_alloc.lua      -- pure logic
-    network_runtime.lua    -- events, storage, GUI
-    research.lua
-    memory.lua
-    logistics.lua
-    construction.lua
-    answer.lua
-    gui.lua
-    migrations.lua
-  tests/
-    graph_spec.lua
-    alloc_spec.lua
-    research_spec.lua
-    memory_spec.lua
-    logistics_spec.lua
+    network_graph.lua     -- PURE: topology builder
+    research_alloc.lua    -- PURE: allocation and decay
+    network_runtime.lua   -- chunk cache, capacities, overlay, monitor
+    research_runtime.lua  -- lab pausing, decay, debug interface
+tools/
+  common.ps1, test-all.ps1, test-mod.ps1, test-contract.ps1
+  make-icons.ps1, make-sound.ps1
+  test-probe/             -- separate test mod: unit, data and runtime probes
 ```
 
 Rules:
 
-- `data.lua` order: items/fluids → machines/labs → network/memory/chips → recipes → technologies.
+- `data.lua` order: items/fluids → machines/labs/providers/memory → network/memory/chips → recipes → technologies.
 - `data-updates.lua` only touches vanilla after all mods load.
 - `control.lua` owns one `on_nth_tick(60)` dispatcher.
 - Runtime state lives in `storage`, versioned and initialized in `on_init` and `on_configuration_changed`.
-- Pure modules never touch `game` or `storage`.
-- Prototypes are cloned from base entities; icons and cable sprites are generated.
-- Tech data is pure tables; `tech/schema.lua` validates it at load time.
+- Pure modules (`research_meta`, `network_graph`, `research_alloc`) never touch `data`, `game` or `storage`.
+- Prototypes are cloned from base entities; icons are generated.
+- Test code lives in `tools/test-probe/`, never in the mod.
 
 ### 15.1 Factorio 2.1 API traps
 
@@ -878,6 +863,12 @@ These have all caused load-stage or runtime errors in this project:
 - `storage` is shared by every mod in the save. Namespace it and never assume another mod's keys are absent.
 - Factorio stores one handler per event. Register every handler in `control.lua`; a registration inside a module silently replaces another module's handler.
 - A `nil` entry inside an `ipairs` registration list truncates the loop without error. Register each event explicitly.
+- `ModulePrototype` lives in `data.raw.module`, not `data.raw.item`, so item checks must consult both (see `M.item_exists`). It requires `category`, `tier` and `effect`; `effect = {}` is valid and is how zero-effect chips are built.
+- `LabPrototype.allowed_effects` is an `EffectTypeLimitation`, not a map of booleans. Assigning `{ speed = true }` fails with "Value must be a string"; omit it and inherit the base lab's limits instead.
+- A lab clone with `inputs = {}` is a valid compute provider: it keeps module slots and `get_module_inventory()` without being usable for research. Setting `researching_speed = 0.001` keeps the animation honest.
+- Provider module contents change without an inventory event (inserters, manual transfer). The runtime compares a signature derived from `get_module_inventory().get_contents()` once per second instead of listening to inventory events.
+- `LuaForce.research_progress` is readable and writable; `current_research` is read-only and `force.add_research` queues a technology.
+- `game.get_entity_by_unit_number` only works with the `get-by-unit-number` flag. Store entity references in graph device descriptors instead.
 
 ---
 
@@ -885,30 +876,38 @@ These have all caused load-stage or runtime errors in this project:
 
 ### 16.1 Unit tests
 
-Graph, allocation, research, memory, QLN, infinite multipliers, property tests, golden tests.
+Implemented in `tools/test-probe/`, run from the probe's data stage against the pure
+modules through a cross-mod `require("__chiptorio__/scripts/...")`:
+
+- `graph_spec.lua`: connectivity, tile flooring, duplicate tiles, switch merging, router
+  bridging, device reach, contested/unconnected devices, bandwidth and latency.
+- `research_spec.lua`: profile shares, compute floor, memory and bandwidth hard stops,
+  proportional decay, greedy lab enablement, bandwidth cap, `decay_amount`, lab demand.
+
+Still to add: memory generations for QLN, infinite multipliers, qualification tables,
+property tests.
 
 ### 16.2 Data-contract tests
 
-Icons, locale, recipes, categories, tech DAG, reachability, lab inputs, science packs, chip profiles, memory modules, network entities, no military/bot/enemy remnants, no throughput-gate references, qualification tables.
+Implemented: icons and locale exist, chip and memory modules are modules with an empty
+effect and the right category, providers are labs with no inputs and both module
+categories, provider recipes start locked, `assembly-fab` exists, `internet` unlocks the
+network and the first providers, `datacenter` unlocks the lab/provider/DRAM, `vlsi-process`
+requires the internet, lab inputs include every workload, no military/bot/enemy remnants,
+no throughput-gate references.
+
+Still to add: process-node ladder, qualification tables, QLN.
 
 ### 16.3 Runtime integration tests
 
-- internet unlock
-- no compute → decay
-- enough compute → progress
-- memory gate
-- bandwidth gate
-- multiple subnets + router
-- cable removal
-- power/cooling throttle
-- blueprint rebuild
-- save/load
-- force isolation
-- QLN storage/transport
-- Construction Core
-- half-node qualification
-- Answer Engine victory/score
-- infinite scaling
+Implemented on a fresh map: enemy/bot/removal checks, cable+router topology via the remote
+interface, provider capacity from module inventories (2 providers, 1 lab, 8 scalar, 64
+memory), supported research with no decay, a memory-gated technology paused and decaying at
+the maximum rate, a mixed scalar/vector technology refused on a scalar-only network, a pure
+compute shortfall decaying at the maximum rate and recovering when chips are reinstalled.
+
+Still to add: power/cooling throttle, save/load, force isolation, QLN, half-node
+qualification, Answer Engine victory/score, infinite scaling.
 
 ### 16.4 Performance tests
 
@@ -947,16 +946,25 @@ Icons, locale, recipes, categories, tech DAG, reachability, lab inputs, science 
 | 7 | Answer Engine rework, infinite research, victory | 42-minute endgame |
 | 8 | Balance, GUI polish, icons/sound, locale, performance, docs, release | full suite green |
 
-Rough effort: 5–7 weeks focused work. Phases 1–2 are highest risk; spike entity shells and lab throttling first.
+Rough effort: 5–7 weeks focused work. Phases 0–2 are complete. Phase 3 is next; the
+highest remaining risk is the process-node ladder's size, not the network runtime.
 
 ---
 
 ## 18. Technical risks and spikes
 
-1. **Lab throttling.** Confirm `LuaEntity.active` can stop a lab without breaking research, or find a safe alternative.
-2. **Cable entity.** Confirm 1×1 no-collision entity placement, blueprinting, mining, sprite variants, and graph rebuild at 10k cables.
-3. **Compute provider shell.** Confirm a beacon/lab/EEI clone can accept module items, draw continuous power, and expose module inventory.
-4. **GUI performance.** Confirm a network monitor with tabs and 100+ devices updates at 30–60 tick intervals without UPS spikes.
+1. **Lab throttling. Resolved.** `LuaEntity.disabled_by_script` pauses a lab safely: the
+   force stops accumulating progress from it, the entity shows idle, and re-enabling
+   resumes. The runtime sets it every second from the allocator result. No progress
+   refund hack is needed.
+2. **Cable entity. Resolved.** A 1×1 `container` clone with `collision_layer` and
+   `collision_mask` both set to `chiptorio-cable` places, blueprints and mines cleanly, and
+   the chunk-indexed rebuild handles the current test map.
+3. **Compute provider shell. Resolved.** A lab clone with `inputs = {}`, a near-zero
+   research speed and module slots exposes `get_module_inventory()` and accepts custom
+   module categories. Chips are zero-effect modules, so vanilla module maths is inert.
+4. **GUI performance.** Open. A network monitor with tabs and 100+ devices updating at
+   30–60 ticks is still untested at scale, as are 10k cables and 1,000 providers.
 
 Fallbacks:
 

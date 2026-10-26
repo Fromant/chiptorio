@@ -18,7 +18,7 @@ end
 --- name:      new prototype name
 --- subgroup:  item subgroup to place it in
 --- order:     optional sort order inside the subgroup
-function M.item_from(base_name, name, subgroup, order)
+function M.item_proto(base_name, name, subgroup, order)
   local base = data.raw.item[base_name]
   if not base then
     error("chiptorio: base item '" .. tostring(base_name) .. "' not found")
@@ -43,8 +43,47 @@ function M.item_from(base_name, name, subgroup, order)
   proto.icon = nil
   proto.icon_size = nil
 
+  return proto
+end
+
+function M.item_from(base_name, name, subgroup, order)
+  local proto = M.item_proto(base_name, name, subgroup, order)
   data:extend({ proto })
   return proto
+end
+
+--- Copy a base item into a module prototype. Modules live in `data.raw.module`,
+--- so the type has to be set *before* `data:extend`, unlike an item tweak.
+--- The effect is deliberately empty: a chip's gameplay value is read by the
+--- research runtime, not by the vanilla module effect maths.
+function M.module_from(base_name, name, category, tier, subgroup, order)
+  local proto = M.item_proto(base_name, name, subgroup, order)
+  proto.type = "module"
+  proto.category = category
+  proto.tier = tier
+  proto.effect = {}
+  proto.effect_description = nil
+  data:extend({ proto })
+  return proto
+end
+
+--- True for anything a recipe, lab input or technology can name as an item.
+--- Modules are items in the ingredient sense but live under `data.raw.module`,
+--- so a plain `data.raw.item[name]` check is wrong for chips.
+function M.item_exists(name)
+  if not name then
+    return false
+  end
+  if data.raw.item and data.raw.item[name] then
+    return true
+  end
+  if data.raw.module and data.raw.module[name] then
+    return true
+  end
+  if data.raw.tool and data.raw.tool[name] then
+    return true
+  end
+  return false
 end
 
 --- Point an item prototype at one of the generated 64x64 icons.

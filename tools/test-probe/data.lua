@@ -5,3 +5,4 @@
 -- exactly why those modules must never touch `game` or `storage`.
 
 require("graph_spec")()
+require("research_spec")()
