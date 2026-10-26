@@ -49,13 +49,13 @@ local ingredient_names = {
 }
 for _, name in ipairs(ingredient_names) do
   if not data.raw.item[name] then
-    error("chipotrio: answer-engine ingredient '" .. name .. "' is missing")
+    error("chiptorio: answer-engine ingredient '" .. name .. "' is missing")
   end
 end
 
 local base_entity = data.raw.lab["lab"]
 if not base_entity then
-  error("chipotrio: base lab missing; cannot build the answer engine")
+  error("chiptorio: base lab missing; cannot build the answer engine")
 end
 
 local entity = M.copy(base_entity)
@@ -97,7 +97,7 @@ item.name = "answer-engine"
 item.localised_name = nil
 item.localised_description = nil
 item.place_result = "answer-engine"
-item.subgroup = "chipotrio-computers"
+item.subgroup = "chiptorio-computers"
 item.order = "f[answer-engine]"
 item.stack_size = 1
 item.hidden = false
@@ -110,7 +110,7 @@ data:extend({ item })
 M.recipe({
   name = "answer-engine",
   enabled = false,
-  category = "chipotrio-compute",
+  category = "chiptorio-compute",
   energy_required = 120,
   ingredients = {
     M.item("monocrystalline-ingot", 64),

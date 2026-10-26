@@ -1,9 +1,24 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.6.0
+Date: 2026-10-26
+  Features:
+    - Renamed the mod and every internal identifier from chipotrio to chiptorio.
+    - Removed enemies entirely: enemy autoplace is stripped from the map generator, enemy expansion and evolution are disabled, and existing enemy entities are destroyed on init.
+    - Removed robots and the spidertron: roboports, logistic and construction robots, robot equipment, logistic request chests and their technologies are hidden and unbuildable.
+    - Removed combat progression: weapons, ammo, capsules, turrets, walls, gates, mines, tanks and artillery are hidden, their recipes are disabled, and the remaining technology graph is rewired around them.
+    - Added a data-contract and runtime test probe plus tools/test-all.ps1.
+  Balance:
+    - Removed the sustained-production throughput gate and its strict-compute setting. Research requirements will move to network compute, memory and bandwidth in the next milestone.
+    - Removed microprocessor and system-on-chip costs from roboports and GPU and quantum-processor costs from the spidertron; those prototypes are no longer buildable.
+  Bugfixes:
+    - The data stage no longer requires the deleted technology-gate metadata module.
+
+---------------------------------------------------------------------------------------------------
 Version: 0.5.0
 Date: 2026-10-26
   Features:
     - Added The Answer endgame: a 5x5 Answer Engine assembled from every era of the factory.
-    - Added The Question, an infinite final technology that costs all seven workloads plus microprocessors and requires every Chip'torio technology.
+    - Added The Question, an infinite final technology that costs all seven workloads plus microprocessors and requires every Chiptorio technology.
     - Booting the Answer Engine requires sustained production of all seven workloads and microprocessors. Dropping below any target pauses the 42-minute clock until every line recovers.
     - Added a custom Answer Engine panel showing every required rate, the remaining time, the current question level and the answer score.
     - Completing the engine prints 42, plays a generated chiptune fanfare, sets a custom victory screen, and unlocks post-game score scaling.
@@ -19,7 +34,7 @@ Version: 0.4.0
 Date: 2026-10-26
   Features:
     - Added Era 7: superconductors, cryogenics, physical qubits, error-corrected qubits and quantum processors.
-    - Added the Quantum Fab (fluid-capable, chipotrio-quantum) and the Cryostat, a fifth research computer with eight module slots and 4x research speed.
+    - Added the Quantum Fab (fluid-capable, chiptorio-quantum) and the Cryostat, a fifth research computer with eight module slots and 4x research speed.
     - Added a seventh workload, the Qubit Array, produced in the Quantum Fab and consumed by every research computer.
     - Added cryogen, produced in the Cooling Tower from coolant and water.
     - Added three technologies: Quantum Computing, Quantum Error Correction and Quantum Advantage.
@@ -37,7 +52,7 @@ Version: 0.3.0
 Date: 2026-10-26
   Features:
     - Added Era 5-6: VLSI fabrication, the datacenter cooling loop, chiplets, HBM stacks, GPUs and multi-core CPUs.
-    - Added the VLSI Fab (fluid-capable, chipotrio-vlsi) and the Cooling Tower (chipotrio-cooling).
+    - Added the VLSI Fab (fluid-capable, chiptorio-vlsi) and the Cooling Tower (chiptorio-cooling).
     - Added the Datacenter, a fourth research computer with six module slots and 2.5x research speed.
     - Added phase-shift masks, CMP slurry, low-k dielectric, coolant and cooling units.
     - Added four technologies: VLSI Process, Datacenter, Advanced Packaging and Heterogeneous Compute.
@@ -49,7 +64,7 @@ Date: 2026-10-26
     - VLSI gates are tuned around the existing utility-science (mainframe module) line.
   Bugfixes:
     - Fixed a fresh-save softlock: hiding the vanilla lab removed the trigger that unlocks the first science pack. The automation-science-pack trigger now fires when the first Analytical Engine is crafted.
-    - Fixed the Chip'torio item-group icon rendering at the wrong size (128px vs the generated 64px icon).
+    - Fixed the Chiptorio item-group icon rendering at the wrong size (128px vs the generated 64px icon).
     - Fixed the throughput gate applying 2% decay per second instead of per minute. Research is now throttled proportionally to production, with proportional decay reaching the documented 2%/min at zero production.
 
 ---------------------------------------------------------------------------------------------------
@@ -57,7 +72,7 @@ Version: 0.2.0
 Date: 2026-10-26
   Features:
     - Added three custom fab machines: Wafer Fab (fluid-capable cleanroom), Crystal Puller, and Server Rack.
-    - Added chipotrio-fab, chipotrio-crystal and chipotrio-compute recipe categories.
+    - Added chiptorio-fab, chiptorio-crystal and chiptorio-compute recipe categories.
     - Moved all lithography, etch, metallisation, dicing and packaging steps into the Wafer Fab.
     - Moved crystal growth and metallurgical silicon into the Crystal Puller.
     - Moved solid-state drives and mainframe modules into the Server Rack.
@@ -70,7 +85,7 @@ Date: 2026-10-26
     - Wafer Fab is unlocked with Photolithography; Server Rack with Planar Process.
   Bugfixes:
     - Fixed a fresh-save softlock: hiding the vanilla lab removed the trigger that unlocks the first science pack. The automation-science-pack trigger now fires when the first Analytical Engine is crafted.
-    - Fixed the Chip'torio item-group icon rendering at the wrong size (128px vs the generated 64px icon).
+    - Fixed the Chiptorio item-group icon rendering at the wrong size (128px vs the generated 64px icon).
     - Fixed the throughput gate applying 2% decay per second instead of per minute. Research is now throttled proportionally to production, with proportional decay reaching the documented 2%/min at zero production.
 
 ---------------------------------------------------------------------------------------------------

@@ -19,7 +19,7 @@ local M = require("scripts.util")
 M.recipe({
   name = "phase-shift-mask",
   enabled = false,
-  category = "chipotrio-fab",
+  category = "chiptorio-fab",
   energy_required = 12,
   ingredients = {
     M.item("litho-mask", 1),
@@ -60,7 +60,7 @@ M.recipe({
 M.recipe({
   name = "coolant",
   enabled = false,
-  category = "chipotrio-cooling",
+  category = "chiptorio-cooling",
   energy_required = 5,
   ingredients = {
     M.fluid("water", 100),
@@ -88,7 +88,7 @@ M.recipe({
 M.recipe({
   name = "vlsi-wafer",
   enabled = false,
-  category = "chipotrio-vlsi",
+  category = "chiptorio-vlsi",
   energy_required = 16,
   ingredients = {
     M.item("silicon-wafer", 10),
@@ -103,7 +103,7 @@ M.recipe({
 M.recipe({
   name = "vlsi-die",
   enabled = false,
-  category = "chipotrio-vlsi",
+  category = "chiptorio-vlsi",
   energy_required = 14,
   ingredients = {
     M.item("vlsi-wafer", 10),
@@ -117,7 +117,7 @@ M.recipe({
 M.recipe({
   name = "system-on-chip",
   enabled = false,
-  category = "chipotrio-compute",
+  category = "chiptorio-compute",
   energy_required = 20,
   ingredients = {
     M.item("vlsi-die", 4),
@@ -131,7 +131,7 @@ M.recipe({
 M.recipe({
   name = "chiplet",
   enabled = false,
-  category = "chipotrio-compute",
+  category = "chiptorio-compute",
   energy_required = 24,
   ingredients = {
     M.item("system-on-chip", 2),
@@ -145,7 +145,7 @@ M.recipe({
 M.recipe({
   name = "hbm-stack",
   enabled = false,
-  category = "chipotrio-compute",
+  category = "chiptorio-compute",
   energy_required = 18,
   ingredients = {
     M.item("vlsi-die", 2),
@@ -159,7 +159,7 @@ M.recipe({
 M.recipe({
   name = "gpu",
   enabled = false,
-  category = "chipotrio-vlsi",
+  category = "chiptorio-vlsi",
   energy_required = 30,
   ingredients = {
     M.item("chiplet", 2),
@@ -173,7 +173,7 @@ M.recipe({
 M.recipe({
   name = "multi-core-cpu",
   enabled = false,
-  category = "chipotrio-compute",
+  category = "chiptorio-compute",
   energy_required = 30,
   ingredients = {
     M.item("chiplet", 2),

@@ -1,4 +1,4 @@
-﻿-- New technologies. Costs are expressed in the re-flavoured workloads:
+-- New technologies. Costs are expressed in the re-flavoured workloads:
 --   automation-science-pack = punched cards
 --   logistic-science-pack   = punched tape
 --   military-science-pack   = magnetic tape
@@ -6,7 +6,6 @@
 --   quantum-science-pack    = qubit arrays
 
 local M = require("scripts.util")
-local meta = require("scripts.tech_meta")
 
 local function ingredients(list)
   local out = {}
@@ -21,7 +20,7 @@ end
 local techs = {
   {
     name = "electromechanics",
-    order = "a[chipotrio]-a",
+    order = "a[chiptorio]-a",
     count = 20,
     time = 10,
     cost = { ["automation-science-pack"] = 1 },
@@ -30,7 +29,7 @@ local techs = {
   },
   {
     name = "thermionics",
-    order = "a[chipotrio]-b",
+    order = "a[chiptorio]-b",
     count = 40,
     time = 15,
     cost = {
@@ -47,7 +46,7 @@ local techs = {
   },
   {
     name = "semiconductor-physics",
-    order = "a[chipotrio]-c",
+    order = "a[chiptorio]-c",
     count = 75,
     time = 20,
     cost = {
@@ -64,7 +63,7 @@ local techs = {
   },
   {
     name = "crystal-growth",
-    order = "a[chipotrio]-d",
+    order = "a[chiptorio]-d",
     count = 100,
     time = 25,
     cost = {
@@ -79,7 +78,7 @@ local techs = {
   },
   {
     name = "photolithography",
-    order = "a[chipotrio]-e",
+    order = "a[chiptorio]-e",
     count = 150,
     time = 30,
     cost = {
@@ -101,7 +100,7 @@ local techs = {
   },
   {
     name = "planar-process",
-    order = "a[chipotrio]-f",
+    order = "a[chiptorio]-f",
     count = 200,
     time = 30,
     cost = {
@@ -117,7 +116,7 @@ local techs = {
   },
   {
     name = "microarchitecture",
-    order = "a[chipotrio]-g",
+    order = "a[chiptorio]-g",
     count = 300,
     time = 30,
     cost = {
@@ -131,7 +130,7 @@ local techs = {
   },
   {
     name = "vlsi-process",
-    order = "a[chipotrio]-h",
+    order = "a[chiptorio]-h",
     count = 250,
     time = 30,
     cost = {
@@ -155,7 +154,7 @@ local techs = {
   },
   {
     name = "datacenter",
-    order = "a[chipotrio]-i",
+    order = "a[chiptorio]-i",
     count = 300,
     time = 30,
     cost = {
@@ -169,7 +168,7 @@ local techs = {
   },
   {
     name = "advanced-packaging",
-    order = "a[chipotrio]-j",
+    order = "a[chiptorio]-j",
     count = 400,
     time = 40,
     cost = {
@@ -185,7 +184,7 @@ local techs = {
   },
   {
     name = "heterogeneous-compute",
-    order = "a[chipotrio]-k",
+    order = "a[chiptorio]-k",
     count = 500,
     time = 40,
     cost = {
@@ -199,7 +198,7 @@ local techs = {
   },
   {
     name = "quantum-computing",
-    order = "a[chipotrio]-l",
+    order = "a[chiptorio]-l",
     count = 600,
     time = 45,
     cost = {
@@ -218,7 +217,7 @@ local techs = {
   },
   {
     name = "quantum-error-correction",
-    order = "a[chipotrio]-m",
+    order = "a[chiptorio]-m",
     count = 400,
     time = 60,
     cost = {
@@ -232,7 +231,7 @@ local techs = {
   },
   {
     name = "quantum-advantage",
-    order = "a[chipotrio]-n",
+    order = "a[chiptorio]-n",
     count = 500,
     time = 60,
     cost = {
@@ -248,7 +247,7 @@ local techs = {
     -- The final technology is infinite: level 1 unlocks the Answer Engine,
     -- and every further level raises the engine's demand and score.
     name = "the-question",
-    order = "a[chipotrio]-z",
+    order = "a[chiptorio]-z",
     count_formula = "500 * L",
     time = 60,
     cost = {
@@ -304,7 +303,7 @@ for _, spec in ipairs(techs) do
     type = "technology",
     name = spec.name,
     icons = {
-      { icon = "__chipotrio__/graphics/technology/" .. spec.name .. ".png", icon_size = 256 },
+      { icon = "__chiptorio__/graphics/technology/" .. spec.name .. ".png", icon_size = 256 },
     },
     order = spec.order,
     prerequisites = spec.prerequisites,
@@ -313,15 +312,6 @@ for _, spec in ipairs(techs) do
   }
   if spec.infinite then
     proto.max_level = "infinite"
-  end
-
-  local gate = meta[spec.name]
-  if gate then
-    proto.localised_description = {
-      "technology-description.chipotrio-gated",
-      tostring(gate.rate),
-      { "item-name." .. gate.item },
-    }
   end
 
   data:extend({ proto })

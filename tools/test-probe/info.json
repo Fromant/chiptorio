@@ -1,0 +1,9 @@
+{
+  "name": "chiptorio-test-probe",
+  "version": "0.1.0",
+  "title": "Chiptorio Test Probe",
+  "author": "chiptorio",
+  "factorio_version": "2.1",
+  "dependencies": ["chiptorio"],
+  "description": "Headless data-contract and runtime assertions for chiptorio. Not for normal play."
+}

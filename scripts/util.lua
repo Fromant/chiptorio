@@ -21,7 +21,7 @@ end
 function M.item_from(base_name, name, subgroup, order)
   local base = data.raw.item[base_name]
   if not base then
-    error("chipotrio: base item '" .. tostring(base_name) .. "' not found")
+    error("chiptorio: base item '" .. tostring(base_name) .. "' not found")
   end
 
   local proto = deepcopy(base)
@@ -53,7 +53,7 @@ function M.set_icon(proto, icon_name, size)
   proto.icon_size = nil
   proto.icons = {
     {
-      icon = "__chipotrio__/graphics/icons/" .. icon_name .. ".png",
+      icon = "__chiptorio__/graphics/icons/" .. icon_name .. ".png",
       icon_size = size or 64,
     },
   }
@@ -62,7 +62,7 @@ end
 --- Entities and fluids use the single `icon` field, not `icons`.
 function M.set_entity_icon(proto, icon_name)
   proto.icons = nil
-  proto.icon = "__chipotrio__/graphics/icons/" .. icon_name .. ".png"
+  proto.icon = "__chiptorio__/graphics/icons/" .. icon_name .. ".png"
   proto.icon_size = nil
 end
 
@@ -150,7 +150,7 @@ end
 function M.tech_icons(from)
   local source = data.raw.technology[from] or data.raw.technology["electronics"]
   if not source then
-    error("chipotrio: no technology available to clone icons from")
+    error("chiptorio: no technology available to clone icons from")
   end
   return deepcopy(source.icons or { { icon = source.icon, icon_size = source.icon_size } })
 end

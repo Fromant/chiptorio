@@ -7,10 +7,10 @@ do
   -- a valid icon path/size instead of guessing.
   local base_group = data.raw["item-group"]["intermediate-products"]
   local group = M.copy(base_group)
-  group.name = "chipotrio"
-  group.localised_name = { "item-group-name.chipotrio" }
-  group.order = "zzz[chipotrio]"
-  group.icon = "__chipotrio__/graphics/icons/quantum-processor.png"
+  group.name = "chiptorio"
+  group.localised_name = { "item-group-name.chiptorio" }
+  group.order = "zzz[chiptorio]"
+  group.icon = "__chiptorio__/graphics/icons/quantum-processor.png"
   group.icon_size = 64
   data:extend({ group })
 end
@@ -18,38 +18,38 @@ end
 data:extend({
   {
     type = "item-subgroup",
-    name = "chipotrio-materials",
-    group = "chipotrio",
+    name = "chiptorio-materials",
+    group = "chiptorio",
     order = "a[materials]",
   },
   {
     type = "item-subgroup",
-    name = "chipotrio-chips",
-    group = "chipotrio",
+    name = "chiptorio-chips",
+    group = "chiptorio",
     order = "b[chips]",
   },
   {
     type = "item-subgroup",
-    name = "chipotrio-computers",
-    group = "chipotrio",
+    name = "chiptorio-computers",
+    group = "chiptorio",
     order = "c[computers]",
   },
   {
     type = "item-subgroup",
-    name = "chipotrio-machines",
-    group = "chipotrio",
+    name = "chiptorio-machines",
+    group = "chiptorio",
     order = "d[machines]",
   },
 })
 
 local function make_material(name, order)
-  local proto = M.item_from("iron-plate", name, "chipotrio-materials", order)
+  local proto = M.item_from("iron-plate", name, "chiptorio-materials", order)
   M.set_icon(proto, name)
   return proto
 end
 
 local function make_chip(name, base, order)
-  local proto = M.item_from(base, name, "chipotrio-chips", order)
+  local proto = M.item_from(base, name, "chiptorio-chips", order)
   M.set_icon(proto, name)
   return proto
 end

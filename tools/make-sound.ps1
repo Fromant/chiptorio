@@ -66,7 +66,7 @@ for ($i = 0; $i -lt $third.Count; $i++) {
   $samples[$chordStart + $i] = $samples[$chordStart + $i] + $third[$i]
 }
 
-$tempWav = Join-Path $env:TEMP "chipotrio-answer-fanfare.wav"
+$tempWav = Join-Path $env:TEMP "chiptorio-answer-fanfare.wav"
 $stream = [System.IO.File]::Open($tempWav, [System.IO.FileMode]::Create)
 $writer = New-Object System.IO.BinaryWriter($stream)
 $dataSize = $samples.Count * 2

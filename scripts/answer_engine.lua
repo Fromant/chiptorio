@@ -25,6 +25,8 @@ local function init_storage()
   storage.answer_victory = storage.answer_victory or false
 end
 
+M.init_storage = init_storage
+
 local function force_print(force, message)
   local printed = false
   for _, player in pairs(force.players) do
@@ -107,7 +109,7 @@ local function frame_for(player)
   if not relative then
     return nil
   end
-  local frame = relative["chipotrio-answer"]
+  local frame = relative["chiptorio-answer"]
   if frame and frame.valid then
     return frame
   end
@@ -128,21 +130,21 @@ local function refresh_gui(player, record)
   if status then
     if record.state == "running" then
       status.caption = {
-        "chipotrio.answer-status-running",
+        "chiptorio.answer-status-running",
         format_time((DURATION_TICKS - record.elapsed) / 60),
       }
       status.style.font_color = GREEN
     elseif record.state == "paused" then
       status.caption = {
-        "chipotrio.answer-status-paused",
+        "chiptorio.answer-status-paused",
         format_time((DURATION_TICKS - record.elapsed) / 60),
       }
       status.style.font_color = GOLD
     elseif record.state == "complete" then
-      status.caption = { "chipotrio.answer-status-complete", tostring(score) }
+      status.caption = { "chiptorio.answer-status-complete", tostring(score) }
       status.style.font_color = GOLD
     else
-      status.caption = { "chipotrio.answer-status-idle" }
+      status.caption = { "chiptorio.answer-status-idle" }
       status.style.font_color = GREY
     end
   end
@@ -155,7 +157,7 @@ local function refresh_gui(player, record)
     local label = frame["answer-req-" .. req.item]
     if label then
       label.caption = {
-        "chipotrio.answer-requirement",
+        "chiptorio.answer-requirement",
         { "item-name." .. req.item },
         string.format("%.2f", req.rate),
         string.format("%.2f", req.required),
@@ -167,7 +169,7 @@ local function refresh_gui(player, record)
   local demand = frame["answer-demand"]
   if demand then
     demand.caption = {
-      "chipotrio.answer-demand",
+      "chiptorio.answer-demand",
       tostring(level),
       string.format("%.2f", scale),
     }
@@ -175,19 +177,19 @@ local function refresh_gui(player, record)
 
   local score_label = frame["answer-score"]
   if score_label then
-    score_label.caption = { "chipotrio.answer-score", tostring(score) }
+    score_label.caption = { "chiptorio.answer-score", tostring(score) }
   end
 
   local button = frame["answer-boot"]
   if button then
     if record.state == "complete" then
-      button.caption = { "chipotrio.answer-run-again" }
+      button.caption = { "chiptorio.answer-run-again" }
       button.enabled = ok
     elseif record.state == "idle" then
-      button.caption = { "chipotrio.answer-boot" }
+      button.caption = { "chiptorio.answer-boot" }
       button.enabled = ok
     else
-      button.caption = { "chipotrio.answer-computing" }
+      button.caption = { "chiptorio.answer-computing" }
       button.enabled = false
     end
   end
@@ -204,9 +206,9 @@ local function create_gui(player, record)
   destroy_gui(player)
   local frame = player.gui.relative.add({
     type = "frame",
-    name = "chipotrio-answer",
+    name = "chiptorio-answer",
     direction = "vertical",
-    caption = { "chipotrio.answer-title" },
+    caption = { "chiptorio.answer-title" },
     anchor = {
       gui = defines.relative_gui_type.lab_gui,
       position = defines.relative_gui_position.right,
@@ -236,7 +238,7 @@ local function create_gui(player, record)
 
   frame.add({ type = "label", name = "answer-demand" })
   frame.add({ type = "label", name = "answer-score" })
-  frame.add({ type = "button", name = "answer-boot", caption = { "chipotrio.answer-boot" } })
+  frame.add({ type = "button", name = "answer-boot", caption = { "chiptorio.answer-boot" } })
 
   storage.answer_gui[player.index] = record.entity.unit_number
   refresh_gui(player, record)
@@ -271,10 +273,10 @@ local function complete(record)
   local force_name = entity.force.name
   storage.answer_score[force_name] = (storage.answer_score[force_name] or 0) + points
 
-  force_print(entity.force, { "chipotrio.answer-complete" })
-  force_print(entity.force, { "chipotrio.answer-score-earned", tostring(points), tostring(level) })
+  force_print(entity.force, { "chiptorio.answer-complete" })
+  force_print(entity.force, { "chiptorio.answer-score-earned", tostring(points), tostring(level) })
   log(string.format(
-    "CHIPOTRIO ANSWER complete force=%s level=%d points=%d score=%d",
+    "CHIPTORIO ANSWER complete force=%s level=%d points=%d score=%d",
     force_name,
     level,
     points,
@@ -282,7 +284,7 @@ local function complete(record)
   ))
 
   rendering.draw_text({
-    text = { "chipotrio.answer-42" },
+    text = { "chiptorio.answer-42" },
     surface = entity.surface,
     target = { type = "entity", entity = entity, offset = { 0, -4 } },
     color = GOLD,
@@ -292,7 +294,7 @@ local function complete(record)
 
   for _, player in pairs(entity.force.players) do
     player.play_sound({
-      path = "__chipotrio__/sound/answer-fanfare.ogg",
+      path = "__chiptorio__/sound/answer-fanfare.ogg",
       volume_modifier = 0.8,
     })
   end
@@ -300,15 +302,15 @@ local function complete(record)
   if not storage.answer_victory then
     storage.answer_victory = true
     game.set_win_ending_info({
-      title = { "chipotrio.answer-victory-title" },
-      message = { "chipotrio.answer-victory-message" },
+      title = { "chiptorio.answer-victory-title" },
+      message = { "chiptorio.answer-victory-message" },
       bullet_points = {
-        { "chipotrio.answer-victory-bullet-1" },
-        { "chipotrio.answer-victory-bullet-2" },
-        { "chipotrio.answer-victory-bullet-3" },
+        { "chiptorio.answer-victory-bullet-1" },
+        { "chiptorio.answer-victory-bullet-2" },
+        { "chiptorio.answer-victory-bullet-3" },
       },
-      final_message = { "chipotrio.answer-victory-final" },
-      image_path = "__chipotrio__/graphics/answer-ending.png",
+      final_message = { "chiptorio.answer-victory-final" },
+      image_path = "__chiptorio__/graphics/answer-ending.png",
     })
     game.set_game_state({
       game_finished = true,
@@ -335,14 +337,14 @@ local function update_record(record)
       record.state = "paused"
       if game.tick >= (record.next_warn or 0) then
         record.next_warn = game.tick + WARN_INTERVAL
-        force_print(entity.force, { "chipotrio.answer-paused" })
+        force_print(entity.force, { "chiptorio.answer-paused" })
       end
     end
   elseif record.state == "paused" then
     local ok = check_engine(record)
     if ok then
       record.state = "running"
-      force_print(entity.force, { "chipotrio.answer-resumed" })
+      force_print(entity.force, { "chiptorio.answer-resumed" })
     end
   end
 end
@@ -416,7 +418,7 @@ local function on_gui_click(event)
 
   local ok = check_engine(record)
   if not ok then
-    player.print({ "chipotrio.answer-boot-failed" })
+    player.print({ "chiptorio.answer-boot-failed" })
     refresh_gui(player, record)
     return
   end
@@ -424,25 +426,23 @@ local function on_gui_click(event)
   record.state = "running"
   record.elapsed = 0
   record.next_warn = 0
-  player.print({ "chipotrio.answer-booted" })
+  player.print({ "chiptorio.answer-booted" })
   refresh_gui(player, record)
 end
 
-script.on_init(init_storage)
-script.on_configuration_changed(init_storage)
 script.on_event(defines.events.on_gui_opened, on_gui_opened)
 script.on_event(defines.events.on_gui_closed, on_gui_closed)
 script.on_event(defines.events.on_gui_click, on_gui_click)
 
-remote.add_interface("chipotrio-answer", {
-  -- Debug helper: /c remote.call("chipotrio-answer", "status")
+remote.add_interface("chiptorio-answer", {
+  -- Debug helper: /c remote.call("chiptorio-answer", "status")
   status = function()
     init_storage()
     for unit_number, record in pairs(storage.answer_engines) do
       if record.entity and record.entity.valid then
         local ok, _, level = check_engine(record)
         log(string.format(
-          "CHIPOTRIO ANSWER status engine=%d state=%s elapsed=%d/%d level=%d ok=%s score=%d",
+          "CHIPTORIO ANSWER status engine=%d state=%s elapsed=%d/%d level=%d ok=%s score=%d",
           unit_number,
           tostring(record.state),
           record.elapsed,

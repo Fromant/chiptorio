@@ -25,25 +25,25 @@ end
 --     a fresh save is dead on arrival.
 local starter_recipe = data.raw.recipe["analytical-engine"]
 if not starter_recipe then
-  error("chipotrio: analytical-engine recipe missing; cannot wire the starter trigger")
+  error("chiptorio: analytical-engine recipe missing; cannot wire the starter trigger")
 end
 if starter_recipe.enabled == false then
-  error("chipotrio: analytical-engine must be craftable without research, or there is no way to research anything")
+  error("chiptorio: analytical-engine must be craftable without research, or there is no way to research anything")
 end
 if not data.raw.item["analytical-engine"] then
-  error("chipotrio: analytical-engine item missing; the starter trigger would point at nothing")
+  error("chiptorio: analytical-engine item missing; the starter trigger would point at nothing")
 end
 
 local starter_tech = data.raw.technology["automation-science-pack"]
 if not starter_tech then
-  error("chipotrio: automation-science-pack technology missing; the starter trigger cannot be retargeted")
+  error("chiptorio: automation-science-pack technology missing; the starter trigger cannot be retargeted")
 end
 starter_tech.research_trigger = {
   type = "craft-item",
   item = "analytical-engine",
 }
 starter_tech.icons = {
-  { icon = "__chipotrio__/graphics/technology/automation-science-pack.png", icon_size = 256 },
+  { icon = "__chiptorio__/graphics/technology/automation-science-pack.png", icon_size = 256 },
 }
 starter_tech.icon = nil
 starter_tech.icon_size = nil
@@ -60,10 +60,9 @@ M.add_ingredient("assembling-machine-3", M.item("integrated-circuit", 2))
 M.add_ingredient("assembling-machine-3", M.item("microprocessor", 1))
 M.add_ingredient("beacon", M.item("microprocessor", 1))
 M.add_ingredient("beacon", M.item("system-on-chip", 1))
-M.add_ingredient("roboport", M.item("microprocessor", 2))
-M.add_ingredient("roboport", M.item("system-on-chip", 1))
 M.add_ingredient("programmable-speaker", M.item("microprocessor", 1))
-M.add_ingredient("spidertron", M.item("microprocessor", 5))
-M.add_ingredient("spidertron", M.item("gpu", 2))
-M.add_ingredient("spidertron", M.item("quantum-processor", 1))
+
+-- 4. No enemies, no robots, no combat. See scripts/prune.lua for why this
+--    hides prototypes instead of deleting them.
+require("scripts.prune").apply()
 

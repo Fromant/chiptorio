@@ -1,9 +1,9 @@
 {
-  "name": "chipotrio",
-  "version": "0.5.0",
-  "title": "Chip'torio",
+  "name": "chiptorio",
+  "version": "0.6.0",
+  "title": "Chiptorio",
   "author": "you",
   "factorio_version": "2.1",
   "dependencies": ["base >= 2.1"],
-  "description": "A total conversion where computation is the economy.\n\nResearch runs on punched cards, tape and silicon - not flasks. Build mechanical computers, then vacuum-tube mainframes, then a real semiconductor industry: silica, polysilicon, crystal pulling, wafers, photolithography, etching, doping, packaging, VLSI, chiplets, GPUs and finally a cryogenic quantum line.\n\nSome technologies require a sustained compute throughput, not just delivered science. Your factory must actually keep producing.\n\nEndgame: build the 5x5 Answer Engine, keep every production line running for 42 minutes, and receive The Answer. Then research The Question forever and keep raising the score.\n\nNauvis only. No Space Age required."
+  "description": "A total conversion where computation is the economy.\n\nResearch runs on punched cards, tape and silicon - not flasks. Build mechanical computers, then vacuum-tube mainframes, then a real semiconductor industry: silica, polysilicon, crystal pulling, wafers, photolithography, etching, doping, packaging, VLSI, chiplets, GPUs and finally a cryogenic quantum line.\n\nThe 0.6 redesign removes enemies and robots. The map is a pure industrial puzzle, and the next milestone is a computer network that supplies compute, memory and bandwidth to every lab.\n\nEndgame: build the 5x5 Answer Engine, run it for 42 minutes, and receive The Answer. Then research The Question forever and keep raising the score.\n\nNauvis only. No Space Age required."
 }

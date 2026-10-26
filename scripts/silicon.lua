@@ -20,7 +20,7 @@ M.recipe({
 M.recipe({
   name = "metallurgical-silicon",
   enabled = false,
-  category = "chipotrio-crystal",
+  category = "chiptorio-crystal",
   energy_required = 8,
   ingredients = { M.item("silica", 4), M.item("coal", 1) },
   results = { M.item("metallurgical-silicon", 1) },
@@ -44,7 +44,7 @@ M.recipe({
 M.recipe({
   name = "monocrystalline-ingot",
   enabled = false,
-  category = "chipotrio-crystal",
+  category = "chiptorio-crystal",
   energy_required = 30,
   ingredients = { M.item("polysilicon", 4) },
   results = { M.item("monocrystalline-ingot", 1) },
@@ -91,7 +91,7 @@ M.recipe({
 M.recipe({
   name = "litho-mask",
   enabled = false,
-  category = "chipotrio-fab",
+  category = "chiptorio-fab",
   energy_required = 8,
   ingredients = { M.item("glass", 2), M.item("steel-plate", 1) },
   results = { M.item("litho-mask", 1) },
@@ -101,7 +101,7 @@ M.recipe({
 M.recipe({
   name = "exposed-wafer",
   enabled = false,
-  category = "chipotrio-fab",
+  category = "chiptorio-fab",
   energy_required = 12,
   ingredients = {
     M.item("silicon-wafer", 10),
@@ -114,7 +114,7 @@ M.recipe({
 M.recipe({
   name = "etched-wafer",
   enabled = false,
-  category = "chipotrio-fab",
+  category = "chiptorio-fab",
   energy_required = 8,
   ingredients = {
     M.item("exposed-wafer", 10),
@@ -127,7 +127,7 @@ M.recipe({
 M.recipe({
   name = "processed-wafer",
   enabled = false,
-  category = "chipotrio-fab",
+  category = "chiptorio-fab",
   energy_required = 10,
   ingredients = {
     M.item("etched-wafer", 10),
@@ -141,7 +141,7 @@ M.recipe({
 M.recipe({
   name = "bare-die",
   enabled = false,
-  category = "chipotrio-fab",
+  category = "chiptorio-fab",
   energy_required = 5,
   ingredients = { M.item("processed-wafer", 10) },
   results = { M.item("bare-die", 40) },

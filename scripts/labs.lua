@@ -14,7 +14,7 @@ local M = require("scripts.util")
 local function make_lab(spec)
   local base = data.raw.lab["lab"]
   if not base then
-    error("chipotrio: base lab prototype not found")
+    error("chiptorio: base lab prototype not found")
   end
 
   local entity = M.copy(base)
@@ -27,7 +27,7 @@ local function make_lab(spec)
   entity.researching_speed = spec.speed
   entity.energy_usage = spec.power
   entity.module_slots = spec.modules
-  entity.fast_replaceable_group = "chipotrio-computers"
+  entity.fast_replaceable_group = "chiptorio-computers"
   entity.hidden = false
   entity.hidden_in_factoriopedia = false
   entity.corpse = nil
@@ -43,7 +43,7 @@ local function make_lab(spec)
   item.localised_name = nil
   item.localised_description = nil
   item.place_result = spec.name
-  item.subgroup = "chipotrio-computers"
+  item.subgroup = "chiptorio-computers"
   item.order = spec.order
   item.hidden = false
   item.hidden_in_factoriopedia = false
@@ -156,7 +156,7 @@ local EXTRA_INPUTS = {
 }
 for _, extra in ipairs(EXTRA_INPUTS) do
   if not data.raw.item[extra] then
-    error("chipotrio: lab input item '" .. extra .. "' is missing")
+    error("chiptorio: lab input item '" .. extra .. "' is missing")
   end
 end
 
@@ -169,7 +169,7 @@ for _, name in ipairs({
 }) do
   local lab = data.raw.lab[name]
   if not lab then
-    error("chipotrio: research computer '" .. name .. "' missing")
+    error("chiptorio: research computer '" .. name .. "' missing")
   end
   lab.inputs = lab.inputs or {}
   for _, extra in ipairs(EXTRA_INPUTS) do

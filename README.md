@@ -1,22 +1,23 @@
-# Chip'torio
+# Chiptorio
 
 A Factorio total conversion where **computation is the economy**.
 
 Start with a mechanical Analytical Engine and punched cards. End with a cryogenic quantum line, a datacenter full of GPUs, and a machine that has been computing for 42 minutes just to answer one question.
 
-![Chip'torio](thumbnail.png)
+![Chiptorio](thumbnail.png)
 
 - **Factorio:** 2.1 (tested with 2.1.23)
 - **DLC:** none required; Nauvis only
-- **Status:** 0.5.0 — Eras 0–7 and The Answer endgame implemented
+- **Status:** 0.6.0 — redesign in progress: enemies and robots removed, network research next
 
 ## What makes it different
 
 - **Research runs on compute, not flasks.** The six vanilla science packs are repurposed as storage media: punched cards, punched tape, magnetic tape, disk packs, SSDs, and mainframe modules. Qubit Arrays are a seventh workload.
-- **Throughput is a factory test.** Selected technologies require a sustained production rate, measured over a rolling minute. A stockpile can keep the labs fed, but it cannot satisfy the gate; below the target, research is throttled and then decays.
+- **No biters, no bots.** Enemy generation is disabled and existing enemies are cleaned up. Robots, roboports, and the spidertron are gone. The map is an industrial and engineering puzzle, and item logistics will move to the Quantum Logistics Network.
 - **Chips are infrastructure.** You mine silica, pull silicon crystals, expose wafers, etch, dice, package, and eventually build VLSI dies, chiplets, GPUs, and quantum processors. Late-game vanilla machines are re-costed to need them.
 - **Five research computers.** The Analytical Engine, Tube Mainframe, Mainframe Cluster, Datacenter, and Cryostat get faster and accept more modules. They all accept every workload, so the vanilla tech tree cannot deadlock.
 - **A real ending.** Build the 5x5 Answer Engine, keep every production line running for 42 minutes, and find out what the factory was for.
+- **The 0.6 redesign** replaces the old sustained-production gate with network compute, memory, and bandwidth. Labs become network clients; datacenters supply compute. The full plan is in [`DESIGN.md`](DESIGN.md).
 
 ## Progression at a glance
 
@@ -37,9 +38,9 @@ The full design, balance targets, and per-era production chains are in [`DESIGN.
    - Windows: `%APPDATA%\Factorio\mods`
    - Linux: `~/.factorio/mods`
    - macOS: `~/Library/Application Support/factorio/mods`
-3. Enable **Chip'torio** in the mod list and start a new game.
+3. Enable **Chiptorio** in the mod list and start a new game.
 
-Alternatively, zip the repository root (so `info.json` is at the top of the archive) as `chipotrio_0.5.0.zip` and place it in the `mods` directory.
+Alternatively, zip the repository root (so `info.json` is at the top of the archive) as `chiptorio_0.6.0.zip` and place it in the `mods` directory.
 
 ## Getting started
 
@@ -71,8 +72,8 @@ This is a Lua mod with no build step. All verification runs through headless Fac
 # Data-stage load, map creation, and a 600-tick benchmark
 powershell -ExecutionPolicy Bypass -File tools\test-mod.ps1
 
-# Runtime regression for the throughput gate (2%/min decay)
-powershell -ExecutionPolicy Bypass -File tools\test-gate.ps1
+# Smoke test plus data-contract and runtime assertions
+powershell -ExecutionPolicy Bypass -File tools\test-all.ps1
 ```
 
 Both scripts resolve the Factorio executable automatically:
@@ -84,7 +85,7 @@ Both scripts resolve the Factorio executable automatically:
 
 If automatic detection fails, copy `.env.example` to `.env` and set its `FACTORIO_EXE` value. The `.env` file is gitignored, so it can stay machine-specific.
 
-`test-gate.ps1` requires `-Ticks` to be a multiple of 60. Both scripts support `-Keep` to retain the temporary save for inspection.
+The contract probe lives in `tools/test-probe/`. It loads as a second mod, asserts the data contract after every mod has loaded, and then checks the fresh map at runtime. The wrappers look for `CHIPTORIO-TEST PASS` and fail on `CHIPTORIO-TEST FAIL`. Both scripts support `-Keep` to retain the temporary save for inspection.
 
 ### Generated assets
 
@@ -108,8 +109,8 @@ tools/                        headless tests, path resolution, asset generators
 .env.example                  template for local Factorio path overrides
 ```
 
-More detail, including the 2.1 API pitfalls and module map, is in DESIGN §8. [`AGENTS.md`](AGENTS.md) contains the conventions for coding agents working in this repository, and [`changelog.txt`](changelog.txt) tracks releases.
+More detail, including the 2.1 API pitfalls and module map, is in DESIGN §15. [`AGENTS.md`](AGENTS.md) contains the conventions for coding agents working in this repository, and [`changelog.txt`](changelog.txt) tracks releases.
 
 ## Status
 
-Version 0.5.0 completes the gameplay arc through Era 7 and The Answer. A full rebalance, biter/pollution pass, and multiplayer test are planned for 0.6; art, sound, achievements, and a mod-portal release are planned for 1.0.
+Version 0.6.0 begins the redesign. Enemies and robots are gone, the throughput gate is removed, and the data contract is tested headlessly. The network, datacenters, memory, and QLN are the next milestones; `1.0.0` is the complete redesign.

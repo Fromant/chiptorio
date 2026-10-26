@@ -35,7 +35,7 @@ M.recipe({
 M.recipe({
   name = "cryogen",
   enabled = false,
-  category = "chipotrio-cooling",
+  category = "chiptorio-cooling",
   energy_required = 6,
   ingredients = {
     M.fluid("coolant", 50),
@@ -48,7 +48,7 @@ M.recipe({
 M.recipe({
   name = "qubit",
   enabled = false,
-  category = "chipotrio-quantum",
+  category = "chiptorio-quantum",
   energy_required = 20,
   ingredients = {
     M.item("superconductor", 2),
@@ -62,7 +62,7 @@ M.recipe({
 M.recipe({
   name = "error-corrected-qubit",
   enabled = false,
-  category = "chipotrio-quantum",
+  category = "chiptorio-quantum",
   energy_required = 30,
   ingredients = {
     M.item("qubit", 9),
@@ -76,7 +76,7 @@ M.recipe({
 M.recipe({
   name = "quantum-processor",
   enabled = false,
-  category = "chipotrio-quantum",
+  category = "chiptorio-quantum",
   energy_required = 40,
   ingredients = {
     M.item("error-corrected-qubit", 4),
@@ -92,7 +92,7 @@ M.recipe({
 M.recipe({
   name = "quantum-science-pack",
   enabled = false,
-  category = "chipotrio-quantum",
+  category = "chiptorio-quantum",
   energy_required = 16,
   ingredients = {
     M.item("qubit", 4),

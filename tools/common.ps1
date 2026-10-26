@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Shared helpers for Chip'torio's PowerShell tooling.
+  Shared helpers for Chiptorio's PowerShell tooling.
 
 .DESCRIPTION
   Resolves the Factorio executable without hard-coding a machine-specific path.
@@ -13,7 +13,7 @@
 
 $script:RepoRoot = Split-Path -Parent $PSScriptRoot
 
-function Read-ChipotrioDotEnv {
+function Read-ChiptorioDotEnv {
   param(
     [string]$Path = (Join-Path $script:RepoRoot ".env")
   )
@@ -176,7 +176,7 @@ function Resolve-FactorioExecutable {
     return $resolved
   }
 
-  $dotenv = Read-ChipotrioDotEnv
+  $dotenv = Read-ChiptorioDotEnv
   if ($dotenv.ContainsKey("FACTORIO_EXE") -and $dotenv["FACTORIO_EXE"]) {
     $configured = $dotenv["FACTORIO_EXE"]
     $resolved = Get-FactorioExecutableCandidate $configured

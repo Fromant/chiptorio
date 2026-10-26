@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Loads Chip'torio headlessly, creates a map, and runs a short benchmark.
+  Loads Chiptorio headlessly, creates a map, and runs a short benchmark.
 
 .DESCRIPTION
   Copies the mod into an isolated mod directory, asks Factorio to generate a
@@ -33,9 +33,9 @@ $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "common.ps1")
 
 $root = Split-Path -Parent $PSScriptRoot
-$work = Join-Path $env:TEMP "chipotrio-test"
+$work = Join-Path $env:TEMP "chiptorio-test"
 $mods = Join-Path $work "mods"
-$dest = Join-Path $mods "chipotrio"
+$dest = Join-Path $mods "chiptorio"
 $save = Join-Path $work "test.zip"
 $logPath = Join-Path $env:APPDATA "Factorio\factorio-current.log"
 
@@ -64,7 +64,7 @@ function Get-LogProblems {
     "Failed to load mod",
     "Unknown prototype",
     "Invalid prototype",
-    "chipotrio.*error",
+    "chiptorio.*error",
     "cannot be loaded"
   )
   foreach ($p in $patterns) {
@@ -118,7 +118,7 @@ if ($problems.Count -gt 0) { Show-Failure -Problems $problems }
 Write-Host ""
 Write-Host "--- mods loaded ---"
 if (Test-Path $logPath) {
-  Select-String -Path $logPath -Pattern "(?i)chipotrio" | Select-Object -First 5 | ForEach-Object { Write-Host $_.Line.Trim() }
+  Select-String -Path $logPath -Pattern "(?i)chiptorio" | Select-Object -First 5 | ForEach-Object { Write-Host $_.Line.Trim() }
 }
 
 Write-Host ""
@@ -128,3 +128,5 @@ Write-Host "Save: $save"
 if (-not $Keep) {
   Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+exit 0

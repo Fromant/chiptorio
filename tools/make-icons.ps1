@@ -1,6 +1,6 @@
-﻿<#
+<#
 .SYNOPSIS
-  Generates the placeholder pixel-art icon set for Chip'torio.
+  Generates the placeholder pixel-art icon set for Chiptorio.
 
 .DESCRIPTION
   Every icon is drawn at 16x16 and upscaled 4x with nearest-neighbour, which
@@ -641,7 +641,7 @@ for ($i = 0; $i -lt $order.Count; $i++) {
   $sg.DrawImage($img, $x, $y, 64, 64)
   $img.Dispose()
 }
-$sheetPath = Join-Path $env:TEMP "chipotrio-icons.png"
+$sheetPath = Join-Path $env:TEMP "chiptorio-icons.png"
 $sheet.Save($sheetPath, [System.Drawing.Imaging.ImageFormat]::Png)
 $sg.Dispose(); $sheet.Dispose()
 

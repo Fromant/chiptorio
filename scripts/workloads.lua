@@ -1,4 +1,4 @@
-﻿-- Workloads: the six vanilla science packs, re-flavoured as the storage
+-- Workloads: the six vanilla science packs, re-flavoured as the storage
 -- media you feed into computers. We keep the prototype *names* so the entire
 -- vanilla technology tree keeps working and only rewrite visuals + recipes.
 --
@@ -55,7 +55,7 @@ local workloads = {
     label = "solid-state-drive",
     amount = 2,
     time = 12,
-    category = "chipotrio-compute",
+    category = "chiptorio-compute",
     ingredients = {
       M.item("chemical-science-pack", 1),
       M.item("integrated-circuit", 2),
@@ -67,7 +67,7 @@ local workloads = {
     label = "mainframe-module",
     amount = 1,
     time = 16,
-    category = "chipotrio-compute",
+    category = "chiptorio-compute",
     ingredients = {
       M.item("production-science-pack", 1),
       M.item("microprocessor", 2),
@@ -80,7 +80,7 @@ for _, w in ipairs(workloads) do
   local item = data.raw.item[w.name]
   local recipe = data.raw.recipe[w.name]
   if not item or not recipe then
-    error("chipotrio: expected vanilla workload prototype '" .. w.name .. "'")
+    error("chiptorio: expected vanilla workload prototype '" .. w.name .. "'")
   end
 
   item.localised_name = { "item-name." .. w.label }

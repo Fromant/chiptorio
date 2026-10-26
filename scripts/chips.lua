@@ -29,7 +29,7 @@ M.recipe({
 M.recipe({
   name = "discrete-transistor",
   enabled = false,
-  category = "chipotrio-fab",
+  category = "chiptorio-fab",
   energy_required = 6,
   ingredients = {
     M.item("bare-die", 2),
@@ -43,7 +43,7 @@ M.recipe({
 M.recipe({
   name = "integrated-circuit",
   enabled = false,
-  category = "chipotrio-fab",
+  category = "chiptorio-fab",
   energy_required = 12,
   ingredients = {
     M.item("bare-die", 4),
@@ -57,7 +57,7 @@ M.recipe({
 M.recipe({
   name = "microprocessor",
   enabled = false,
-  category = "chipotrio-fab",
+  category = "chiptorio-fab",
   energy_required = 20,
   ingredients = {
     M.item("integrated-circuit", 2),

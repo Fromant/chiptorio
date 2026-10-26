@@ -14,18 +14,18 @@ local M = require("scripts.util")
 -- Custom recipe categories. The names are deliberately namespaced so other
 -- mods cannot accidentally put recipes in our fabs.
 data:extend({
-  { type = "recipe-category", name = "chipotrio-fab" },
-  { type = "recipe-category", name = "chipotrio-crystal" },
-  { type = "recipe-category", name = "chipotrio-compute" },
-  { type = "recipe-category", name = "chipotrio-vlsi" },
-  { type = "recipe-category", name = "chipotrio-cooling" },
-  { type = "recipe-category", name = "chipotrio-quantum" },
+  { type = "recipe-category", name = "chiptorio-fab" },
+  { type = "recipe-category", name = "chiptorio-crystal" },
+  { type = "recipe-category", name = "chiptorio-compute" },
+  { type = "recipe-category", name = "chiptorio-vlsi" },
+  { type = "recipe-category", name = "chiptorio-cooling" },
+  { type = "recipe-category", name = "chiptorio-quantum" },
 })
 
 local function make_machine(spec)
   local entity = M.copy(data.raw[spec.base_type][spec.base])
   if not entity then
-    error("chipotrio: base machine '" .. spec.base .. "' not found")
+    error("chiptorio: base machine '" .. spec.base .. "' not found")
   end
 
   entity.name = spec.name
@@ -36,7 +36,7 @@ local function make_machine(spec)
   entity.next_upgrade = nil
   entity.hidden = false
   entity.hidden_in_factoriopedia = false
-  entity.fast_replaceable_group = "chipotrio-machines"
+  entity.fast_replaceable_group = "chiptorio-machines"
   entity.crafting_categories = { spec.category }
   entity.crafting_speed = spec.speed
   entity.energy_usage = spec.power
@@ -52,7 +52,7 @@ local function make_machine(spec)
   item.localised_name = nil
   item.localised_description = nil
   item.place_result = spec.name
-  item.subgroup = "chipotrio-machines"
+  item.subgroup = "chiptorio-machines"
   item.order = spec.order
   item.hidden = false
   item.hidden_in_factoriopedia = false
@@ -74,7 +74,7 @@ make_machine({
   name = "wafer-fab",
   base_type = "assembling-machine",
   base = "chemical-plant",
-  category = "chipotrio-fab",
+  category = "chiptorio-fab",
   speed = 1.5,
   power = "300kW",
   modules = 3,
@@ -94,7 +94,7 @@ make_machine({
   name = "crystal-puller",
   base_type = "furnace",
   base = "electric-furnace",
-  category = "chipotrio-crystal",
+  category = "chiptorio-crystal",
   speed = 2,
   power = "240kW",
   modules = 2,
@@ -113,7 +113,7 @@ make_machine({
   name = "server-rack",
   base_type = "assembling-machine",
   base = "assembling-machine-3",
-  category = "chipotrio-compute",
+  category = "chiptorio-compute",
   speed = 1.25,
   power = "420kW",
   modules = 4,
@@ -132,7 +132,7 @@ make_machine({
   name = "vlsi-fab",
   base_type = "assembling-machine",
   base = "chemical-plant",
-  category = "chipotrio-vlsi",
+  category = "chiptorio-vlsi",
   speed = 2,
   power = "800kW",
   modules = 4,
@@ -153,7 +153,7 @@ make_machine({
   name = "cooling-tower",
   base_type = "assembling-machine",
   base = "chemical-plant",
-  category = "chipotrio-cooling",
+  category = "chiptorio-cooling",
   speed = 1.5,
   power = "300kW",
   modules = 2,
@@ -172,7 +172,7 @@ make_machine({
   name = "quantum-fab",
   base_type = "assembling-machine",
   base = "chemical-plant",
-  category = "chipotrio-quantum",
+  category = "chiptorio-quantum",
   speed = 1.5,
   power = "1.2MW",
   modules = 4,
