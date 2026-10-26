@@ -1,0 +1,90 @@
+---------------------------------------------------------------------------------------------------
+Version: 0.5.0
+Date: 2026-10-26
+  Features:
+    - Added The Answer endgame: a 5x5 Answer Engine assembled from every era of the factory.
+    - Added The Question, an infinite final technology that costs all seven workloads plus microprocessors and requires every Chip'torio technology.
+    - Booting the Answer Engine requires sustained production of all seven workloads and microprocessors. Dropping below any target pauses the 42-minute clock until every line recovers.
+    - Added a custom Answer Engine panel showing every required rate, the remaining time, the current question level and the answer score.
+    - Completing the engine prints 42, plays a generated chiptune fanfare, sets a custom victory screen, and unlocks post-game score scaling.
+    - Generated the Answer Engine icon, The Question technology icon, updated thumbnail and victory image.
+  Balance:
+    - The final exam requires 10/s punched cards, 10/s punched tape, 10/s magnetic tape, 6/s disk packs, 4/s solid-state drives, 2/s mainframe modules, 0.5/s qubit arrays and 1/s microprocessors.
+    - Every level of The Question raises the engine's demand by 25% and the completion score by 42 points.
+  Bugfixes:
+    - None.
+
+---------------------------------------------------------------------------------------------------
+Version: 0.4.0
+Date: 2026-10-26
+  Features:
+    - Added Era 7: superconductors, cryogenics, physical qubits, error-corrected qubits and quantum processors.
+    - Added the Quantum Fab (fluid-capable, chipotrio-quantum) and the Cryostat, a fifth research computer with eight module slots and 4x research speed.
+    - Added a seventh workload, the Qubit Array, produced in the Quantum Fab and consumed by every research computer.
+    - Added cryogen, produced in the Cooling Tower from coolant and water.
+    - Added three technologies: Quantum Computing, Quantum Error Correction and Quantum Advantage.
+    - All three Era 7 gates measure sustained production: multi-core CPUs, physical qubits and error-corrected qubits.
+    - Added a quantum processor ingredient to the spidertron.
+    - Generated icons for every new item, fluid, machine and technology.
+  Balance:
+    - Quantum Error Correction costs Qubit Arrays but its recipe deliberately needs only physical qubits, so the tech is not circular.
+    - Quantum Advantage requires a running error-correction line; a stockpile of logical qubits cannot satisfy the gate.
+  Bugfixes:
+    - None.
+
+---------------------------------------------------------------------------------------------------
+Version: 0.3.0
+Date: 2026-10-26
+  Features:
+    - Added Era 5-6: VLSI fabrication, the datacenter cooling loop, chiplets, HBM stacks, GPUs and multi-core CPUs.
+    - Added the VLSI Fab (fluid-capable, chipotrio-vlsi) and the Cooling Tower (chipotrio-cooling).
+    - Added the Datacenter, a fourth research computer with six module slots and 2.5x research speed.
+    - Added phase-shift masks, CMP slurry, low-k dielectric, coolant and cooling units.
+    - Added four technologies: VLSI Process, Datacenter, Advanced Packaging and Heterogeneous Compute.
+    - Advanced Packaging and Heterogeneous Compute gate on sustained SoC and GPU production, not science packs.
+    - Generated icons for every new item, fluid, machine and technology.
+  Balance:
+    - The Tube Mainframe and Mainframe Cluster recipes are now correctly locked behind their technologies instead of being craftable from the start.
+    - Assembling machine 3 now needs a microprocessor; beacons and roboports need a system on a chip; spidertrons need GPUs.
+    - VLSI gates are tuned around the existing utility-science (mainframe module) line.
+  Bugfixes:
+    - Fixed a fresh-save softlock: hiding the vanilla lab removed the trigger that unlocks the first science pack. The automation-science-pack trigger now fires when the first Analytical Engine is crafted.
+    - Fixed the Chip'torio item-group icon rendering at the wrong size (128px vs the generated 64px icon).
+    - Fixed the throughput gate applying 2% decay per second instead of per minute. Research is now throttled proportionally to production, with proportional decay reaching the documented 2%/min at zero production.
+
+---------------------------------------------------------------------------------------------------
+Version: 0.2.0
+Date: 2026-10-26
+  Features:
+    - Added three custom fab machines: Wafer Fab (fluid-capable cleanroom), Crystal Puller, and Server Rack.
+    - Added chipotrio-fab, chipotrio-crystal and chipotrio-compute recipe categories.
+    - Moved all lithography, etch, metallisation, dicing and packaging steps into the Wafer Fab.
+    - Moved crystal growth and metallurgical silicon into the Crystal Puller.
+    - Moved solid-state drives and mainframe modules into the Server Rack.
+    - Generated a full 64x64 icon set for every new item, fluid, machine and computer.
+    - Generated 256x256 technology icons and a mod thumbnail.
+    - Renamed the first-science trigger technology to Punched Cards and gave it a matching icon.
+  Balance:
+    - Silica sand is now unlocked with Thermionics, so glass is craftable as soon as it is unlocked.
+    - Crystal Puller is now unlocked by Semiconductor Physics, before metallurgical silicon is craftable.
+    - Wafer Fab is unlocked with Photolithography; Server Rack with Planar Process.
+  Bugfixes:
+    - Fixed a fresh-save softlock: hiding the vanilla lab removed the trigger that unlocks the first science pack. The automation-science-pack trigger now fires when the first Analytical Engine is crafted.
+    - Fixed the Chip'torio item-group icon rendering at the wrong size (128px vs the generated 64px icon).
+    - Fixed the throughput gate applying 2% decay per second instead of per minute. Research is now throttled proportionally to production, with proportional decay reaching the documented 2%/min at zero production.
+
+---------------------------------------------------------------------------------------------------
+Version: 0.1.0
+Date: 2026-10-26
+  Features:
+    - Replaced the vanilla lab with three computer generations: Analytical Engine, Tube Mainframe, Mainframe Cluster.
+    - Replaced all six science packs with workloads: punched cards, punched tape, magnetic tape, disk packs, SSDs, mainframe modules.
+    - Added the silicon chain: silica, metallurgical silicon, polysilicon, crystal ingots, wafers.
+    - Added the first chip process: photoresist, masks, exposure, etch, metallisation, dicing, discrete transistors.
+    - Added integrated circuits and microprocessors.
+    - Added seven new technologies, from Electromechanics to Microarchitecture.
+    - Added sustained compute-throughput requirements for late technologies.
+    - Circuit network is now gated behind Electromechanics.
+    - Late-game vanilla entities now require chips.
+  Bugfixes:
+    - None yet.

@@ -1,0 +1,122 @@
+<#
+.SYNOPSIS
+  Loads Chip'torio headlessly, creates a map, and runs a short benchmark.
+
+.DESCRIPTION
+  Copies the mod into an isolated mod directory, asks Factorio to generate a
+  map with it enabled, then runs the save for a few hundred ticks so runtime
+  code is exercised too. Finally scans factorio-current.log for errors.
+
+  This is the fastest way to catch prototype and control-stage mistakes without
+  clicking through the menu.
+
+.EXAMPLE
+  powershell -ExecutionPolicy Bypass -File tools\test-mod.ps1
+
+.EXAMPLE
+  powershell -ExecutionPolicy Bypass -File tools\test-mod.ps1 -Keep -Ticks 1200
+#>
+
+param(
+  [string]$Factorio = "C:\Program Files (X86)\Steam\steamapps\common\Factorio\bin\x64\factorio.exe",
+  [int]$Ticks = 600,
+  [switch]$Keep
+)
+
+$ErrorActionPreference = "Stop"
+
+$root = Split-Path -Parent $PSScriptRoot
+$work = Join-Path $env:TEMP "chipotrio-test"
+$mods = Join-Path $work "mods"
+$dest = Join-Path $mods "chipotrio"
+$save = Join-Path $work "test.zip"
+$logPath = Join-Path $env:APPDATA "Factorio\factorio-current.log"
+
+foreach ($required in @("info.json", "data.lua", "data-updates.lua", "control.lua")) {
+  if (-not (Test-Path (Join-Path $root $required))) {
+    throw "missing required mod file: $required"
+  }
+}
+
+if (Test-Path $work) { Remove-Item $work -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $mods | Out-Null
+
+robocopy $root $dest /E /XD .git tools dist /NFL /NDL /NJH /NJS | Out-Null
+if ($LASTEXITCODE -ge 8) { throw "robocopy failed with code $LASTEXITCODE" }
+
+if (-not (Test-Path $Factorio)) { throw "factorio.exe not found at $Factorio" }
+
+function Get-LogProblems {
+  param([string]$LogPath)
+  if (-not (Test-Path $LogPath)) { return @("No Factorio log at $LogPath") }
+  $log = Get-Content $LogPath -Raw
+  $found = @()
+  $patterns = @(
+    "Error while running",
+    "Failed to load mod",
+    "Unknown prototype",
+    "Invalid prototype",
+    "chipotrio.*error",
+    "cannot be loaded"
+  )
+  foreach ($p in $patterns) {
+    $m = [regex]::Matches($log, "(?im)^.*$p.*$")
+    foreach ($hit in $m) { $found += $hit.Value.Trim() }
+  }
+  return $found
+}
+
+function Show-Failure {
+  param([string[]]$Problems)
+  Write-Host ""
+  Write-Host "FAILED" -ForegroundColor Red
+  $Problems | Select-Object -Unique | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+  Write-Host ""
+  Write-Host "Full log: $logPath"
+  if (-not $Keep) {
+    Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+  }
+  exit 1
+}
+
+Write-Host "Creating a map with mod directory: $mods"
+$create = Start-Process -FilePath $Factorio `
+  -ArgumentList @("--mod-directory", "`"$mods`"", "--create", "`"$save`"") `
+  -PassThru -Wait
+
+$problems = @()
+if ($create.ExitCode -ne 0) {
+  $problems += "map creation exited with code $($create.ExitCode)"
+}
+$problems += Get-LogProblems -LogPath $logPath
+if ($problems.Count -gt 0) { Show-Failure -Problems $problems }
+
+if (-not (Test-Path $save)) {
+  Show-Failure -Problems @("map creation produced no save at $save")
+}
+
+Write-Host "Running a $Ticks-tick benchmark"
+$bench = Start-Process -FilePath $Factorio `
+  -ArgumentList @("--mod-directory", "`"$mods`"", "--benchmark", "`"$save`"", "--benchmark-ticks", "$Ticks") `
+  -PassThru -Wait
+
+$problems = @()
+if ($bench.ExitCode -ne 0) {
+  $problems += "benchmark exited with code $($bench.ExitCode)"
+}
+$problems += Get-LogProblems -LogPath $logPath
+if ($problems.Count -gt 0) { Show-Failure -Problems $problems }
+
+Write-Host ""
+Write-Host "--- mods loaded ---"
+if (Test-Path $logPath) {
+  Select-String -Path $logPath -Pattern "(?i)chipotrio" | Select-Object -First 5 | ForEach-Object { Write-Host $_.Line.Trim() }
+}
+
+Write-Host ""
+Write-Host "OK: data stage loaded, a map was created, and $Ticks ticks ran." -ForegroundColor Green
+Write-Host "Save: $save"
+
+if (-not $Keep) {
+  Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+}
