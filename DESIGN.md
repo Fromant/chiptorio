@@ -1,6 +1,6 @@
 # chiptorio — Design Specification
 
-Status: authoritative design; Phase 0 in progress  
+Status: authoritative design; Phase 1 complete, Phase 2 next  
 Date: 2026-10-26  
 Mod ID: `chiptorio`  
 Target: Factorio 2.1, no Space Age, Nauvis only  
@@ -862,6 +862,22 @@ Rules:
 - Pure modules never touch `game` or `storage`.
 - Prototypes are cloned from base entities; icons and cable sprites are generated.
 - Tech data is pure tables; `tech/schema.lua` validates it at load time.
+
+### 15.1 Factorio 2.1 API traps
+
+These have all caused load-stage or runtime errors in this project:
+
+- Recipe `category` is a string; `categories` is the list form. A recipe with fluid ingredients must not use the `crafting` category.
+- Technology ingredients are the positional `{"item-name", amount}` form, not the typed recipe-ingredient table.
+- Prototypes take `icon` or `icons`, not both, and `icon_size` must match the file.
+- Locale placeholders are `__1__`, `__2__`, not `%s`.
+- `defines.events.on_player_fast_replace` does not exist in 2.1. Referencing it yields `First argument must be a table or LuaEventType`.
+- Custom-input events cannot be raised through `script.raise_event`. Test an input path through an exported function, e.g. `remote.call("chiptorio-network", "overlay", true)`.
+- `rendering.destroy(id)` does not exist. Use `rendering.get_object_by_id(id).destroy()`, or `rendering.clear(mod_name)`.
+- An entity at position `4.5` occupies tile `4`: use `math.floor`, not rounding.
+- `storage` is shared by every mod in the save. Namespace it and never assume another mod's keys are absent.
+- Factorio stores one handler per event. Register every handler in `control.lua`; a registration inside a module silently replaces another module's handler.
+- A `nil` entry inside an `ipairs` registration list truncates the loop without error. Register each event explicitly.
 
 ---
 

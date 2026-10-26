@@ -109,7 +109,6 @@ local techs = {
     },
     prerequisites = { "photolithography" },
     effects = {
-      "server-rack",
       "integrated-circuit",
       "mainframe-cluster",
     },
@@ -126,6 +125,26 @@ local techs = {
     prerequisites = { "planar-process" },
     effects = {
       "microprocessor",
+    },
+  },
+  {
+    -- The internet is the first network technology. It costs no compute: it is
+    -- the thing that creates compute. DESIGN §7.4.
+    name = "internet",
+    order = "a[chiptorio]-g2",
+    count = 200,
+    time = 30,
+    cost = {
+      ["chemical-science-pack"] = 1,
+      ["production-science-pack"] = 1,
+    },
+    prerequisites = { "microarchitecture" },
+    effects = {
+      "server-rack",
+      "network-cable",
+      "network-switch",
+      "network-router",
+      "network-monitor",
     },
   },
   {
@@ -268,6 +287,7 @@ local techs = {
       "photolithography",
       "planar-process",
       "microarchitecture",
+      "internet",
       "vlsi-process",
       "datacenter",
       "advanced-packaging",

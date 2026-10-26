@@ -4,9 +4,9 @@
 
 .DESCRIPTION
   Copies chiptorio and the test probe into an isolated mod directory, creates a
-  map, runs a short benchmark, and requires both probe suites to log PASS.
-  The probe is a separate mod so it runs after every chiptorio prototype and
-  data-updates mutation.
+  map, runs a short benchmark, and requires the unit, data and runtime probe
+  suites to log PASS. The probe is a separate mod so it runs after every
+  chiptorio prototype and data-updates mutation.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File tools\test-contract.ps1
@@ -123,6 +123,9 @@ $problems += Get-LogProblems -LogPath $logPath
 
 if (Test-Path $logPath) {
   $log = Get-Content $logPath -Raw
+  if ($log -notmatch "CHIPTORIO-TEST PASS unit") {
+    $problems += "unit probe did not log PASS"
+  }
   if ($log -notmatch "CHIPTORIO-TEST PASS data") {
     $problems += "data probe did not log PASS"
   }

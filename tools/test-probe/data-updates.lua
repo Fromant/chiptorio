@@ -112,7 +112,12 @@ local function entity(name)
   for prototype_type, prototypes in pairs(data.raw) do
     if prototype_type ~= "item" and prototypes[name] then
       local proto = prototypes[name]
-      if proto.type == prototype_type then
+      -- Recipes share a name with the item they make and carry a type, so
+      -- require something entity-shaped before accepting a match.
+      if
+        proto.type == prototype_type
+        and (proto.collision_box or proto.selection_box or proto.minable)
+      then
         return proto
       end
     end
@@ -277,6 +282,82 @@ for _, name in ipairs(LABS) do
       check(inputs[workload], "lab " .. name .. " does not accept " .. workload)
     end
   end
+end
+
+-- Network wiring. Cable, switch, router and monitor are buildable containers;
+-- the cable must sit on its own collision layer so cables stack-proof while
+-- still passing under machines and belts.
+local NETWORK_ENTITIES = {
+  ["network-cable"] = { layer = "chiptorio-cable" },
+  ["network-switch"] = { layer = nil },
+  ["network-router"] = { layer = nil },
+  ["network-monitor"] = { layer = nil },
+}
+for name, spec in pairs(NETWORK_ENTITIES) do
+  local item = item(name)
+  check(item, "missing network item " .. name)
+  if item then
+    check(not item.hidden, "network item is hidden: " .. name)
+    check(item.place_result == name, "network item " .. name .. " does not place itself")
+  end
+
+  local proto = entity(name)
+  check(proto, "missing network entity " .. name)
+  if proto then
+    check(not proto.hidden, "network entity is hidden: " .. name)
+    check(proto.minable and proto.minable.result == name, "network entity " .. name .. " is not minable")
+    check(
+      proto.collision_box and proto.selection_box,
+      "network entity " .. name .. " has no collision or selection box"
+    )
+    if spec.layer then
+      local masks = proto.collision_mask and proto.collision_mask.layers or {}
+      local layers = proto.collision_layer and proto.collision_layer.layers or {}
+      check(masks[spec.layer], "network entity " .. name .. " is not on collision layer " .. spec.layer)
+      check(layers[spec.layer], "network entity " .. name .. " does not collide on layer " .. spec.layer)
+      check(
+        not masks["object"] and not masks["player"] and not layers["object"],
+        "network entity " .. name .. " should pass under machines and players"
+      )
+    end
+  end
+
+  local recipe = data.raw.recipe[name]
+  check(recipe, "missing network recipe " .. name)
+  if recipe then
+    check(not recipe.hidden, "network recipe is hidden: " .. name)
+    check(recipe.enabled == false, "network recipe should start locked: " .. name)
+  end
+end
+
+check(
+  data.raw["collision-layer"] and data.raw["collision-layer"]["chiptorio-cable"],
+  "missing chiptorio-cable collision layer"
+)
+
+local internet = data.raw.technology["internet"]
+check(internet, "missing internet technology")
+if internet then
+  check(not internet.hidden, "internet technology is hidden")
+  local unlocked = {}
+  for _, effect in ipairs(internet.effects or {}) do
+    if effect.type == "unlock-recipe" then
+      unlocked[effect.recipe] = true
+    end
+  end
+  for name in pairs(NETWORK_ENTITIES) do
+    check(unlocked[name], "internet does not unlock " .. name)
+  end
+  check(unlocked["server-rack"], "internet does not unlock server-rack")
+end
+
+local overlay_input = data.raw["custom-input"]["chiptorio-network-overlay"]
+check(overlay_input, "missing chiptorio-network-overlay custom input")
+
+local monitor_shortcut = data.raw.shortcut["chiptorio-network-monitor"]
+check(monitor_shortcut, "missing chiptorio-network-monitor shortcut")
+if monitor_shortcut then
+  check(monitor_shortcut.technology_to_unlock == "internet", "monitor shortcut is not gated on internet")
 end
 
 if #failures > 0 then

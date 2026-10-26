@@ -8,13 +8,14 @@ Start with a mechanical Analytical Engine and punched cards. End with a cryogeni
 
 - **Factorio:** 2.1 (tested with 2.1.23)
 - **DLC:** none required; Nauvis only
-- **Status:** 0.6.0 — redesign in progress: enemies and robots removed, network research next
+- **Status:** 0.6.0 — redesign in progress: enemies and robots removed, network wiring in, network research next
 
 ## What makes it different
 
 - **Research runs on compute, not flasks.** The six vanilla science packs are repurposed as storage media: punched cards, punched tape, magnetic tape, disk packs, SSDs, and mainframe modules. Qubit Arrays are a seventh workload.
 - **No biters, no bots.** Enemy generation is disabled and existing enemies are cleaned up. Robots, roboports, and the spidertron are gone. The map is an industrial and engineering puzzle, and item logistics will move to the Quantum Logistics Network.
 - **Chips are infrastructure.** You mine silica, pull silicon crystals, expose wafers, etch, dice, package, and eventually build VLSI dies, chiplets, GPUs, and quantum processors. Late-game vanilla machines are re-costed to need them.
+- **The factory is the network.** The **Internet** technology unlocks cables, switches, routers, and a monitor. Cables run under machines, switches merge a subnet, routers join subnets, and the monitor shows compute, memory, bandwidth, and latency per network. `ALT + N` draws the topology in-world.
 - **Five research computers.** The Analytical Engine, Tube Mainframe, Mainframe Cluster, Datacenter, and Cryostat get faster and accept more modules. They all accept every workload, so the vanilla tech tree cannot deadlock.
 - **A real ending.** Build the 5x5 Answer Engine, keep every production line running for 42 minutes, and find out what the factory was for.
 - **The 0.6 redesign** replaces the old sustained-production gate with network compute, memory, and bandwidth. Labs become network clients; datacenters supply compute. The full plan is in [`DESIGN.md`](DESIGN.md).
@@ -85,7 +86,7 @@ Both scripts resolve the Factorio executable automatically:
 
 If automatic detection fails, copy `.env.example` to `.env` and set its `FACTORIO_EXE` value. The `.env` file is gitignored, so it can stay machine-specific.
 
-The contract probe lives in `tools/test-probe/`. It loads as a second mod, asserts the data contract after every mod has loaded, and then checks the fresh map at runtime. The wrappers look for `CHIPTORIO-TEST PASS` and fail on `CHIPTORIO-TEST FAIL`. Both scripts support `-Keep` to retain the temporary save for inspection.
+The contract probe lives in `tools/test-probe/`. It loads as a second mod, unit-tests the pure topology graph in the data stage, asserts the data contract after every mod has loaded, and then checks the fresh map at runtime. The wrappers look for `CHIPTORIO-TEST PASS` and fail on `CHIPTORIO-TEST FAIL`. Both scripts support `-Keep` to retain the temporary save for inspection.
 
 ### Generated assets
 
@@ -113,4 +114,4 @@ More detail, including the 2.1 API pitfalls and module map, is in DESIGN §15. [
 
 ## Status
 
-Version 0.6.0 begins the redesign. Enemies and robots are gone, the throughput gate is removed, and the data contract is tested headlessly. The network, datacenters, memory, and QLN are the next milestones; `1.0.0` is the complete redesign.
+Version 0.6.0 begins the redesign. Enemies and robots are gone, the throughput gate is removed, and the network wiring and topology graph are in. Datacenters, memory, research compute, and the QLN are the next milestones; `1.0.0` is the complete redesign.

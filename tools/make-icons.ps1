@@ -610,6 +610,53 @@ Rect $g 3 12 4 1 $gold
 Rect $g 8 12 4 1 $line
 Save-Icon $b "mainframe-cluster"
 
+# --- network -----------------------------------------------------------
+
+$b, $g = New-Canvas
+Rect $g 1 1 14 14 $ink
+Rect $g 2 2 12 12 $panel
+Rect $g 2 2 12 1 $line
+Rect $g 2 7 8 1 $cyan
+Rect $g 9 7 1 6 $cyan
+Rect $g 8 12 3 1 $green
+Rect $g 1 7 1 1 $gold
+Rect $g 14 12 1 1 $gold
+Save-Icon $b "network-cable"
+
+$b, $g = New-Canvas
+Rect $g 1 3 14 10 $panel
+Rect $g 1 3 14 1 $line
+for ($x = 3; $x -le 11; $x += 4) {
+  Rect $g $x 5 2 2 $ink
+  Rect $g ($x + 1) 5 1 1 $cyan
+}
+Rect $g 2 9 12 1 $gold
+Rect $g 2 11 12 1 $line
+Save-Icon $b "network-switch"
+
+$b, $g = New-Canvas
+Rect $g 1 2 14 12 $panel
+Rect $g 1 2 14 1 $line
+Rect $g 2 5 3 1 $cyan
+Rect $g 7 7 1 7 $cyan
+Rect $g 5 6 2 1 $cyan
+Rect $g 8 6 2 1 $cyan
+Rect $g 11 5 3 1 $green
+Rect $g 7 11 1 1 $gold
+Save-Icon $b "network-router"
+
+$b, $g = New-Canvas
+Rect $g 1 1 14 12 $ink
+Rect $g 1 1 14 1 $line
+Rect $g 2 2 12 9 $panel
+Rect $g 3 8 2 1 $cyan
+Rect $g 5 6 2 3 $cyan
+Rect $g 7 7 2 2 $cyan
+Rect $g 9 4 2 5 $green
+Rect $g 6 12 4 2 $steel
+Rect $g 11 12 2 2 $line
+Save-Icon $b "network-monitor"
+
 # --- contact sheet -----------------------------------------------------
 
 $order = @(
@@ -626,7 +673,8 @@ $order = @(
   "vlsi-fab", "cooling-tower", "datacenter", "coolant",
   "superconductor", "qubit", "error-corrected-qubit", "quantum-processor",
   "qubit-array", "quantum-fab", "cryostat", "cryogen",
-  "answer-engine"
+  "answer-engine", "network-cable", "network-switch", "network-router",
+  "network-monitor"
 )
 
 $cols = 8
@@ -662,6 +710,7 @@ $techIcons = @{
   "photolithography"      = "litho-mask"
   "planar-process"        = "integrated-circuit"
   "microarchitecture"     = "microprocessor"
+  "internet"              = "network-monitor"
   "vlsi-process"          = "vlsi-die"
   "datacenter"            = "datacenter"
   "advanced-packaging"    = "chiplet"

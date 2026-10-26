@@ -1,13 +1,18 @@
 ---------------------------------------------------------------------------------------------------
 Version: 0.6.0
-Date: 2026-10-26
+Date: 2026-10-27
   Features:
     - Renamed the mod and every internal identifier from chipotrio to chiptorio.
     - Removed enemies entirely: enemy autoplace is stripped from the map generator, enemy expansion and evolution are disabled, and existing enemy entities are destroyed on init.
     - Removed robots and the spidertron: roboports, logistic and construction robots, robot equipment, logistic request chests and their technologies are hidden and unbuildable.
     - Removed combat progression: weapons, ammo, capsules, turrets, walls, gates, mines, tanks and artillery are hidden, their recipes are disabled, and the remaining technology graph is rewired around them.
     - Added a data-contract and runtime test probe plus tools/test-all.ps1.
+    - Added the Internet technology and network wiring: cable, switch, router and monitor. Cables use a dedicated collision layer so they stack-proof but pass under machines, belts and players.
+    - Added the network topology graph: cables form subnets, switches merge and add bandwidth, routers join subnets into networks, and devices attach within two tiles.
+    - Added the network monitor window and the ALT + N overlay, showing subnet and network compute, memory, bandwidth and latency.
+    - Added a chunk-indexed topology cache that rebuilds at most once per second, and unit tests for the pure graph module.
   Balance:
+    - The Internet technology now unlocks the Server Rack. It no longer comes free with Microarchitecture.
     - Removed the sustained-production throughput gate and its strict-compute setting. Research requirements will move to network compute, memory and bandwidth in the next milestone.
     - Removed microprocessor and system-on-chip costs from roboports and GPU and quantum-processor costs from the spidertron; those prototypes are no longer buildable.
   Bugfixes:

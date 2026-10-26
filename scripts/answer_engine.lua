@@ -430,9 +430,9 @@ local function on_gui_click(event)
   refresh_gui(player, record)
 end
 
-script.on_event(defines.events.on_gui_opened, on_gui_opened)
-script.on_event(defines.events.on_gui_closed, on_gui_closed)
-script.on_event(defines.events.on_gui_click, on_gui_click)
+M.on_gui_opened = on_gui_opened
+M.on_gui_closed = on_gui_closed
+M.on_gui_click = on_gui_click
 
 remote.add_interface("chiptorio-answer", {
   -- Debug helper: /c remote.call("chiptorio-answer", "status")

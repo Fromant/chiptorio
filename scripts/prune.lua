@@ -135,9 +135,13 @@ end
 
 local function hide_place_results()
   for name in pairs(hidden_items) do
-    local item = find_prototype(name)
-    if item and item.place_result then
-      hide_entity(item.place_result)
+    -- A hidden item and its recipe share a name, so search every prototype
+    -- for a place_result instead of trusting the first name match.
+    for _, prototypes in pairs(data.raw) do
+      local proto = prototypes[name]
+      if proto and proto.place_result then
+        hide_entity(proto.place_result)
+      end
     end
   end
 end
