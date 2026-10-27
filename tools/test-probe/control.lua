@@ -26,7 +26,16 @@ local function raise(event, entity)
 end
 
 local function topology(surface_index)
-  return remote.call("chiptorio-network", "topology", surface_index)
+  local ok, res = pcall(function()
+    return remote.call("chiptorio-network", "topology", surface_index)
+  end)
+  if not ok or type(res) ~= "table" then
+    return { cable_count = 0, networks = {}, unconnected = {}, conflicts = {} }
+  end
+  res.networks = res.networks or {}
+  res.unconnected = res.unconnected or {}
+  res.conflicts = res.conflicts or {}
+  return res
 end
 
 local function clear_area(surface, area)
@@ -307,10 +316,10 @@ local function check_research()
   local topo = topology(surface.index)
   check(topo, "topology returned nothing after research setup")
   if topo then
-    check(topo.providers == 2, "expected 2 providers but got " .. tostring(topo.providers))
-    check(topo.labs == 1, "expected 1 lab but got " .. tostring(topo.labs))
-    check(topo.scalar >= 8, "expected at least 8 scalar compute but got " .. tostring(topo.scalar))
-    check(topo.memory >= 16, "expected at least 16 memory capacity but got " .. tostring(topo.memory))
+    check((topo.providers or 0) == 2, "expected 2 providers but got " .. tostring(topo.providers))
+    check((topo.labs or 0) == 1, "expected 1 lab but got " .. tostring(topo.labs))
+    check((topo.scalar or 0) >= 8, "expected at least 8 scalar compute but got " .. tostring(topo.scalar))
+    check((topo.memory or 0) >= 16, "expected at least 16 memory capacity but got " .. tostring(topo.memory))
   end
 
   local supported = remote.call("chiptorio-research", "evaluate", "vlsi-process")
@@ -563,10 +572,10 @@ local function check_qualification()
   check(boosted, "topology returned nothing after qualification")
   if boosted then
     local expected = 8 * first.bonus.compute
-    check(math.abs(boosted.scalar - expected) < 1e-6,
+    check(math.abs((boosted.scalar or 0) - expected) < 1e-6,
       "scalar compute was " .. tostring(boosted.scalar) .. ", expected " .. tostring(expected))
     if before_topo then
-      check(boosted.memory == before_topo.memory,
+      check((boosted.memory or 0) == (before_topo.memory or 0),
         "memory capacity was scaled by the compute bonus: " .. tostring(boosted.memory)
         .. " vs " .. tostring(before_topo.memory))
     end
@@ -606,7 +615,7 @@ local function check_qualification()
 
   local final_topo = topology(surface.index)
   local expected_final = 8 * first.bonus.compute * second.bonus.compute
-  check(final_topo and math.abs(final_topo.scalar - expected_final) < 1e-6,
+  check(final_topo and math.abs((final_topo.scalar or 0) - expected_final) < 1e-6,
     "stacked compute bonus was " .. tostring(final_topo and final_topo.scalar) .. ", expected " .. tostring(expected_final))
 
   for _, entity in ipairs(created) do
