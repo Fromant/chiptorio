@@ -328,20 +328,32 @@ end
 --- level in storage, which changes the force-level multipliers on the next
 --- graph rebuild. Returns true if the level changed.
 function M.on_technology_researched(force, tech_name)
-  init_storage()
-  local spec = meta.INFINITE_RESEARCH_SCALES[tech_name]
-  if not spec then
+  if not force or type(force.index) ~= "number" or type(tech_name) ~= "string" then
     return false
   end
-  local levels = storage.research.infinite_multipliers[force.index] or {}
-  local old_level = levels[tech_name] or 0
-  local new_level = old_level + 1
-  levels[tech_name] = new_level
-  storage.research.infinite_multipliers[force.index] = levels
-  -- Multipliers changed: force the network graph to rebuild so the new
-  -- values reach the allocator.
-  network.mark_dirty()
-  return true, old_level, new_level
+  local ok, result = pcall(function()
+    init_storage()
+    local spec = meta.INFINITE_RESEARCH_SCALES[tech_name]
+    if not spec then
+      return false
+    end
+    if not storage.research or not storage.research.infinite_multipliers then
+      return false
+    end
+    local levels = storage.research.infinite_multipliers[force.index] or {}
+    local old_level = levels[tech_name] or 0
+    local new_level = old_level + 1
+    levels[tech_name] = new_level
+    storage.research.infinite_multipliers[force.index] = levels
+    if network and network.mark_dirty then
+      network.mark_dirty()
+    end
+    return true, old_level, new_level
+  end)
+  if not ok then
+    return false
+  end
+  return result
 end
 
 return M
