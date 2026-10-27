@@ -4,6 +4,8 @@
 
 local failures = {}
 
+local nodes = require("__chiptorio__/scripts/process_nodes")
+
 local function check(condition, message)
   if not condition then
     failures[#failures + 1] = message
@@ -290,6 +292,173 @@ local function check_research()
   end
 end
 
+-- Exercise qualification end to end. A Metrology Lab on a small network must
+-- analyse the pre-internet 6 µm refinement offline, and the 800 nm refinement
+-- must refuse to run until the network reaches its compute gate. Values come
+-- from scripts/process_nodes.lua so this probe tracks the table, not a copy.
+local function check_qualification()
+  local iface = remote.interfaces["chiptorio-qualification"]
+  check(iface and iface.evaluate and iface.step, "missing chiptorio-qualification interface")
+  if not (iface and iface.evaluate and iface.step) then
+    return
+  end
+
+  local surface = game.surfaces[1]
+  local force = game.forces.player
+  local area = { { 78, 56 }, { 96, 74 } }
+  for _, entity in ipairs(surface.find_entities_filtered({ area = area })) do
+    if entity.valid and entity.type ~= "character" then
+      raise(defines.events.script_raised_destroy, entity)
+      entity.destroy()
+    end
+  end
+
+  local created = {}
+  for y = 60, 68 do
+    local cable = surface.create_entity({ name = "network-cable", position = { 84.5, y + 0.5 }, force = force })
+    check(cable, "could not place qualification cable at " .. y)
+    if cable then
+      created[#created + 1] = cable
+    end
+  end
+
+  local metrology = surface.create_entity({ name = "metrology-lab", position = { 82.5, 60.5 }, force = force })
+  local rack = surface.create_entity({ name = "server-rack", position = { 82.5, 64.5 }, force = force })
+  local bank = surface.create_entity({ name = "memory-bank", position = { 82.5, 68.5 }, force = force })
+  check(metrology, "could not place metrology-lab")
+  check(rack, "could not place server-rack for qualification")
+  check(bank, "could not place memory-bank for qualification")
+  if not (metrology and rack and bank) then
+    return
+  end
+  created[#created + 1] = metrology
+  created[#created + 1] = rack
+  created[#created + 1] = bank
+
+  local inventory = metrology.get_inventory(defines.inventory.lab_input)
+  check(inventory, "metrology-lab has no lab input inventory")
+  if not inventory then
+    return
+  end
+
+  local first = nodes.HALF_NODES[1]
+  local second = nodes.HALF_NODES[3]
+  check(first.requires_network == false, "the first half-node should work offline")
+  check(second.requires_network == true, "the third half-node should need the internet")
+
+  inventory.insert({ name = nodes.qualification_item(first.key), count = first.samples })
+  rack.get_module_inventory().insert({ name = "integrated-circuit", count = 4 })
+  bank.get_module_inventory().insert({ name = "sram-module", count = 4 })
+
+  -- The map has no power grid. Fill the lab buffer so the power gate passes;
+  -- the probe is testing analysis and network gating, not electricity.
+  metrology.energy = 1e9
+
+  for _, entity in ipairs(created) do
+    raise(defines.events.script_raised_built, entity)
+  end
+
+  local topo = topology(surface.index)
+  check(topo and topo.metrology == 1, "topology does not see the Metrology Lab")
+
+  local tech = force.technologies[nodes.half_tech_name(first.key)]
+  check(tech, "missing refinement technology on the force: " .. nodes.half_tech_name(first.key))
+  if tech then
+    tech.research_recursive()
+    check(tech.researched, "refinement technology did not research: " .. tech.name)
+  end
+
+  local before = remote.call("chiptorio-qualification", "evaluate", first.key)
+  check(before, "qualification evaluate returned nothing")
+  if before then
+    check(before.supported == true, first.key .. " should be supported offline")
+    check(before.reason == "ok", first.key .. " reason was " .. tostring(before.reason))
+    check(before.qualified == false, first.key .. " started qualified")
+  end
+
+  -- The map has no power grid. Fill the lab buffer so the power gate passes;
+  -- the probe is testing analysis and network gating, not electricity.
+  remote.call("chiptorio-qualification", "step", first.samples * first.analysis_time * 2)
+
+  local state = remote.call("chiptorio-qualification", "state")
+  check(state, "qualification state returned nothing")
+  local qualified = false
+  for _, key in ipairs(state and state.qualified or {}) do
+    if key == first.key then
+      qualified = true
+    end
+  end
+  check(qualified, first.key .. " was not qualified after analysing a full batch")
+
+  local after = remote.call("chiptorio-qualification", "evaluate", first.key)
+  check(after and after.qualified == true, first.key .. " did not report qualified")
+  check(inventory.get_item_count(nodes.qualification_item(first.key)) == 0,
+    "qualification did not consume its PQWs")
+
+  -- Yield is applied to the node the half-node refines, on wafer and die.
+  local refined = nodes.items(nodes.refined_node(first.key))
+  local wafer_bonus = force.recipes[refined.wafer] and force.recipes[refined.wafer].productivity_bonus
+  local die_bonus = force.recipes[refined.die] and force.recipes[refined.die].productivity_bonus
+  check(wafer_bonus and math.abs(wafer_bonus - (first.bonus.yield - 1)) < 1e-6,
+    "wafer yield bonus was " .. tostring(wafer_bonus))
+  check(die_bonus and math.abs(die_bonus - (first.bonus.yield - 1)) < 1e-6,
+    "die yield bonus was " .. tostring(die_bonus))
+
+  -- The compute multiplier must reach the graph through the provider, but it
+  -- must not scale memory capacity or backplane bandwidth.
+  local boosted = topology(surface.index)
+  check(boosted, "topology returned nothing after qualification")
+  if boosted then
+    local expected = 4 * first.bonus.compute
+    check(math.abs(boosted.scalar - expected) < 1e-6,
+      "scalar compute was " .. tostring(boosted.scalar) .. ", expected " .. tostring(expected))
+    check(boosted.memory == 64, "memory capacity was scaled by the compute bonus: " .. tostring(boosted.memory))
+  end
+
+  -- 800 nm needs a network. A 4.2-scalar network must fail on compute even
+  -- though the lab is connected, powered and has memory and bandwidth.
+  local second_tech = force.technologies[nodes.half_tech_name(second.key)]
+  check(second_tech, "missing refinement technology on the force: " .. nodes.half_tech_name(second.key))
+  if second_tech then
+    second_tech.research_recursive()
+  end
+  local gated = remote.call("chiptorio-qualification", "evaluate", second.key)
+  check(gated, "qualification evaluate returned nothing for " .. second.key)
+  if gated then
+    check(gated.supported == false, second.key .. " should not run on 4.2 scalar")
+    check(gated.reason == "compute", second.key .. " reason was " .. tostring(gated.reason))
+  end
+
+  -- Two microprocessors per slot clear the floor: 4 * 2 * 1.05 = 8.4 scalar.
+  rack.get_module_inventory().clear()
+  rack.get_module_inventory().insert({ name = "microprocessor", count = 4 })
+  local recovered = remote.call("chiptorio-qualification", "evaluate", second.key)
+  check(recovered, "qualification evaluate returned nothing after installing microprocessors")
+  if recovered then
+    check(recovered.supported == true, second.key .. " should run on 8.4 scalar")
+    check(recovered.reason == "ok", second.key .. " reason was " .. tostring(recovered.reason))
+  end
+
+  inventory.insert({ name = nodes.qualification_item(second.key), count = second.samples })
+  metrology.energy = 1e9
+  remote.call("chiptorio-qualification", "step", second.samples * second.analysis_time * 2)
+
+  local final = remote.call("chiptorio-qualification", "evaluate", second.key)
+  check(final and final.qualified == true, second.key .. " did not qualify on a qualified network")
+
+  local final_topo = topology(surface.index)
+  local expected_final = 4 * 2 * first.bonus.compute * second.bonus.compute
+  check(final_topo and math.abs(final_topo.scalar - expected_final) < 1e-6,
+    "stacked compute bonus was " .. tostring(final_topo and final_topo.scalar) .. ", expected " .. tostring(expected_final))
+
+  for _, entity in ipairs(created) do
+    if entity.valid then
+      raise(defines.events.script_raised_destroy, entity)
+      entity.destroy()
+    end
+  end
+end
+
 script.on_init(function()
   local map = game.map_settings
   check(map.enemy_evolution and map.enemy_evolution.enabled == false, "enemy evolution is enabled")
@@ -322,5 +491,6 @@ script.on_nth_tick(120, function()
 
   check_network()
   check_research()
+  check_qualification()
   finish("runtime")
 end)

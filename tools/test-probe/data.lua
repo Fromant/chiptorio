@@ -7,6 +7,7 @@
 require("graph_spec")()
 require("research_spec")()
 require("node_spec")()
+require("qualification_spec")()
 
 -- One PASS marker for the whole suite, after every spec has run. Calling
 -- H.finish inside a spec would report only that spec's failures.

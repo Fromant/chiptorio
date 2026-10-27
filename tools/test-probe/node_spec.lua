@@ -101,37 +101,80 @@ return function()
     for index, node in ipairs(nodes.NODES) do
       major[node.key] = index
     end
-    for _, half in ipairs(nodes.HALF_NODES) do
+    for index, half in ipairs(nodes.HALF_NODES) do
       local from = major[half.between[1]]
       local to = major[half.between[2]]
       H.truthy(from and to, "unknown node in half-node " .. half.key)
       H.eq(to, from + 1, "half-node " .. half.key .. " must sit between adjacent majors")
-      H.truthy(half.yield > 1, "half-node " .. half.key .. " must raise yield")
-      H.truthy(half.compute >= 1, "half-node " .. half.key .. " must not lower compute")
-      H.truthy(half.power <= 1, "half-node " .. half.key .. " must not raise power")
+      H.truthy(half.bonus.yield > 1, "half-node " .. half.key .. " must raise yield")
+      H.truthy(half.bonus.compute >= 1, "half-node " .. half.key .. " must not lower compute")
+      H.truthy(half.bonus.power <= 1, "half-node " .. half.key .. " must not raise power")
+      H.truthy(half.samples >= 50 and half.samples <= 150, "sample batch out of range at " .. half.key)
+      H.truthy(half.analysis_time >= 1 and half.analysis_time <= 3, "analysis time out of range at " .. half.key)
+      H.truthy(half.tint, "half-node " .. half.key .. " has no tint")
+      H.eq(nodes.half_index(half.key), index, "half-node index")
+      H.eq(nodes.refined_node(half.key), half.between[1], "refined node")
     end
   end)
 
-  H.test("half-node bonuses are monotonic and accumulate", function()
-    local previous = 1
+  H.test("half-node names are prototype-safe", function()
     for _, half in ipairs(nodes.HALF_NODES) do
-      H.truthy(half.yield >= previous, "yield bonus must not fall at " .. half.key)
-      previous = half.yield
+      H.eq(nodes.half_tech_name(half.key), "refine-" .. half.key, "refinement technology name")
+      H.truthy(nodes.half_tech_name(half.key):find("[%.:]") == nil, "unsafe tech name " .. half.key)
+      H.eq(
+        nodes.qualification_item(half.key),
+        "refine-" .. half.key .. "-qualification-wafer",
+        "qualification item name"
+      )
+      H.eq(nodes.qualification_recipe(half.key), nodes.qualification_item(half.key), "pilot recipe name")
     end
-    -- One half-node sits before each node from 3 um to 1.4 nm.
-    local total = 1
+  end)
+
+  H.test("only the pre-internet half-nodes work offline", function()
     for _, half in ipairs(nodes.HALF_NODES) do
-      total = total * half.yield
+      local previous = nodes.major_index(half.between[1])
+      -- The first two refinements sit on 10 um and 3 um, before the internet.
+      H.eq(half.requires_network, previous > 2, "network requirement at " .. half.key)
     end
-    H.truthy(total > 2, "ten half-nodes should more than double total yield")
-    local first = nodes.half_bonus("10um")
-    local last = nodes.half_bonus("1-4nm")
-    H.eq(first, 1, "no half-node qualifies 10 um")
-    H.eq(last, total, "1.4 nm accumulates every half-node")
+  end)
+
+  H.test("total bonus multiplies the qualified set exactly once", function()
+    local function close(actual, expected, label)
+      if math.abs(actual - expected) > 1e-9 then
+        error((label or "value") .. " expected " .. tostring(expected) .. " but got " .. tostring(actual), 2)
+      end
+    end
+
+    local none = nodes.total_bonus({})
+    close(none.yield, 1, "no yield")
+    close(none.compute, 1, "no compute")
+    close(none.power, 1, "no power")
+
+    local keys = {}
+    local expected = { yield = 1, compute = 1, power = 1 }
+    for _, half in ipairs(nodes.HALF_NODES) do
+      keys[#keys + 1] = half.key
+      expected.yield = expected.yield * half.bonus.yield
+      expected.compute = expected.compute * half.bonus.compute
+      expected.power = expected.power * half.bonus.power
+    end
+
+    local all = nodes.total_bonus(keys)
+    close(all.yield, expected.yield, "all yield")
+    close(all.compute, expected.compute, "all compute")
+    close(all.power, expected.power, "all power")
+    H.truthy(all.yield > 2, "ten half-nodes should more than double total yield")
+
+    local first = nodes.total_bonus({ "6um" })
+    close(first.yield, nodes.half_node("6um").bonus.yield, "single yield")
+    close(first.compute, nodes.half_node("6um").bonus.compute, "single compute")
   end)
 
   H.test("lookups return nil for unknown nodes", function()
     H.eq(nodes.node("nope"), nil, "unknown major node")
     H.eq(nodes.half_node("nope"), nil, "unknown half-node")
+    H.eq(nodes.major_index("nope"), nil, "unknown major index")
+    H.eq(nodes.half_index("nope"), nil, "unknown half index")
+    H.eq(nodes.refined_node("nope"), nil, "unknown refinement")
   end)
 end

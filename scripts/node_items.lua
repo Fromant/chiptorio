@@ -24,3 +24,18 @@ for index, node in ipairs(nodes.NODES) do
   make_node_item("silicon-wafer", names.wafer, "silicon-wafer", node.tint, prefix .. "-b[node-wafer]")
   make_node_item("bare-die", names.die, "bare-die", node.tint, prefix .. "-c[node-die]")
 end
+
+-- Process Qualification Wafers. One item per half-node, tinted with the node it
+-- refines. The pilot recipe in scripts/metrology.lua produces them and the
+-- Metrology Lab consumes them; nothing else uses them, so a locked PQW can
+-- never leak into another production line.
+for index, half in ipairs(nodes.HALF_NODES) do
+  local prefix = string.format("%02d", index)
+  make_node_item(
+    "silicon-wafer",
+    nodes.qualification_item(half.key),
+    "qualification-wafer",
+    half.tint,
+    prefix .. "-q[qualification-wafer]"
+  )
+end

@@ -259,131 +259,152 @@ M.NODES = {
   },
 }
 
--- Ten half-node refinements. They add no wafer/die family: they qualify the
--- previous major node and give it a global yield/compute improvement. Phase 4
--- implements the Metrology Lab; the table is defined now so the data is one
--- source of truth and the contract can check it.
+-- Ten half-node refinements. A half-node adds no wafer/die family: it qualifies
+-- the previous major node and then applies a force-wide bonus. The table is the
+-- single source of truth for the data stage (pilot recipe and technology) and
+-- the runtime (qualification progress and bonuses). DESIGN §4.5.
+--
+-- `bonus.yield` multiplies the previous node's wafer and die output,
+-- `bonus.compute` multiplies the compute of every chip in the force, and
+-- `bonus.power` scales provider power and heat. The runtime multiplies them
+-- over the qualified set, so they accumulate without ever stacking twice on one
+-- recipe.
+--
+-- Keys must be prototype-safe: "1.5um" would fail at load ("Invalid prototype
+-- name"), so the key is "1-5um" and only the label contains the dot.
 M.HALF_NODES = {
   {
     key = "6um",
     label = "6 µm",
     between = { "10um", "3um" },
+    tint = { r = 0.95, g = 0.55, b = 0.45 },
     samples = 50,
-    yield = 1.10,
-    compute = 1.05,
-    power = 0.95,
+    analysis_time = 1.5,
     requires_network = false,
+    bonus = { yield = 1.10, compute = 1.05, power = 0.95 },
   },
   {
-    key = "1.5um",
+    key = "1-5um",
     label = "1.5 µm",
     between = { "3um", "1um" },
+    tint = { r = 0.95, g = 0.72, b = 0.35 },
     samples = 60,
-    yield = 1.10,
-    compute = 1.05,
-    power = 0.95,
+    analysis_time = 1.5,
     requires_network = false,
+    bonus = { yield = 1.10, compute = 1.05, power = 0.95 },
   },
   {
     key = "800nm",
     label = "800 nm",
     between = { "1um", "350nm" },
+    tint = { r = 0.85, g = 0.85, b = 0.35 },
     samples = 70,
-    yield = 1.15,
-    compute = 1.05,
-    power = 0.90,
+    analysis_time = 1.75,
     requires_network = true,
+    bonus = { yield = 1.15, compute = 1.05, power = 0.90 },
   },
   {
     key = "250nm",
     label = "250 nm",
     between = { "350nm", "180nm" },
+    tint = { r = 0.55, g = 0.95, b = 0.55 },
     samples = 80,
-    yield = 1.15,
-    compute = 1.05,
-    power = 0.90,
+    analysis_time = 1.75,
     requires_network = true,
+    bonus = { yield = 1.15, compute = 1.05, power = 0.90 },
   },
   {
     key = "130nm",
     label = "130 nm",
     between = { "180nm", "90nm" },
+    tint = { r = 0.40, g = 0.90, b = 0.85 },
     samples = 90,
-    yield = 1.15,
-    compute = 1.10,
-    power = 0.90,
+    analysis_time = 2.0,
     requires_network = true,
+    bonus = { yield = 1.15, compute = 1.10, power = 0.90 },
   },
   {
     key = "65nm",
     label = "65 nm",
     between = { "90nm", "45nm" },
+    tint = { r = 0.35, g = 0.75, b = 0.95 },
     samples = 100,
-    yield = 1.20,
-    compute = 1.10,
-    power = 0.85,
+    analysis_time = 2.0,
     requires_network = true,
+    bonus = { yield = 1.20, compute = 1.10, power = 0.85 },
   },
   {
     key = "32nm",
     label = "32 nm",
     between = { "45nm", "22nm" },
+    tint = { r = 0.45, g = 0.55, b = 0.95 },
     samples = 105,
-    yield = 1.20,
-    compute = 1.10,
-    power = 0.85,
+    analysis_time = 2.25,
     requires_network = true,
+    bonus = { yield = 1.20, compute = 1.10, power = 0.85 },
   },
   {
     key = "10nm",
     label = "10 nm",
     between = { "14nm", "7nm" },
+    tint = { r = 0.90, g = 0.45, b = 0.85 },
     samples = 110,
-    yield = 1.20,
-    compute = 1.15,
-    power = 0.85,
+    analysis_time = 2.25,
     requires_network = true,
+    bonus = { yield = 1.20, compute = 1.15, power = 0.85 },
   },
   {
     key = "5nm",
     label = "5 nm",
     between = { "7nm", "3nm" },
+    tint = { r = 0.95, g = 0.35, b = 0.65 },
     samples = 120,
-    yield = 1.25,
-    compute = 1.15,
-    power = 0.80,
+    analysis_time = 2.5,
     requires_network = true,
+    bonus = { yield = 1.25, compute = 1.15, power = 0.80 },
   },
   {
     key = "2nm",
     label = "2 nm",
     between = { "3nm", "1-4nm" },
+    tint = { r = 0.95, g = 0.30, b = 0.45 },
     samples = 150,
-    yield = 1.25,
-    compute = 1.20,
-    power = 0.80,
+    analysis_time = 3.0,
     requires_network = true,
+    bonus = { yield = 1.25, compute = 1.20, power = 0.80 },
   },
 }
 
---- Look up a major node by key.
-function M.node(key)
-  for _, node in ipairs(M.NODES) do
-    if node.key == key then
-      return node
+--- Index of an entry with `key` in a list, or nil.
+local function index_of(list, key)
+  for index, entry in ipairs(list) do
+    if entry.key == key then
+      return index
     end
   end
   return nil
 end
 
+--- Look up a major node by key.
+function M.node(key)
+  local index = index_of(M.NODES, key)
+  return index and M.NODES[index] or nil
+end
+
 --- Look up a half-node by key.
 function M.half_node(key)
-  for _, half in ipairs(M.HALF_NODES) do
-    if half.key == key then
-      return half
-    end
-  end
-  return nil
+  local index = index_of(M.HALF_NODES, key)
+  return index and M.HALF_NODES[index] or nil
+end
+
+--- Position of a major node in the roadmap, or nil.
+function M.major_index(key)
+  return index_of(M.NODES, key)
+end
+
+--- Position of a half-node in the roadmap, or nil.
+function M.half_index(key)
+  return index_of(M.HALF_NODES, key)
 end
 
 --- Item names for one node. One function so the data stage and tests cannot
@@ -401,24 +422,53 @@ function M.tech_name(key)
   return "process-" .. key
 end
 
---- Die yield multiplier of every completed half-node before this node.
-function M.half_bonus(node_key)
-  local order = {}
-  local target
-  for index, node in ipairs(M.NODES) do
-    order[node.key] = index
-    if node.key == node_key then
-      target = index
+--- Technology name for a half-node refinement.
+function M.half_tech_name(key)
+  return "refine-" .. key
+end
+
+--- The Process Qualification Wafer item and its pilot recipe. A recipe may share
+--- an item's name in Factorio, so both are the same prototype-safe string.
+function M.qualification_item(key)
+  return "refine-" .. key .. "-qualification-wafer"
+end
+
+function M.qualification_recipe(key)
+  return M.qualification_item(key)
+end
+
+--- The major node a half-node refines.
+function M.refined_node(key)
+  local half = M.half_node(key)
+  return half and half.between[1] or nil
+end
+
+local function is_qualified(qualified, key)
+  if not qualified then
+    return false
+  end
+  if qualified[key] then
+    return true
+  end
+  -- Accept a list of keys as well as a set, so callers can pass either.
+  for _, value in ipairs(qualified) do
+    if value == key then
+      return true
     end
   end
-  if not target then
-    return 1
-  end
-  local bonus = 1
+  return false
+end
+
+--- Product of every bonus over the qualified half-nodes. With nothing qualified
+--- all three multipliers are 1; the result is a plain table the data stage and
+--- the runtime can both use.
+function M.total_bonus(qualified)
+  local bonus = { yield = 1, compute = 1, power = 1 }
   for _, half in ipairs(M.HALF_NODES) do
-    local reached = order[half.between[2]]
-    if reached and reached <= target then
-      bonus = bonus * half.yield
+    if is_qualified(qualified, half.key) then
+      bonus.yield = bonus.yield * half.bonus.yield
+      bonus.compute = bonus.compute * half.bonus.compute
+      bonus.power = bonus.power * half.bonus.power
     end
   end
   return bonus

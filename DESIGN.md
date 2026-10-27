@@ -258,48 +258,84 @@ The upgrade applies to the previous major node:
 - yield multiplier for wafer/die recipes
 - compute multiplier for chips
 - power/heat multiplier
-- optional unlock of a process module for flavor
 
-The technology remains “researched”, but its effects are gated until qualification is complete. The GUI must show this clearly:
+There is deliberately no per-fab process module: the upgrade is force-wide, so a fab
+does not need to be rebuilt or refitted to benefit.
+
+The technology remains "researched", but its effects are gated until qualification is complete. The network monitor shows this clearly:
 
 > 65 nm Process — researched  
-> Qualification: 37/100 test wafers analyzed  
-> Requires: 20 CU/s vector, 16 GB memory, Metrology Lab online  
-> Upgrade inactive until qualification completes.
+> Qualification: 37/100 wafers analyzed  
+> Needs 32 compute (scalar 0.5, vector 0.5), 64 memory and 32 bandwidth.
+
+If the lab is unpowered or the network is short, the bar simply stops and the monitor
+names the reason: `no-labs`, `no-network`, `no-power`, `compute`, `memory` or
+`bandwidth`. Nothing decays and nothing is destroyed; the pilot line can be fixed and
+the batch resumes.
 
 #### 4.5.2 Qualification data
 
-Data-driven in the technology table:
+The half-node table lives in `scripts/process_nodes.lua` (pure) and the network gates in
+`scripts/research_meta.lua` (pure). The technology table only supplies position and
+cost:
 
 ```lua
-qualification = {
+-- process_nodes.HALF_NODES entry
+{
+  key = "65nm",                       -- prototype-safe
+  label = "65 nm",                    -- locale only
+  between = { "90nm", "45nm" },       -- the major node it refines
   samples = 100,
-  sample_item = "chiptorio-65nm-qualification-wafer",
-  sample_recipe = "chiptorio-65nm-qualification-wafer",
-  lab = "metrology-lab",
-  analysis_time = 2.0,          -- seconds per sample
-  compute = { scalar = 10, vector = 10 },
-  memory = 16,                  -- GB
+  analysis_time = 2.0,                -- seconds per sample
   requires_network = true,
-  effects = {
-    yield = 1.20,
-    compute = 1.10,
-    power = 0.85,
-  },
+  tint = { r = 0.35, g = 0.75, b = 0.95 },
+  bonus = { yield = 1.20, compute = 1.10, power = 0.85 },
+}
+
+-- research_meta.QUALIFICATION_GATES["65nm"]
+{
+  floor = 32,
+  memory = 64,
+  bandwidth = 32,
+  profiles = { scalar = 0.5, vector = 0.5 },
 }
 ```
 
-Early half-nodes before the internet (6 µm, 1.5 µm) use `requires_network = false`. From 800 nm onward the Metrology Lab requires network compute/memory. This avoids a pre-internet deadlock while making later refinements a network task.
+Generated names are `refine-<key>` for the technology and
+`refine-<key>-qualification-wafer` for both the PQW item and its pilot recipe.
+The pilot recipe runs in the refined node's fab category (`chiptorio-fab` for the first
+three nodes, `chiptorio-vlsi` after that) and consumes 2 previous-node wafers, 1 of that
+node's base mask, 20 photoresist and 1 metrology test structure per PQW.
+
+The bonus is applied by three different mechanisms, because they are three different
+game systems:
+
+- `bonus.yield` becomes `LuaRecipe.productivity_bonus` on the refined node's wafer and
+  die recipes. Those recipes set `allow_productivity = true`; the bonus is set, not
+  added, so re-qualifying cannot multiply the same recipe twice.
+- `bonus.compute` becomes a per-force multiplier read by
+  `network_runtime.provider_descriptor` for every provider, so a rebuilt graph sees it.
+- `bonus.power` scales provider `power` and `heat`, not `cooling`. Memory capacity and
+  backplane bandwidth are hardware and are never scaled.
+
+Early half-nodes before the internet (6 µm, 1.5 µm) have no gate at all, so the
+Metrology Lab works offline. From 800 nm onward the lab needs a network that meets its
+gate. Profile shares stay scalar-only up to 130 nm: a vector requirement before the GPU
+exists would deadlock the ladder.
 
 #### 4.5.3 Anti-grind rules
 
 - Sample batch is modest: 50–150 depending on node.
-- Analysis time is 1–3 seconds per sample.
-- One Metrology Lab can handle a half-node; no need to build a second factory.
-- No random failures.
+- Analysis time is 1.5–3 seconds per sample, and the total batch is a few minutes of
+  lab time, not an evening.
+- One lab is enough; extra labs on the same network speed the batch up rather than
+  being required.
+- No random failures. A powered, supported lab always makes progress.
 - Qualification is per-force and persists across save/load.
 - The pilot recipe is cheap enough to run from existing node production.
 - The upgrade is global once qualified, so fabs do not need individual modules.
+- Progress is only granted for whole samples, and only if the matching PQW is actually
+  in a lab inventory. Time alone cannot qualify a process.
 
 #### 4.5.4 Why this step exists
 
@@ -640,8 +676,8 @@ Each method has a mask/resist/etch recipe chain. The machine tier determines whi
 Phase 3 folds the method into the node: `process_nodes.NODES` records the
 lithography method and the mask family (`litho-mask` or `phase-shift-mask`)
 for each node, and the node technology unlocks the matching process kit.
-Standalone lithography technologies are Phase 4 content if the qualification
-loop needs to unlock methods separately.
+Phase 4 kept that decision: the qualification loop unlocks a pilot line, not a
+standalone lithography method, so there is still one process kit per major node.
 
 ### 10.2 Transistor architectures
 
@@ -650,8 +686,9 @@ PMOS → NMOS → CMOS → HMOS → FinFET → GAA nanosheet → CFET.
 Each is a technology that unlocks the next node family and improves density/efficiency.
 
 Phase 3 records the transistor architecture on its node and expresses it through
-the node's die recipe and yield. A separate transistor technology per
-architecture is deferred with the half-node qualification work.
+the node's die recipe and yield. Phase 4 did not add a separate transistor
+technology per architecture: the half-node refinements carry the process
+improvements, and a second tech layer would have duplicated them.
 
 ### 10.3 Packaging and assembly
 
@@ -863,23 +900,26 @@ scripts/
   machines.lua            -- wafer fab, crystal puller, VLSI fab, assembly fab
   labs.lua                -- analytical engine .. cryostat
   providers.lua           -- server rack, memory bank, datacenter (lab clones)
+  metrology.lua           -- Metrology Lab, test structure, pilot recipes
   memory.lua              -- SRAM/DRAM recipes
   network.lua             -- cable, switch, router, monitor
   process_nodes.lua       -- PURE: 12-node ladder, half-node table, naming
-  node_items.lua          -- tinted node mask/wafer/die items
+  node_items.lua          -- tinted node mask/wafer/die items and PQWs
   node_recipes.lua        -- node mask/wafer/die and chip-packaging recipes
   chips.lua, silicon.lua, era5.lua, era7.lua, workloads.lua, endgame.lua
-  research_meta.lua       -- PURE: labs, chips, memory, providers, tech gates
+  research_meta.lua       -- PURE: labs, chips, memory, providers, tech/qual gates
   answer_meta.lua, rates.lua
-  technology.lua          -- the chiptorio tech tree
+  technology.lua          -- the chiptorio tech tree, including refine-* techs
   prune.lua               -- enemies, robots, combat removal
   enemy_cleanup.lua
   answer_engine.lua
   runtime/
     network_graph.lua     -- PURE: topology builder
     research_alloc.lua    -- PURE: allocation and decay
+    qualification_alloc.lua -- PURE: gate checks and qualification progress
     network_runtime.lua   -- chunk cache, capacities, overlay, monitor
     research_runtime.lua  -- lab pausing, decay, debug interface
+    qualification_runtime.lua -- Metrology Lab analysis, per-force bonuses
 tools/
   common.ps1, test-all.ps1, test-mod.ps1, test-contract.ps1
   make-icons.ps1, make-sound.ps1
@@ -892,9 +932,10 @@ Rules:
 - `data-updates.lua` only touches vanilla after all mods load.
 - `control.lua` owns one `on_nth_tick(60)` dispatcher.
 - Runtime state lives in `storage`, versioned and initialized in `on_init` and `on_configuration_changed`.
-- Pure modules (`research_meta`, `network_graph`, `research_alloc`, `process_nodes`) never touch `data`, `game` or `storage`.
+- Pure modules (`research_meta`, `network_graph`, `research_alloc`, `qualification_alloc`, `process_nodes`) never touch `data`, `game` or `storage`.
 - Prototypes are cloned from base entities; icons are generated. Node items share the wafer/die/mask art with a per-node tint.
-- `scripts/technology.lua` generates the twelve `process-*` technologies from `process_nodes.NODES`; the technology table only supplies tech-tree position and cost.
+- `scripts/technology.lua` generates the twelve `process-*` technologies from `process_nodes.NODES` and the ten `refine-*` technologies from `process_nodes.HALF_NODES`; the technology table only supplies tech-tree position and cost.
+- `network_runtime` never requires `qualification_runtime`. The latter registers a monitor section and a bonus setter through calls, which keeps the dependency one-way.
 - Test code lives in `tools/test-probe/`, never in the mod.
 
 ### 15.1 Factorio 2.1 API traps
@@ -917,6 +958,10 @@ These have all caused load-stage or runtime errors in this project:
 - `ModulePrototype` lives in `data.raw.module`, not `data.raw.item`, so item checks must consult both (see `M.item_exists`). It requires `category`, `tier` and `effect`; `effect = {}` is valid and is how zero-effect chips are built.
 - `LabPrototype.allowed_effects` is an `EffectTypeLimitation`, not a map of booleans. Assigning `{ speed = true }` fails with "Value must be a string"; omit it and inherit the base lab's limits instead.
 - A lab clone with `inputs = {}` is a valid compute provider: it keeps module slots and `get_module_inventory()` without being usable for research. Setting `researching_speed = 0.001` keeps the animation honest.
+- A lab clone whose `inputs` are the ten PQWs is a valid Metrology Lab: those items sit in `defines.inventory.lab_input`, which is the only item inventory a lab exposes to script. Set `module_slots = 0` so it cannot also be used as a provider.
+- `LuaRecipe.productivity_bonus` is a per-force `Read|Write` `EffectValue` (0.10 = 10%), reached through `force.recipes[name].productivity_bonus`. The recipe must have `allow_productivity = true`, and the value is absolute: setting it again does not stack.
+- `LuaInventory.remove{}` returns the number actually removed, which is what the qualification runtime uses to decide whether a sample was really paid for.
+- Qualification completion changes chip compute, so it must call `network.mark_dirty()`; otherwise the cached graph keeps serving the pre-bonus provider capacities for up to a second.
 - Provider module contents change without an inventory event (inserters, manual transfer). The runtime compares a signature derived from `get_module_inventory().get_contents()` once per second instead of listening to inventory events.
 - `LuaForce.research_progress` is readable and writable; `current_research` is read-only and `force.add_research` queues a technology.
 - At runtime `LuaTechnology.prerequisites` is a dictionary keyed by technology name, not an array. Use `pairs`, and `research_recursive()` to force-unlock a chain in tests; the data-stage prototype uses an array of names.
@@ -937,13 +982,17 @@ modules through a cross-mod `require("__chiptorio__/scripts/...")`:
   proportional decay, greedy lab enablement, bandwidth cap, `decay_amount`, lab demand.
 - `node_spec.lua`: twelve major nodes in roadmap order, unique and prototype-safe
   naming, monotonic die yield, first-three/VLSI split, ten half-nodes between adjacent
-  majors, monotonic and accumulating half-node bonuses, unknown-node lookups.
+  majors, prototype-safe refinement and PQW names, the offline/network split,
+  multiplying the qualified set exactly once, unknown-node lookups.
+- `qualification_spec.lua`: gates exist for exactly the network half-nodes, missing
+  network/compute/memory/bandwidth are separate hard stops, profile shares are honoured,
+  only powered and supported labs gain samples, clamping, wafer consumption and bar
+  fractions.
 
-All three specs run before a single `PASS unit` marker; calling `H.finish` inside one
+All four specs run before a single `PASS unit` marker; calling `H.finish` inside one
 spec would hide the failures of the specs that run after it.
 
-Still to add: memory generations for QLN, infinite multipliers, qualification tables,
-property tests.
+Still to add: memory generations for QLN, infinite multipliers, property tests.
 
 ### 16.2 Data-contract tests
 
@@ -956,9 +1005,14 @@ no throughput-gate references. The process-node contract checks every node's thr
 three locked recipes and technology, and that the technology unlocks each mask/wafer/die
 plus one packaging recipe per supported architecture. It also asserts the nine-pack lab
 inputs, that each custom pack is unlocked by its introducing technology, and that the
-unprefixed `quantum-science-pack` no longer exists.
+unprefixed `quantum-science-pack` no longer exists. The qualification contract checks
+the Metrology Lab (visible, lab clone, near-zero research speed, all ten PQWs as inputs),
+the test structure, one locked pilot recipe per half-node that produces its PQW, one
+`refine-*` technology per half-node with the right prerequisite and internet split, node
+wafer/die recipes that allow productivity, and that `the-question` requires every
+refinement.
 
-Still to add: qualification tables, QLN.
+Still to add: QLN.
 
 ### 16.3 Runtime integration tests
 
@@ -967,9 +1021,14 @@ interface, provider capacity from module inventories (2 providers, 1 lab, 8 scal
 memory), supported research with no decay, a memory-gated technology paused and decaying at
 the maximum rate, a mixed scalar/vector technology refused on a scalar-only network, a pure
 compute shortfall decaying at the maximum rate and recovering when chips are reinstalled.
+Half-node qualification runs end to end: a Metrology Lab on a cable run qualifies 6 µm
+offline and consumes its PQWs, the wafer/die yield bonus appears on the refined node, the
+compute multiplier reaches the topology while memory capacity stays unscaled, 800 nm is
+refused with reason `compute` on the boosted 4.2-scalar network, accepted at 8.4 scalar
+with microprocessors, and the second qualification stacks compute to 8.82.
 
-Still to add: power/cooling throttle, save/load, force isolation, QLN, half-node
-qualification, Answer Engine victory/score, infinite scaling.
+Still to add: power/cooling throttle, save/load, force isolation, QLN, Answer Engine
+victory/score, infinite scaling.
 
 ### 16.4 Performance tests
 
@@ -1008,8 +1067,8 @@ qualification, Answer Engine victory/score, infinite scaling.
 | 7 | Answer Engine rework, infinite research, victory | 42-minute endgame |
 | 8 | Balance, GUI polish, icons/sound, locale, performance, docs, release | full suite green |
 
-Rough effort: 5–7 weeks focused work. Phases 0–3 are complete. Phase 4 is next; the
-highest remaining risk is the half-node qualification loop, not the network runtime.
+Rough effort: 5–7 weeks focused work. Phases 0–4 are complete. Phase 5 is next; the
+highest remaining risk is the QLN transport chain, not the network runtime.
 
 ---
 
@@ -1039,8 +1098,10 @@ Fallbacks:
 
 ## 19. Open questions
 
-1. Exact sample counts and compute/memory requirements for half-node qualification.
-2. Whether half-node upgrades are global (current plan) or also require per-fab process modules.
+1. ~~Exact sample counts and compute/memory requirements for half-node qualification.~~
+   Resolved in `process_nodes.HALF_NODES` and `research_meta.QUALIFICATION_GATES`.
+2. ~~Whether half-node upgrades are global or also require per-fab process modules.~~
+   Resolved: global, applied through force recipe productivity and chip multipliers.
 3. Whether QLN pattern crafting ships in 1.0 or later.
 4. Whether pollution becomes a cleanroom contamination mechanic later.
 5. True multiplayer/desync test scope.

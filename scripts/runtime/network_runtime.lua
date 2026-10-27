@@ -23,6 +23,7 @@ local CABLE = "network-cable"
 local SWITCH = "network-switch"
 local ROUTER = "network-router"
 local MONITOR = "network-monitor"
+local METROLOGY = "metrology-lab"
 
 local PROVIDER_NAMES = { "server-rack", "memory-bank", "datacenter" }
 
@@ -32,7 +33,7 @@ for name in pairs(meta.LAB_DEMAND) do
 end
 table.sort(LAB_NAMES)
 
-local NETWORK_NAMES = { CABLE, SWITCH, ROUTER, MONITOR }
+local NETWORK_NAMES = { CABLE, SWITCH, ROUTER, MONITOR, METROLOGY }
 for _, name in ipairs(PROVIDER_NAMES) do
   NETWORK_NAMES[#NETWORK_NAMES + 1] = name
 end
@@ -41,13 +42,15 @@ for _, name in ipairs(LAB_NAMES) do
 end
 
 -- Which graph role an entity has. A provider contributes compute, memory and
--- bandwidth; a lab is a client that consumes compute. Everything else is
--- wiring.
+-- bandwidth; a lab is a client that consumes compute; a Metrology Lab is a
+-- client that analyses pilot wafers (qualification_runtime.lua reads it).
+-- Everything else is wiring.
 local NETWORK_KINDS = {
   [CABLE] = "cable",
   [SWITCH] = "switch",
   [ROUTER] = "router",
   [MONITOR] = "monitor",
+  [METROLOGY] = "metrology",
 }
 for _, name in ipairs(PROVIDER_NAMES) do
   NETWORK_KINDS[name] = "provider"
@@ -97,6 +100,7 @@ local function init_storage()
   network.render_ids = network.render_ids or {}
   network.monitors = network.monitors or {}
   network.module_signatures = network.module_signatures or {}
+  network.chip_multipliers = network.chip_multipliers or {}
 end
 
 local function track(entity)
@@ -151,17 +155,40 @@ local function new_device(entity, kind)
   }
 end
 
-local function add_profile(device, profile, count)
+local function add_profile(device, profile, count, multiplier)
+  local compute_scale = multiplier and multiplier.compute or 1
+  local power_scale = multiplier and multiplier.power or 1
   for _, field in ipairs(COMPUTE_KINDS) do
-    local value = (profile[field] or 0) * count
+    local value = (profile[field] or 0) * count * compute_scale
     device[field] = device[field] + value
     device.compute = device.compute + value
   end
+  -- Memory capacity and backplane bandwidth are hardware, not compute: a
+  -- process refinement must never create memory or ports out of nothing.
   device.memory = device.memory + (profile.capacity or 0) * count
   device.bandwidth = device.bandwidth + (profile.bandwidth or 0) * count
   for _, field in ipairs(POWER_FIELDS) do
-    device[field] = device[field] + (profile[field] or 0) * count
+    local scale = (field == "power" or field == "heat") and power_scale or 1
+    device[field] = device[field] + (profile[field] or 0) * count * scale
   end
+end
+
+--- Force-wide compute and power multipliers from completed half-nodes. The
+--- qualification runtime is the only writer; this module reads the table while
+--- describing providers so a rebuilt graph picks the new values up.
+function M.set_chip_multipliers(force_index, bonus)
+  init_storage()
+  bonus = bonus or {}
+  storage.network.chip_multipliers[force_index] = {
+    compute = bonus.compute or 1,
+    power = bonus.power or 1,
+  }
+  storage.network.dirty = true
+end
+
+function M.chip_multipliers(force_index)
+  init_storage()
+  return storage.network.chip_multipliers[force_index] or { compute = 1, power = 1 }
 end
 
 --- Read a provider's module inventory and turn it into capacities. Only the
@@ -173,10 +200,13 @@ local function provider_descriptor(entity)
     return nil
   end
 
+  local multiplier = M.chip_multipliers(entity.force and entity.force.index or 0)
+  local power_scale = multiplier.power or 1
+
   local device = new_device(entity, "provider")
   device.bandwidth = profile.bandwidth or 0
-  device.power = profile.power or 0
-  device.heat = profile.heat or 0
+  device.power = (profile.power or 0) * power_scale
+  device.heat = (profile.heat or 0) * power_scale
   device.cooling = profile.cooling or 0
   device.chip_slots = profile.chip_slots or 0
   device.memory_slots = profile.memory_slots or 0
@@ -197,14 +227,14 @@ local function provider_descriptor(entity)
         count = device.chip_slots - device.chips
       end
       device.chips = device.chips + count
-      add_profile(device, chip, count)
+      add_profile(device, chip, count, multiplier)
     elseif memory and device.memory_modules < device.memory_slots then
       local count = item.count
       if count > device.memory_slots - device.memory_modules then
         count = device.memory_slots - device.memory_modules
       end
       device.memory_modules = device.memory_modules + count
-      add_profile(device, memory, count)
+      add_profile(device, memory, count, multiplier)
     end
   end
 
@@ -219,6 +249,16 @@ local function lab_descriptor(entity)
   local device = new_device(entity, "lab")
   device.demand_compute = base
   device.base_demand = base
+  return device
+end
+
+--- A Metrology Lab is a network client: it needs power and, for the later
+--- half-nodes, a network that meets the qualification gate. It contributes no
+--- capacity and consumes no research compute.
+local function metrology_descriptor(entity)
+  local device = new_device(entity, "metrology")
+  device.demand_compute = 0
+  device.base_demand = 0
   return device
 end
 
@@ -246,6 +286,8 @@ local function rebuild_surface(surface)
               device = provider_descriptor(entity)
             elseif kind == "lab" then
               device = lab_descriptor(entity)
+            elseif kind == "metrology" then
+              device = metrology_descriptor(entity)
             else
               local profile = PROFILES[entity.name] or {}
               device = new_device(entity, kind)
@@ -559,6 +601,14 @@ end
 
 local MONITOR_GUI = "chiptorio-network-monitor"
 
+-- The qualification runtime registers an extra monitor section. A callback
+-- keeps the dependency one-way: network_runtime never requires qualification.
+local qualification_provider = nil
+
+function M.set_qualification_provider(provider)
+  qualification_provider = provider
+end
+
 local function monitor_players()
   local players = {}
   for index in pairs(storage.network.monitors) do
@@ -608,6 +658,9 @@ local function rebuild_monitor(player)
   local graph = M.graph_for(surface)
   if not graph or #graph.networks == 0 then
     body.add({ type = "label", caption = { "chiptorio.network-empty" } })
+    if qualification_provider then
+      qualification_provider(player, body)
+    end
     return
   end
 
@@ -646,6 +699,9 @@ local function rebuild_monitor(player)
       { "chiptorio.network-devices" },
       tostring(#(network.providers or {})) .. " / " .. tostring(#(network.labs or {}))
     )
+    if #(network.metrology or {}) > 0 then
+      add_stat(body, { "chiptorio.network-metrology" }, tostring(#network.metrology))
+    end
 
     for index, subnet in ipairs(network.subnets) do
       if index > MAX_MONITOR_SUBNETS then
@@ -665,6 +721,10 @@ local function rebuild_monitor(player)
         })
       end
     end
+  end
+
+  if qualification_provider then
+    qualification_provider(player, body)
   end
 end
 
@@ -786,6 +846,7 @@ function M.summary(surface_index)
     bandwidth = 0,
     labs = 0,
     providers = 0,
+    metrology = 0,
   }
   for _, network in ipairs(graph.networks) do
     summary.compute = summary.compute + network.compute
@@ -796,6 +857,7 @@ function M.summary(surface_index)
     summary.bandwidth = summary.bandwidth + network.bandwidth
     summary.labs = summary.labs + #(network.labs or {})
     summary.providers = summary.providers + #(network.providers or {})
+    summary.metrology = summary.metrology + #(network.metrology or {})
   end
   return summary
 end

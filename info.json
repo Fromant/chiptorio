@@ -1,9 +1,9 @@
 {
   "name": "chiptorio",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "title": "Chiptorio",
   "author": "you",
   "factorio_version": "2.1",
   "dependencies": ["base >= 2.1"],
-  "description": "A total conversion where computation is the economy.\n\nResearch runs on punched cards, tape and silicon - not flasks. Build mechanical computers, then vacuum-tube mainframes, then a real semiconductor industry: silica, polysilicon, crystal pulling, wafers, photolithography, etching, doping, packaging, VLSI, chiplets, GPUs and finally a cryogenic quantum line.\n\nThe redesign removes enemies and robots. The map is a pure industrial puzzle, wired together by an Internet technology: cables, switches, routers and a live network monitor. Labs draw compute, memory and bandwidth from that network: install chips in server racks, memory modules in memory banks, and keep the research programme fed.\n\nEndgame: build the 5x5 Answer Engine, run it for 42 minutes, and receive The Answer. Then research The Question forever and keep raising the score.\n\nNauvis only. No Space Age required."
+  "description": "A total conversion where computation is the economy.\n\nResearch runs on punched cards, tape and silicon - not flasks. Build mechanical computers, then vacuum-tube mainframes, then a real semiconductor industry: silica, polysilicon, crystal pulling, wafers, photolithography, etching, doping, packaging, VLSI, chiplets, GPUs and finally a cryogenic quantum line.\n\nThe redesign removes enemies and robots. The map is a pure industrial puzzle, wired together by an Internet technology: cables, switches, routers and a live network monitor. Labs draw compute, memory and bandwidth from that network: install chips in server racks, memory modules in memory banks, and keep the research programme fed.\n\nThe process ladder runs from 10 µm to 1.4 nm, with ten half-node refinements between the majors. Researching a refinement only unlocks its pilot line: make Process Qualification Wafers, analyse them in a Metrology Lab, and the yield, compute and power upgrade activates for the whole force.\n\nEndgame: build the 5x5 Answer Engine, run it for 42 minutes, and receive The Answer. Then research The Question forever and keep raising the score.\n\nNauvis only. No Space Age required."
 }

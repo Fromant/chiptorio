@@ -211,11 +211,75 @@ M.TECHS = {
   },
 }
 
+-- Qualification gates for the half-node refinements (DESIGN §4.5.2). A missing
+-- entry means the Metrology Lab works offline, which is what keeps 6 µm and
+-- 1.5 µm reachable before the internet. From 800 nm the lab must be attached to
+-- a network that meets the same shape of gate as a technology: compute floor,
+-- memory, bandwidth and a profile mix.
+--
+-- The profile mix stays scalar-only until the GPU exists at 90 nm. A vector
+-- requirement before then would be unsatisfiable and would deadlock the ladder.
+M.QUALIFICATION_GATES = {
+  ["800nm"] = {
+    floor = 8,
+    memory = 16,
+    bandwidth = 8,
+    profiles = { scalar = 1 },
+  },
+  ["250nm"] = {
+    floor = 12,
+    memory = 24,
+    bandwidth = 12,
+    profiles = { scalar = 1 },
+  },
+  ["130nm"] = {
+    floor = 16,
+    memory = 32,
+    bandwidth = 16,
+    profiles = { scalar = 1 },
+  },
+  ["65nm"] = {
+    floor = 32,
+    memory = 64,
+    bandwidth = 32,
+    profiles = { scalar = 0.5, vector = 0.5 },
+  },
+  ["32nm"] = {
+    floor = 48,
+    memory = 96,
+    bandwidth = 48,
+    profiles = { scalar = 0.75, vector = 0.25 },
+  },
+  ["10nm"] = {
+    floor = 64,
+    memory = 128,
+    bandwidth = 64,
+    profiles = { scalar = 0.75, vector = 0.25 },
+  },
+  ["5nm"] = {
+    floor = 96,
+    memory = 192,
+    bandwidth = 96,
+    profiles = { scalar = 0.5, vector = 0.5 },
+  },
+  ["2nm"] = {
+    floor = 128,
+    memory = 256,
+    bandwidth = 128,
+    profiles = { scalar = 0.5, vector = 0.5 },
+  },
+}
+
 M.COMPUTE_PROFILES = { "scalar", "vector", "tensor", "quantum" }
 
 --- Gate table for a technology, or nil for technologies that work offline.
 function M.tech_spec(name)
   return M.TECHS[name]
+end
+
+--- Network gate for a half-node qualification, or nil when it works offline.
+function M.qualification_gate(key)
+  return M.QUALIFICATION_GATES[key]
 end
 
 --- Effective compute demand of one lab for this technology.

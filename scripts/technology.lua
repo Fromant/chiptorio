@@ -423,6 +423,53 @@ for _, node in ipairs(nodes.NODES) do
   }
 end
 
+-- Half-node refinement technologies. Researching one unlocks the Metrology Lab,
+-- the test structure and that half-node's pilot recipe. The bonus stays inactive
+-- until the Process Qualification Wafers have been analysed, which the runtime
+-- tracks per force (scripts/runtime/qualification_runtime.lua, DESIGN §4.5).
+--
+-- The tech costs half of the node it refines and sits directly behind that
+-- node, so a refinement is always a detour, never a prerequisite for the next
+-- major node. From 800 nm it also requires the internet, because the Metrology
+-- Lab needs a network to analyse against.
+for _, half in ipairs(nodes.HALF_NODES) do
+  local previous = nodes.node(half.between[1])
+  local position = previous and NODE_TECHS[previous.key]
+  if not position then
+    error("chiptorio: half-node '" .. half.key .. "' has no previous node technology")
+  end
+
+  local prerequisites = { nodes.tech_name(previous.key) }
+  if half.requires_network then
+    prerequisites[#prerequisites + 1] = "internet"
+  end
+
+  techs[#techs + 1] = {
+    name = nodes.half_tech_name(half.key),
+    -- "f1b" sorts directly after the node it refines and before the next node.
+    order = position.order .. "b",
+    count = math.floor(position.count / 2),
+    time = position.time,
+    cost = previous.science,
+    prerequisites = prerequisites,
+    effects = {
+      "metrology-lab",
+      "metrology-test-structure",
+      nodes.qualification_recipe(half.key),
+    },
+  }
+end
+
+-- The final technology wants every refinement researched. Qualification is a
+-- runtime state, not a technology, so it cannot be a prerequisite.
+for _, spec in ipairs(techs) do
+  if spec.name == "the-question" then
+    for _, half in ipairs(nodes.HALF_NODES) do
+      spec.prerequisites[#spec.prerequisites + 1] = nodes.half_tech_name(half.key)
+    end
+  end
+end
+
 for _, spec in ipairs(techs) do
   local effects = {}
   for _, recipe in ipairs(spec.effects) do

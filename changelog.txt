@@ -1,4 +1,24 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.9.0
+Date: 2026-10-27
+  Features:
+    - Added half-node process qualification. The ten refinements from 6 µm to 2 nm are now real two-stage upgrades: the technology unlocks a pilot line and a Metrology Lab, and the yield, compute and power bonus only activates once the lab has analysed a batch of Process Qualification Wafers.
+    - Added the Metrology Lab, a lab clone whose inputs are the ten qualification wafers. It cannot research and has no module slots; it only analyses pilot batches.
+    - Added the Metrology Test Structure and one pilot recipe per half-node. The recipe runs in the fab of the node it refines and consumes that node's wafers, its base mask, photoresist and a test structure per wafer.
+    - Added ten refine technologies. Each costs half of the node it refines, sits directly behind it, and unlocks the Metrology Lab, the test structure and its own pilot recipe. The Question now requires every refinement.
+    - Added a qualification section to the network monitor: wafers analysed, batch size, and the exact reason the bar is stopped.
+    - Added a debug interface: /c remote.call("chiptorio-qualification", "status"), "evaluate", "state" and "step".
+    - Added a pure qualification allocator with unit tests, data-contract checks for the lab, wafers, pilot recipes and refine technologies, and a runtime probe that qualifies 6 µm offline and 800 nm through a network gate.
+  Balance:
+    - 6 µm and 1.5 µm work without the internet so the early ladder cannot deadlock. From 800 nm the Metrology Lab needs a network that meets a compute floor, a memory dataset and a bandwidth gate.
+    - Qualification gates stay scalar-only up to 130 nm; 65 nm and later ask for a scalar/vector split. A vector requirement before the GPU exists would deadlock the ladder.
+    - Yield improves the refined node's wafer and die output by 10–25%. Compute improves every chip by 5–20%. Provider power and heat fall by 5–20%. Memory capacity and backplane bandwidth are never scaled.
+    - Batches run from 50 to 150 wafers at 1.5–3 seconds each. Extra labs on the same network speed the batch up, but are not required.
+    - A qualified upgrade is global and permanent for that force, and persists across save/load. There are no random failures.
+  Bugfixes:
+    - Node wafer and die recipes now allow productivity, which the qualification yield bonus needs; before this they silently ignored it.
+    - The 1.4 nm process technology pointed at a mistyped icon path, so its icon was missing. The generator now writes process-1-4nm.png and the stale dotted file is gone.
+---------------------------------------------------------------------------------------------------
 Version: 0.8.0
 Date: 2026-10-27
   Features:

@@ -105,6 +105,9 @@ for index, node in ipairs(nodes.NODES) do
     energy_required = 12 + index * 2,
     ingredients = wafer_ingredients,
     results = { M.item(names.wafer, 10) },
+    -- Qualified half-nodes raise this recipe's force productivity; allow the
+    -- bonus without requiring a productivity module in the fab.
+    allow_productivity = true,
   })
 
   -- Dicing. The die count rises with the node: same wafer, more devices.
@@ -118,6 +121,7 @@ for index, node in ipairs(nodes.NODES) do
       M.fluid("etchant", 10),
     },
     results = { M.item(names.die, node.dies) },
+    allow_productivity = true,
   })
 
   -- Packaging recipes for the architectures this node supports.

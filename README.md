@@ -8,7 +8,7 @@ Start with a mechanical Analytical Engine and punched cards. End with a cryogeni
 
 - **Factorio:** 2.1 (tested with 2.1.23)
 - **DLC:** none required; Nauvis only
-- **Status:** 0.8.0 — redesign in progress: enemies and robots removed, network research and the twelve-node process ladder in, QLN next
+- **Status:** 0.9.0 — redesign in progress: enemies and robots removed, network research, the twelve-node process ladder and half-node process qualification in, QLN next
 
 ## What makes it different
 
@@ -18,7 +18,7 @@ Start with a mechanical Analytical Engine and punched cards. End with a cryogeni
 - **The factory is the network.** The **Internet** technology unlocks cables, switches, routers, and a monitor. Cables run under machines, switches merge a subnet, routers join subnets, and the monitor shows compute, memory, bandwidth, and latency per network. `ALT + N` draws the topology in-world.
 - **Five research computers.** The Analytical Engine, Tube Mainframe, Mainframe Cluster, Datacenter, and Cryostat get faster and accept more modules. They all accept every workload, so the vanilla tech tree cannot deadlock.
 - **A real ending.** Build the 5x5 Answer Engine, keep every production line running for 42 minutes, and find out what the factory was for.
-- **The redesign** replaces the old sustained-production gate with network compute, memory, and bandwidth. Labs become network clients; datacenters supply compute; twelve process nodes gate the chip ladder. The full plan is in [`DESIGN.md`](DESIGN.md).
+- **The redesign** replaces the old sustained-production gate with network compute, memory, and bandwidth. Labs become network clients; datacenters supply compute; twelve process nodes gate the chip ladder, and ten half-node refinements are qualified by running a pilot line through a Metrology Lab. The full plan is in [`DESIGN.md`](DESIGN.md).
 
 ## Progression at a glance
 
@@ -41,7 +41,7 @@ The full design, balance targets, and per-era production chains are in [`DESIGN.
    - macOS: `~/Library/Application Support/factorio/mods`
 3. Enable **Chiptorio** in the mod list and start a new game.
 
-Alternatively, zip the repository root (so `info.json` is at the top of the archive) as `chiptorio_0.8.0.zip` and place it in the `mods` directory.
+Alternatively, zip the repository root (so `info.json` is at the top of the archive) as `chiptorio_0.9.0.zip` and place it in the `mods` directory.
 
 ## Getting started
 
@@ -114,4 +114,4 @@ More detail, including the 2.1 API pitfalls and module map, is in DESIGN §15. [
 
 ## Status
 
-Version 0.8.0 completes the compute economy and the semiconductor ladder. Enemies and robots are gone, the throughput gate is removed, labs run on network compute, memory and bandwidth, and twelve process nodes carry the chip line from 10 µm to 1.4 nm. QLN logistics, the half-node qualification loop and the Answer Engine rework are next milestones; `1.0.0` is the complete redesign.
+Version 0.9.0 adds half-node process qualification. Enemies and robots are gone, the throughput gate is removed, labs run on network compute, memory and bandwidth, twelve process nodes carry the chip line from 10 µm to 1.4 nm, and ten refinements between them are unlocked by research but only take effect after a pilot line has been analysed in a Metrology Lab. QLN logistics and the Answer Engine rework are the next milestones; `1.0.0` is the complete redesign.

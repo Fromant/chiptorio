@@ -737,6 +737,41 @@ Rect $g 6 12 4 2 $steel
 Rect $g 11 12 2 2 $line
 Save-Icon $b "network-monitor"
 
+# --- metrology ---------------------------------------------------------
+
+$b, $g = New-Canvas
+Disc $g 8 8 6 $silver
+Disc $g 8 8 5 $panel
+Rect $g 2 7 12 1 $line
+Rect $g 7 2 1 12 $line
+Rect $g 4 4 2 1 $cyan
+Rect $g 10 10 2 1 $gold
+Disc $g 8 8 1 $cyan
+Save-Icon $b "qualification-wafer"
+
+$b, $g = New-Canvas
+Rect $g 1 1 14 14 $ink
+Rect $g 2 2 12 12 $panel
+for ($i = 4; $i -le 11; $i += 3) { Rect $g $i 3 1 10 $line }
+Rect $g 3 3 10 1 $line
+Rect $g 3 12 10 1 $line
+Rect $g 7 3 2 10 $cyan
+Rect $g 3 7 10 2 $gold
+Rect $g 4 4 2 2 $green
+Save-Icon $b "metrology-test-structure"
+
+$b, $g = New-Canvas
+Rect $g 1 1 14 14 $ink
+Rect $g 1 1 14 1 $line
+Rect $g 2 2 12 8 $panel
+Rect $g 3 3 10 6 $cyan
+Rect $g 7 2 1 8 $ink
+Rect $g 2 6 12 1 $ink
+Rect $g 2 11 12 2 $steel
+Rect $g 4 12 2 1 $gold
+Rect $g 10 12 2 1 $green
+Save-Icon $b "metrology-lab"
+
 # --- contact sheet -----------------------------------------------------
 
 $order = @(
@@ -756,7 +791,8 @@ $order = @(
   "quantum-processor", "qubit-array", "quantum-fab", "cryostat",
   "cryogen", "answer-engine", "network-cable", "network-switch",
   "optical-disc", "hbm-science",
-  "network-router", "network-monitor"
+  "network-router", "network-monitor",
+  "qualification-wafer", "metrology-test-structure", "metrology-lab"
 )
 
 $cols = 8
@@ -813,6 +849,16 @@ $techIcons = @{
   "quantum-error-correction"   = "error-corrected-qubit"
   "quantum-advantage"          = "quantum-processor"
   "the-question"               = "answer-engine"
+  "refine-6um"                 = "qualification-wafer"
+  "refine-1-5um"               = "qualification-wafer"
+  "refine-800nm"               = "qualification-wafer"
+  "refine-250nm"               = "qualification-wafer"
+  "refine-130nm"               = "qualification-wafer"
+  "refine-65nm"                = "qualification-wafer"
+  "refine-32nm"                = "qualification-wafer"
+  "refine-10nm"                = "qualification-wafer"
+  "refine-5nm"                 = "qualification-wafer"
+  "refine-2nm"                 = "qualification-wafer"
 }
 
 foreach ($tech in $techIcons.Keys) {

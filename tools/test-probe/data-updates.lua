@@ -518,6 +518,87 @@ for _, node in ipairs(nodes.NODES) do
   end
 end
 
+-- Half-node refinements. Researching a refine technology must create a real
+-- pilot line and a real Metrology Lab, and the lab must accept every PQW.
+-- Qualification itself is runtime state, so the data contract checks the
+-- unlocking, the items and the lab inputs, not the bonus.
+for _, node in ipairs(nodes.NODES) do
+  local names = nodes.items(node.key)
+  for _, name in ipairs({ names.wafer, names.die }) do
+    local recipe = data.raw.recipe[name]
+    check(recipe and recipe.allow_productivity == true, "node recipe cannot take the yield bonus: " .. name)
+  end
+end
+
+local metrology_lab = data.raw.lab["metrology-lab"]
+check(metrology_lab, "missing metrology-lab entity")
+check(metrology_lab and not metrology_lab.hidden, "metrology-lab is hidden")
+check(metrology_lab and metrology_lab.researching_speed and metrology_lab.researching_speed <= 0.001,
+  "metrology-lab must not be usable as a research lab")
+local metrology_item = item("metrology-lab")
+check(metrology_item, "missing metrology-lab item")
+check(metrology_item and not metrology_item.hidden, "metrology-lab item is hidden")
+local metrology_recipe = data.raw.recipe["metrology-lab"]
+check(metrology_recipe, "missing metrology-lab recipe")
+check(metrology_recipe and metrology_recipe.enabled == false, "metrology-lab recipe should start locked")
+check(item("metrology-test-structure"), "missing metrology-test-structure item")
+local test_recipe = data.raw.recipe["metrology-test-structure"]
+check(test_recipe, "missing metrology-test-structure recipe")
+check(test_recipe and test_recipe.enabled == false, "metrology-test-structure recipe should start locked")
+
+local lab_inputs = {}
+for _, input in ipairs(metrology_lab and metrology_lab.inputs or {}) do
+  lab_inputs[input] = true
+end
+
+local function has_prerequisite(tech, name)
+  for _, prereq in ipairs(tech.prerequisites or {}) do
+    if prereq == name then
+      return true
+    end
+  end
+  return false
+end
+
+for _, half in ipairs(nodes.HALF_NODES) do
+  local wafer = nodes.qualification_item(half.key)
+  local proto = item(wafer)
+  check(proto, "missing qualification wafer " .. wafer)
+  check(proto and not proto.hidden, "qualification wafer is hidden: " .. wafer)
+  check(lab_inputs[wafer], "metrology-lab does not accept " .. wafer)
+
+  local recipe = data.raw.recipe[nodes.qualification_recipe(half.key)]
+  check(recipe, "missing pilot recipe " .. nodes.qualification_recipe(half.key))
+  check(recipe and recipe.enabled == false, "pilot recipe should start locked: " .. wafer)
+  check(
+    recipe and recipe.results and recipe.results[1] and recipe.results[1].name == wafer,
+    "pilot recipe does not produce its PQW: " .. wafer
+  )
+
+  local tech_name = nodes.half_tech_name(half.key)
+  local tech = data.raw.technology[tech_name]
+  check(tech, "missing refinement technology " .. tech_name)
+  check(tech and has_prerequisite(tech, nodes.tech_name(half.between[1])),
+    tech_name .. " must require the node it refines")
+  check(tech and half.requires_network == has_prerequisite(tech, "internet"),
+    tech_name .. " internet requirement does not match its gate")
+  local unlocked = unlocked_recipes(tech_name)
+  check(unlocked[nodes.qualification_recipe(half.key)], tech_name .. " does not unlock its pilot recipe")
+  if half.key == nodes.HALF_NODES[1].key then
+    check(unlocked["metrology-lab"], tech_name .. " does not unlock the Metrology Lab")
+    check(unlocked["metrology-test-structure"], tech_name .. " does not unlock the test structure")
+  end
+end
+
+local the_question = data.raw.technology["the-question"]
+check(the_question, "missing the-question technology")
+if the_question then
+  for _, half in ipairs(nodes.HALF_NODES) do
+    local tech_name = nodes.half_tech_name(half.key)
+    check(has_prerequisite(the_question, tech_name), "the-question must require " .. tech_name)
+  end
+end
+
 -- The three custom workloads are item prototypes with their own recipes. The
 -- two that are not node-specific are unlocked by the node that introduces
 -- their feedstock; the Qubit Array comes from the Quantum Fab.

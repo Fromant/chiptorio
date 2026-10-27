@@ -429,6 +429,7 @@ function M.build(spec)
     network.routers = group.routers
     network.labs = {}
     network.providers = {}
+    network.metrology = {}
     table.sort(network.routers)
     network.router_bandwidth = nil
 
@@ -475,12 +476,15 @@ function M.build(spec)
         network.labs[#network.labs + 1] = device.id
       elseif device.kind == "provider" then
         network.providers[#network.providers + 1] = device.id
+      elseif device.kind == "metrology" then
+        network.metrology[#network.metrology + 1] = device.id
       end
     end
   end
   for _, network in ipairs(networks) do
     table.sort(network.labs)
     table.sort(network.providers)
+    table.sort(network.metrology)
   end
 
   table.sort(unconnected)

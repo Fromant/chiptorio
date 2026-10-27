@@ -9,12 +9,14 @@
 local answer_engine = require("scripts.answer_engine")
 local enemy_cleanup = require("scripts.enemy_cleanup")
 local network = require("scripts.runtime.network_runtime")
+local qualification = require("scripts.runtime.qualification_runtime")
 local research = require("scripts.runtime.research_runtime")
 
 script.on_init(function()
   answer_engine.init_storage()
   enemy_cleanup.on_init()
   network.on_init()
+  qualification.on_init()
   research.on_init()
 end)
 
@@ -22,13 +24,17 @@ script.on_configuration_changed(function()
   answer_engine.init_storage()
   enemy_cleanup.on_configuration_changed()
   network.on_configuration_changed()
+  qualification.on_configuration_changed()
   research.on_configuration_changed()
 end)
 
 script.on_nth_tick(60, function()
   answer_engine.tick()
   network.tick()
-  -- Network first: the allocator reads the freshly rebuilt graph.
+  -- Network first: qualification and the allocator read the freshly rebuilt
+  -- graph. Qualification can complete a half-node and mark the graph dirty, so
+  -- it runs before research and its chip multiplier is visible immediately.
+  qualification.tick()
   research.tick()
 end)
 
@@ -84,4 +90,15 @@ remote.add_interface("chiptorio-research", {
   evaluate = research.evaluate,
   -- /c remote.call("chiptorio-research", "step", 60)
   step = research.step,
+})
+
+remote.add_interface("chiptorio-qualification", {
+  -- /c remote.call("chiptorio-qualification", "status")
+  status = qualification.status,
+  -- /c remote.call("chiptorio-qualification", "state")
+  state = qualification.state,
+  -- /c remote.call("chiptorio-qualification", "evaluate", "6um")
+  evaluate = qualification.evaluate,
+  -- /c remote.call("chiptorio-qualification", "step", 600)
+  step = qualification.step,
 })
