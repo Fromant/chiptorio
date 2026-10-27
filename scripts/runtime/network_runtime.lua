@@ -680,7 +680,7 @@ local function rebuild_all()
   init_storage()
   local graphs = {}
   local signatures = {}
-  for index, _ in pairs(storage.network.chunks) do
+  for index, _ in pairs(storage.network.chunks or {}) do
     local surface = game.get_surface(index)
     if surface and surface.valid then
       graphs[index] = rebuild_surface(surface)
@@ -689,14 +689,12 @@ local function rebuild_all()
   end
   -- Also rebuild any surfaces that have network entities but no chunks tracked
   for _, surface in pairs(game.surfaces) do
-    if not graphs[surface.index] then
-      for _, name in ipairs(NETWORK_NAMES) do
-        local entities = surface.find_entities_filtered({name = name})
-        if #entities > 0 then
-          graphs[surface.index] = rebuild_surface(surface)
-          signatures[surface.index] = provider_signature(surface)
-          break
-        end
+    for _, name in ipairs(NETWORK_NAMES) do
+      local entities = surface.find_entities_filtered({name = name})
+      if #entities > 0 then
+        graphs[surface.index] = rebuild_surface(surface)
+        signatures[surface.index] = provider_signature(surface)
+        break
       end
     end
   end
