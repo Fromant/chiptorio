@@ -375,7 +375,7 @@ local function rebuild_surface(surface)
         { (chunk.cx + 1) * CHUNK + SCAN_MARGIN, (chunk.cy + 1) * CHUNK + SCAN_MARGIN },
       }
       for _, entity in ipairs(surface.find_entities_filtered({ area = area, name = NETWORK_NAMES })) do
-        if entity.valid and NETWORK_KINDS[entity.name] and not seen[entity.unit_number] then
+        if entity.valid and not seen[entity.unit_number] then
           seen[entity.unit_number] = true
           if entity.name == CABLE then
             cables[#cables + 1] = {
@@ -403,6 +403,18 @@ local function rebuild_surface(surface)
             }
           else
             local kind = NETWORK_KINDS[entity.name]
+            if not kind then
+              if entity.name == "server-rack" or entity.name == "memory-bank" or entity.name == "datacenter" or entity.name == "analytical-engine" or entity.name == "tube-mainframe" or entity.name == "mainframe-cluster" or entity.name == "datacenter-lab" or entity.name == "cryostat" then kind = "provider"
+              elseif entity.name == "network-switch" then kind = "switch"
+              elseif entity.name == "network-router" then kind = "router"
+              elseif entity.name == "network-monitor" then kind = "monitor"
+              elseif entity.name == "metrology-lab" then kind = "metrology"
+              elseif entity.name == "answer-engine" then kind = "answer"
+              elseif string.find(entity.name, "qln") then kind = entity.name == "qln-storage-drive" and "qln-drive" or "qln"
+              elseif string.find(entity.name, "lab") then kind = "lab"
+              else kind = "lab"
+              end
+            end
             local device
             if kind == "provider" then
               device = provider_descriptor(entity)
@@ -429,7 +441,7 @@ local function rebuild_surface(surface)
   else
     -- No chunk index - scan entire surface for network entities
     for _, entity in ipairs(surface.find_entities_filtered({ name = NETWORK_NAMES })) do
-      if entity.valid and NETWORK_KINDS[entity.name] and not seen[entity.unit_number] then
+      if entity.valid and not seen[entity.unit_number] then
         seen[entity.unit_number] = true
         if entity.name == CABLE then
           cables[#cables + 1] = {
@@ -457,6 +469,18 @@ local function rebuild_surface(surface)
           }
         else
           local kind = NETWORK_KINDS[entity.name]
+          if not kind then
+            if entity.name == "server-rack" or entity.name == "memory-bank" or entity.name == "datacenter" or entity.name == "analytical-engine" or entity.name == "tube-mainframe" or entity.name == "mainframe-cluster" or entity.name == "datacenter-lab" or entity.name == "cryostat" then kind = "provider"
+            elseif entity.name == "network-switch" then kind = "switch"
+            elseif entity.name == "network-router" then kind = "router"
+            elseif entity.name == "network-monitor" then kind = "monitor"
+            elseif entity.name == "metrology-lab" then kind = "metrology"
+            elseif entity.name == "answer-engine" then kind = "answer"
+            elseif string.find(entity.name, "qln") then kind = entity.name == "qln-storage-drive" and "qln-drive" or "qln"
+            elseif string.find(entity.name, "lab") then kind = "lab"
+            else kind = "lab"
+            end
+          end
           local device
           if kind == "provider" then
             device = provider_descriptor(entity)
