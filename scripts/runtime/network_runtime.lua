@@ -368,7 +368,7 @@ local function rebuild_surface(surface)
   local devices = {}
   local seen = {}
 
-  if chunks then
+  if chunks and next(chunks) then
     for _, chunk in pairs(chunks) do
       local area = {
         { chunk.cx * CHUNK - SCAN_MARGIN, chunk.cy * CHUNK - SCAN_MARGIN },
@@ -422,6 +422,59 @@ local function rebuild_surface(surface)
             if device then
               devices[#devices + 1] = device
             end
+          end
+        end
+      end
+    end
+  else
+    -- No chunk index - scan entire surface for network entities
+    for _, entity in ipairs(surface.find_entities_filtered({ name = NETWORK_NAMES })) do
+      if entity.valid and NETWORK_KINDS[entity.name] and not seen[entity.unit_number] then
+        seen[entity.unit_number] = true
+        if entity.name == CABLE then
+          cables[#cables + 1] = {
+            x = entity.position.x,
+            y = entity.position.y,
+            tier = "network-cable",
+          }
+        elseif entity.name == COAXIAL then
+          cables[#cables + 1] = {
+            x = entity.position.x,
+            y = entity.position.y,
+            tier = "network-coaxial-cable",
+          }
+        elseif entity.name == FIBER_MM then
+          cables[#cables + 1] = {
+            x = entity.position.x,
+            y = entity.position.y,
+            tier = "network-fiber-mm-cable",
+          }
+        elseif entity.name == FIBER_SM then
+          cables[#cables + 1] = {
+            x = entity.position.x,
+            y = entity.position.y,
+            tier = "network-fiber-sm-cable",
+          }
+        else
+          local kind = NETWORK_KINDS[entity.name]
+          local device
+          if kind == "provider" then
+            device = provider_descriptor(entity)
+          elseif kind == "lab" then
+            device = lab_descriptor(entity)
+          elseif kind == "metrology" then
+            device = metrology_descriptor(entity)
+          elseif kind == "qln-drive" then
+            device = qln_drive_descriptor(entity)
+          elseif kind == "qln" then
+            device = qln_descriptor(entity)
+          elseif kind == "answer" then
+            device = answer_descriptor(entity)
+          else
+            device = generic_descriptor(entity, kind)
+          end
+          if device then
+            devices[#devices + 1] = device
           end
         end
       end
