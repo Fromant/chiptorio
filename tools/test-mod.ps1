@@ -93,10 +93,16 @@ $create = Start-Process -FilePath $Factorio `
   -PassThru -Wait
 
 $problems = @()
-if ($create.ExitCode -ne 0) {
-  # only treat non-zero exit as failure if there are actual error messages
-  # Factorio returns exit code 1 when the Steam API requires a restart,
-  # but the map may have been created successfully anyway.
+if ($create.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $save)) {
+  # Factorio returns exit code 1 when the Steam API requires a restart;
+  # the map may not have been created yet. Retry once.
+  Write-Host "Map creation exited with code $($create.ExitCode), retrying..." -ForegroundColor Yellow
+  $create = Start-Process -FilePath $Factorio `
+    -ArgumentList @("--mod-directory", "`"$mods`"", "--create", "`"$save`"") `
+    -PassThru -Wait
+}
+$problems = @()
+if ($create.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $save)) {
   $log = Get-Content -LiteralPath $logPath -Raw
   if ($log -match "(?im)Error|Failed|chiptorio.*error|cannot be loaded|Invalid prototype|Unknown prototype") {
     $problems += "map creation exited with code $($create.ExitCode)"
