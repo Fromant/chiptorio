@@ -200,11 +200,31 @@ do
                       cables[#cables + 1] = {x = entity.position.x, y = entity.position.y, tier = tier}
                     end
                   end
-                  for _, entity in ipairs(surface.find_entities_filtered({name = {"network-switch","network-router","network-monitor","metrology-lab","answer-engine","server-rack","memory-bank","datacenter"}})) do
+                  for _, entity in ipairs(surface.find_entities_filtered({name = {"network-switch","network-router","network-monitor","metrology-lab","answer-engine","server-rack","memory-bank","datacenter","analytical-engine","tube-mainframe","mainframe-cluster","datacenter-lab","cryostat"}})) do
                     if entity.valid and not seen[entity.unit_number] then
                       seen[entity.unit_number] = true
-                      -- minimal device
-                      devices[#devices + 1] = {id = entity.unit_number, kind = entity.name == "server-rack" and "provider" or entity.name == "memory-bank" and "provider" or entity.name == "datacenter" and "provider" or entity.name == "network-switch" and "switch" or entity.name == "network-router" and "router" or entity.name == "network-monitor" and "monitor" or entity.name == "metrology-lab" and "metrology" or entity.name == "answer-engine" and "answer" or "lab", name = entity.name, force_index = entity.force and entity.force.index, x = entity.position.x, y = entity.position.y, direction = entity.direction or 0, compute=0, scalar=0,vector=0,tensor=0,quantum=0, memory=0, bandwidth=0, power=0, heat=0, cooling=0, demand_compute=0, demand_memory=0, demand_bandwidth=0}
+                      local kind
+                      if entity.name == "server-rack" or entity.name == "memory-bank" or entity.name == "datacenter" or entity.name == "analytical-engine" or entity.name == "tube-mainframe" or entity.name == "mainframe-cluster" or entity.name == "datacenter-lab" or entity.name == "cryostat" then kind = "provider" end
+                      if entity.name == "network-switch" then kind = "switch" end
+                      if entity.name == "network-router" then kind = "router" end
+                      if entity.name == "network-monitor" then kind = "monitor" end
+                      if entity.name == "metrology-lab" then kind = "metrology" end
+                      if entity.name == "answer-engine" then kind = "answer" end
+                      if not kind then kind = "lab" end
+                      local dev = {id = entity.unit_number, kind = kind, name = entity.name, force_index = entity.force and entity.force.index, x = entity.position.x, y = entity.position.y, direction = entity.direction or 0, compute=0, scalar=0,vector=0,tensor=0,quantum=0, memory=0, bandwidth=0, power=0, heat=0, cooling=0, demand_compute=0, demand_memory=0, demand_bandwidth=0}
+                      if kind == "provider" then
+                        dev.bandwidth = 1000
+                        dev.scalar = 8
+                        dev.compute = 8
+                        dev.memory = 16
+                        dev.power = 10
+                        dev.heat = 10
+                        dev.cooling = 10
+                      elseif kind == "lab" then
+                        dev.demand_compute = 10
+                        dev.base_demand = 10
+                      end
+                      devices[#devices + 1] = dev
                     end
                   end
                   storage.network.graphs[surface_index] = graph_builder.build({cables=cables, devices=devices})
