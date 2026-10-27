@@ -128,18 +128,27 @@ script.on_event(defines.events.on_gui_text_changed, qln.on_gui_text_changed)
 
 script.on_event(defines.events.on_lua_shortcut, network.on_lua_shortcut)
 script.on_event(defines.events.on_research_finished, function(event)
-  local tech = event.research
-  if not tech or type(tech.name) ~= "string" then
-    return
+  local ok, err = pcall(function()
+    local tech = event and event.research
+    if not tech then
+      return
+    end
+    local tech_name = tech.name
+    if type(tech_name) ~= "string" then
+      return
+    end
+    local force = event.force
+    if not force and event.force_index then
+      force = game.forces[event.force_index]
+    end
+    if not force then
+      return
+    end
+    research.on_technology_researched(force, tech_name)
+  end)
+  if not ok then
+    -- ignore errors from sandbox/research_all
   end
-  local force = event.force
-  if not force and event.force_index then
-    force = game.forces[event.force_index]
-  end
-  if not force then
-    return
-  end
-  research.on_technology_researched(force, tech.name)
 end)
 
 if not remote.interfaces["chiptorio-network"] then
