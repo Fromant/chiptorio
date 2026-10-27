@@ -35,22 +35,37 @@ M.CHIP_PROFILES = {
   ["system-on-chip"] = { scalar = 8, power = 25, heat = 2 },
   ["multi-core-cpu"] = { scalar = 32, power = 60, heat = 4 },
   ["gpu"] = { scalar = 2, vector = 16, power = 100, heat = 6 },
+  ["neural-processor"] = { tensor = 32, power = 150, heat = 8 },
   ["quantum-processor"] = { quantum = 64, power = 500, heat = 20 },
 }
 
 -- Memory modules. Capacity is the research dataset size; bandwidth is added
--- to the network's memory bus. QLN storage will reuse the same items in a
--- later phase.
+-- to the network's memory bus. The same items also provide QLN cells through
+-- qln_meta.DRIVE_CELLS (DESIGN §8.2). Later generations add capacity faster
+-- than bandwidth; the two exotic lines trade one for the other: HBM is the
+-- bandwidth ceiling and 3D NAND is the density ceiling.
 M.MEMORY_PROFILES = {
   ["sram-module"] = { capacity = 16, bandwidth = 8, power = 2, heat = 0.5 },
   ["dram-module"] = { capacity = 128, bandwidth = 16, power = 6, heat = 1 },
+  ["sdram-module"] = { capacity = 256, bandwidth = 24, power = 8, heat = 1.5 },
+  ["ddr-module"] = { capacity = 384, bandwidth = 32, power = 10, heat = 2 },
+  ["ddr2-module"] = { capacity = 512, bandwidth = 40, power = 12, heat = 2.5 },
+  ["ddr3-module"] = { capacity = 768, bandwidth = 48, power = 14, heat = 3 },
+  ["ddr4-module"] = { capacity = 1024, bandwidth = 56, power = 16, heat = 3.5 },
+  ["ddr5-module"] = { capacity = 1536, bandwidth = 64, power = 18, heat = 4 },
+  ["hbm-module"] = { capacity = 2048, bandwidth = 96, power = 24, heat = 5 },
+  ["hbm3-module"] = { capacity = 3072, bandwidth = 128, power = 30, heat = 6 },
+  ["3d-nand-module"] = { capacity = 4096, bandwidth = 16, power = 12, heat = 2 },
 }
 
 -- Compute providers. Every provider is a lab clone with no science inputs, so
 -- it can expose module slots without being usable as a research lab.
+-- Providers accept computer modules (`category = chiptorio-computer`) in their
+-- computer slots, and memory modules in their memory slots. A computer bundles
+-- its own compute and memory; memory banks provide additional bulk memory.
 M.PROVIDERS = {
   ["server-rack"] = {
-    chip_slots = 4,
+    computer_slots = 4,
     memory_slots = 0,
     bandwidth = 25,
     power = 150,
@@ -59,7 +74,7 @@ M.PROVIDERS = {
     cooling = 0,
   },
   ["memory-bank"] = {
-    chip_slots = 0,
+    computer_slots = 0,
     memory_slots = 4,
     bandwidth = 25,
     power = 80,
@@ -68,7 +83,7 @@ M.PROVIDERS = {
     cooling = 0,
   },
   ["datacenter"] = {
-    chip_slots = 8,
+    computer_slots = 8,
     memory_slots = 4,
     bandwidth = 100,
     power = 1000,
@@ -76,6 +91,17 @@ M.PROVIDERS = {
     heat = 20,
     cooling = 20,
   },
+}
+
+-- Computer profiles. Each computer module contributes compute profiles,
+-- memory capacity, bandwidth, power and heat when installed in a provider.
+-- These replace the old per-chip CHIP_PROFILES lookups in provider_descriptor.
+M.COMPUTER_PROFILES = {
+  ["microcomputer"] = { scalar = 8, capacity = 256, bandwidth = 32, power = 25, heat = 2 },
+  ["server"] = { scalar = 32, capacity = 512, bandwidth = 64, power = 60, heat = 4 },
+  ["supercomputer"] = { scalar = 8, vector = 64, capacity = 1024, bandwidth = 128, power = 100, heat = 6 },
+  ["neural-computer"] = { scalar = 4, vector = 32, tensor = 128, capacity = 2048, bandwidth = 256, power = 150, heat = 8 },
+  ["quantum-computer"] = { scalar = 2, vector = 16, tensor = 64, quantum = 256, capacity = 4096, bandwidth = 512, power = 500, heat = 20 },
 }
 
 -- Research gates. `profiles` are relative weights, not additive capacities:
@@ -201,6 +227,20 @@ M.TECHS = {
     bandwidth = 384,
     profiles = { scalar = 0.5, vector = 0.5 },
   },
+  ["qln"] = {
+    floor = 48,
+    per_lab = 12,
+    memory = 96,
+    bandwidth = 48,
+    profiles = { scalar = 1 },
+  },
+  ["qln-quantum"] = {
+    floor = 192,
+    per_lab = 48,
+    memory = 384,
+    bandwidth = 192,
+    profiles = { scalar = 0.5, vector = 0.5 },
+  },
   ["the-question"] = {
     floor = 512,
     per_lab = 128,
@@ -290,6 +330,68 @@ function M.lab_demand(spec, lab_name)
     return per_lab
   end
   return base
+end
+
+--- Infinite research scales. Each entry maps a technology name to its per-level
+--- multiplier and the stat it affects. Level 1 is the base (no multiplier).
+--- Applied by the runtime to network capacities, provider stats, and recipe
+--- productivity. Caps are enforced where the design specifies them.
+M.INFINITE_RESEARCH_SCALES = {
+  ["chip-performance"] = {
+    per_level = 0.05,   -- +5% compute per level
+    field = "compute",
+    cap = nil,
+  },
+  ["chip-efficiency"] = {
+    per_level = -0.02,  -- −2% power per level
+    field = "power",
+    cap = 0.10,         -- 90% reduction max (multiplier floor 0.10)
+  },
+  ["memory-density"] = {
+    per_level = 0.05,   -- +5% memory capacity per level
+    field = "memory",
+    cap = nil,
+  },
+  ["memory-bandwidth"] = {
+    per_level = 0.05,   -- +5% memory bandwidth per level
+    field = "bandwidth",
+    cap = nil,
+  },
+  ["network-bandwidth"] = {
+    per_level = 0.05,   -- +5% link throughput per level
+    field = "network_bandwidth",
+    cap = nil,
+  },
+  ["cooling-efficiency"] = {
+    per_level = 0.05,   -- +5% cooling capacity per level
+    field = "cooling",
+    cap = nil,
+  },
+  ["quantum-correction"] = {
+    per_level = 0.05,   -- +5% QPU compute per level
+    field = "quantum",
+    cap = nil,
+  },
+  -- Process Yield uses recipe productivity_bonus directly, capped at 300%.
+  -- It has no entry here because it is applied through LuaRecipe, not a
+  -- scripted multiplier.
+}
+
+--- Infinite-research multiplier for a given tech and level.
+--- Returns 1 + per_level * (level - 1), clamped by cap if present.
+function M.infinite_multiplier(tech_name, level)
+  local spec = M.INFINITE_RESEARCH_SCALES[tech_name]
+  if not spec then
+    return 1
+  end
+  local mult = 1 + spec.per_level * ((level or 1) - 1)
+  if spec.cap then
+    local floor = 1 - spec.cap
+    if mult < floor then
+      mult = floor
+    end
+  end
+  return mult
 end
 
 --- Infinite-research multiplier. Level 1 is the researched technology itself.

@@ -18,18 +18,20 @@ data:extend({
   },
 })
 
-local function icon_picture(name)
-  return {
-    layers = {
-      {
-        filename = "__chiptorio__/graphics/icons/" .. name .. ".png",
-        width = 64,
-        height = 64,
-        scale = 0.5,
-        priority = "extra-high",
-      },
-    },
-  }
+local function rgba(r, g, b, a)
+  return { r = r, g = g, b = b, a = a or 1 }
+end
+
+--- Borrow a real world sprite from a base prototype. An item icon scaled onto
+--- the map is not a sprite: it floats, ignores direction and makes the
+--- collision box impossible to judge.
+local function donor(type_name, name)
+  local prototypes = data.raw[type_name]
+  local proto = prototypes and prototypes[name]
+  if not proto then
+    error("chiptorio: missing donor prototype " .. tostring(type_name) .. "/" .. tostring(name))
+  end
+  return proto
 end
 
 local function make_network_entity(spec)
@@ -51,7 +53,7 @@ local function make_network_entity(spec)
   entity.hidden_in_factoriopedia = false
   entity.inventory_size = 0
   entity.default_empty_slots_signal = nil
-  entity.picture = icon_picture(spec.name)
+  M.set_world_picture(entity, donor(spec.donor_type or "container", spec.donor or "wooden-chest"), spec.tint)
   entity.icon_draw_specification = { scale = 0.5 }
   entity.max_health = spec.health or 100
   entity.collision_box = { { -0.4, -0.4 }, { 0.4, 0.4 } }
@@ -91,6 +93,9 @@ make_network_entity({
   amount = 4,
   craft_time = 0.5,
   collision_layer = "chiptorio-cable",
+  donor_type = "pipe",
+  donor = "pipe",
+  tint = rgba(0.85, 0.55, 0.30),
   ingredients = {
     M.item("copper-cable", 2),
     M.item("plastic-bar", 1),
@@ -104,6 +109,9 @@ make_network_entity({
   order = "b[network-switch]",
   health = 150,
   craft_time = 2,
+  donor_type = "constant-combinator",
+  donor = "constant-combinator",
+  tint = rgba(0.55, 0.85, 1.0),
   ingredients = {
     M.item("network-cable", 5),
     M.item("electronic-circuit", 2),
@@ -118,6 +126,9 @@ make_network_entity({
   order = "c[network-router]",
   health = 200,
   craft_time = 4,
+  donor_type = "constant-combinator",
+  donor = "constant-combinator",
+  tint = rgba(1.0, 0.80, 0.45),
   ingredients = {
     M.item("network-cable", 5),
     M.item("advanced-circuit", 4),
@@ -131,6 +142,9 @@ make_network_entity({
   order = "d[network-monitor]",
   health = 150,
   craft_time = 3,
+  donor_type = "display-panel",
+  donor = "display-panel",
+  tint = rgba(0.50, 1.0, 0.85),
   ingredients = {
     M.item("network-cable", 5),
     M.item("electronic-circuit", 5),

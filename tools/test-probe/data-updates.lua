@@ -8,6 +8,9 @@
 local failures = {}
 
 local nodes = require("__chiptorio__/scripts/process_nodes")
+local qmeta = require("__chiptorio__/scripts/qln_meta")
+local rmeta = require("__chiptorio__/scripts/research_meta")
+local answer_meta = require("__chiptorio__/scripts/answer_meta")
 
 local function check(condition, message)
   if not condition then
@@ -95,9 +98,49 @@ local COMPUTE_MODULES = {
   "quantum-processor",
 }
 
+local COMPUTER_MODULES = {
+  "microcomputer",
+  "server",
+  "supercomputer",
+  "neural-computer",
+  "quantum-computer",
+}
+
+local AI_MODEL_ITEMS = {
+  "small-model",
+  "specialist-model",
+  "general-model",
+  "frontier-model",
+  "agi-model",
+}
+
+local AI_BUILDINGS = {
+  "training-cluster",
+  "inference-lab",
+}
+
+local AI_TECHNOLOGIES = {
+  "machine-learning",
+  "ai-specialist",
+  "ai-general",
+  "ai-frontier",
+  "artificial-general-intelligence",
+}
+
+-- DESIGN §8.3. Order matters: the ladder is asserted to be monotonic in both
+-- research capacity and QLN cells.
 local MEMORY_MODULES = {
   "sram-module",
   "dram-module",
+  "sdram-module",
+  "ddr-module",
+  "ddr2-module",
+  "ddr3-module",
+  "ddr4-module",
+  "ddr5-module",
+  "hbm-module",
+  "hbm3-module",
+  "3d-nand-module",
 }
 
 local EXPECTED_HIDDEN_ITEMS = {}
@@ -145,6 +188,37 @@ local function entity(name)
     end
   end
   return nil
+end
+
+--- Find the first filename inside a Sprite / Sprite4Way so the probe can tell a
+--- real world sprite from an item icon scaled onto the map.
+local function picture_filename(sprite)
+  if type(sprite) ~= "table" then
+    return nil
+  end
+  if type(sprite.filename) == "string" then
+    return sprite.filename
+  end
+  if type(sprite.layers) == "table" then
+    for _, layer in ipairs(sprite.layers) do
+      local filename = picture_filename(layer)
+      if filename then
+        return filename
+      end
+    end
+  end
+  return nil
+end
+
+local function check_world_picture(proto, name)
+  local filename = picture_filename(proto.picture)
+  check(filename, "entity " .. name .. " has no world sprite")
+  if filename then
+    check(
+      not string.find(filename, "graphics/icons/", 1, true),
+      "entity " .. name .. " still uses an item icon as its world sprite"
+    )
+  end
 end
 
 local function is_item_name(name)
@@ -334,6 +408,7 @@ for name, spec in pairs(NETWORK_ENTITIES) do
       proto.collision_box and proto.selection_box,
       "network entity " .. name .. " has no collision or selection box"
     )
+    check_world_picture(proto, name)
     if spec.layer then
       local masks = proto.collision_mask and proto.collision_mask.layers or {}
       local layers = proto.collision_layer and proto.collision_layer.layers or {}
@@ -386,6 +461,92 @@ for _, name in ipairs(MEMORY_MODULES) do
   check(recipe and recipe.enabled == false, "memory module recipe should start locked: " .. name)
 end
 
+-- Computer modules are modules, not plain items. Providers read them from
+-- their module inventory to supply network compute.
+check(data.raw["module-category"]["chiptorio-computer"], "missing chiptorio-computer module category")
+for _, name in ipairs(COMPUTER_MODULES) do
+  local proto = data.raw.module[name]
+  check(proto, "missing computer module " .. name)
+  if proto then
+    check(proto.category == "chiptorio-computer", "computer module " .. name .. " has the wrong category")
+    check(proto.effect and next(proto.effect) == nil, "computer module " .. name .. " must have an empty effect")
+    check(not proto.hidden, "computer module is hidden: " .. name)
+  end
+  local recipe = data.raw.recipe[name]
+  check(recipe, "missing computer module recipe " .. name)
+  check(recipe and recipe.enabled == false, "computer module recipe should start locked: " .. name)
+end
+
+-- AI model items are modules consumed by the Training Cluster to produce models.
+for _, name in ipairs(AI_MODEL_ITEMS) do
+  local proto = data.raw.item[name]
+  check(proto, "missing AI model item " .. name)
+  local recipe = data.raw.recipe[name]
+  check(recipe, "missing AI model recipe " .. name)
+  check(recipe and recipe.enabled == false, "AI model recipe should start locked: " .. name)
+end
+
+-- AI buildings: Training Cluster (assembling-machine) and Inference Lab (lab).
+for _, name in ipairs(AI_BUILDINGS) do
+  local entity = data.raw["assembling-machine"][name] or data.raw.lab[name]
+  check(entity, "missing AI building entity " .. name)
+  local item = data.raw.item[name]
+  check(item, "missing AI building item " .. name)
+  local recipe = data.raw.recipe[name]
+  check(recipe, "missing AI building recipe " .. name)
+end
+
+-- AI technologies must exist and be reachable.
+for _, name in ipairs(AI_TECHNOLOGIES) do
+  local tech = data.raw.technology[name]
+  check(tech, "missing AI technology " .. name)
+end
+
+
+-- Every memory generation must be reachable, and it must carry both uses:
+-- research dataset/bandwidth (research_meta) and QLN cells (qln_meta). The
+-- ladder is monotonic, so no generation is a downgrade in capacity or storage.
+local memory_unlock = {}
+for tech_name, tech in pairs(data.raw.technology) do
+  for _, effect in ipairs(tech.effects or {}) do
+    if effect.type == "unlock-recipe" and data.raw.recipe[effect.recipe] and effect.recipe:find("module$") then
+      check(
+        memory_unlock[effect.recipe] == nil,
+        "memory recipe unlocked by two technologies: " .. effect.recipe
+      )
+      memory_unlock[effect.recipe] = tech_name
+    end
+  end
+end
+
+local previous_capacity = 0
+local previous_cells = 0
+for _, name in ipairs(MEMORY_MODULES) do
+  local profile = rmeta.MEMORY_PROFILES[name]
+  check(profile, "memory module has no research profile: " .. name)
+  if profile then
+    check(profile.capacity > previous_capacity,
+      "memory capacity is not monotonic at " .. name .. ": " .. tostring(profile.capacity))
+    check(profile.bandwidth > 0, "memory module has no bandwidth: " .. name)
+    previous_capacity = profile.capacity
+  end
+  local cells = qmeta.DRIVE_CELLS[name]
+  check(cells, "memory module has no QLN cells: " .. name)
+  if cells then
+    check(cells > previous_cells,
+      "QLN cells are not monotonic at " .. name .. ": " .. tostring(cells))
+    previous_cells = cells
+  end
+  local tech_name = memory_unlock[name]
+  check(tech_name, "memory module recipe is never unlocked: " .. name)
+  if tech_name and name ~= "sram-module" then
+    check(tech_name:find("^process%-"), "memory module " .. name .. " is unlocked by " .. tech_name)
+  end
+end
+check(memory_unlock["sram-module"] == "internet", "SRAM must stay an Internet unlock")
+check(memory_unlock["dram-module"] == "process-3um", "DRAM must stay on the 3 µm node")
+check(memory_unlock["3d-nand-module"] == "process-7nm", "3D NAND must arrive with the 7 nm node")
+
 -- Providers are lab clones with no science inputs and a readable module
 -- inventory. A provider that accepts a science pack would become an ordinary
 -- lab and bypass the network.
@@ -400,8 +561,11 @@ for _, name in ipairs(PROVIDERS) do
     for _, category in ipairs(proto.allowed_module_categories or {}) do
       categories[category] = true
     end
-    check(categories["chiptorio-chip"], "provider " .. name .. " does not accept chips")
-    check(categories["chiptorio-memory"], "provider " .. name .. " does not accept memory modules")
+    check(categories["chiptorio-computer"], "provider " .. name .. " does not accept computer modules")
+    -- Only memory-bank and datacenter have memory slots; server-rack does not.
+    local expect_memory = (name == "memory-bank" or name == "datacenter")
+    check((categories["chiptorio-memory"] or false) == expect_memory,
+      "provider " .. name .. " memory category mismatch: expected " .. tostring(expect_memory))
     check(
       not (data.raw["assembling-machine"] and data.raw["assembling-machine"][name]),
       "provider " .. name .. " must not be a crafting machine"
@@ -452,7 +616,6 @@ if datacenter_tech then
   end
   check(unlocked["datacenter"], "datacenter technology does not unlock the provider")
   check(unlocked["datacenter-lab"], "datacenter technology does not unlock the lab")
-  check(unlocked["dram-module"], "datacenter technology does not unlock DRAM")
 end
 
 local vlsi = data.raw.technology["vlsi-process"]
@@ -617,6 +780,153 @@ for name, tech_name in pairs(CUSTOM_WORKLOADS) do
   check(unlocked_recipes(tech_name)[name], tech_name .. " does not unlock " .. name)
 end
 check(not item("quantum-science-pack"), "unprefixed quantum-science-pack still exists")
+
+-- QLN: the pre-quantum Data Bus and the phase-six quantum layer. Every node
+-- must be placeable, every recipe locked, and the two technology lines must
+-- unlock exactly the machines the runtime looks for.
+local QLN_NODES = {
+  "qln-import-node",
+  "qln-export-node",
+  "qln-provider-node",
+  "qln-requester-node",
+  "qln-terminal",
+  "qln-storage-drive",
+  "construction-core",
+  "quantum-entanglement-core",
+  "foup-dock",
+  "network-repeater",
+  "wireless-access-point",
+}
+for _, name in ipairs(QLN_NODES) do
+  local proto = entity(name)
+  check(proto, "missing QLN entity " .. name)
+  if proto then
+    check(not proto.hidden, "QLN entity is hidden: " .. name)
+    check(proto.minable and proto.minable.result == name, "QLN entity is not minable: " .. name)
+    check(proto.collision_box and proto.selection_box,
+      "QLN entity " .. name .. " has no collision or selection box")
+    if data.raw.container[name] then
+      check_world_picture(proto, name)
+    elseif data.raw.lab[name] then
+      -- Lab clones keep the 3x3 lab sprite, so the collision box has to cover
+      -- the art instead of a small 1.6x1.6 square in the middle.
+      local box = proto.collision_box
+      check(box and box[1] and box[1][1] <= -1.1 and box[2][1] >= 1.1,
+        "QLN lab clone " .. name .. " collision box does not match its 3x3 sprite")
+    elseif data.raw.accumulator[name] then
+      check(proto.energy_source and proto.energy_source.buffer_capacity,
+        "QLN accumulator clone " .. name .. " has no energy buffer")
+    end
+  end
+  local qln_item = item(name)
+  check(qln_item, "missing QLN item " .. name)
+  check(qln_item and qln_item.place_result == name, "QLN item " .. name .. " does not place itself")
+  local recipe = data.raw.recipe[name]
+  check(recipe, "missing QLN recipe " .. name)
+  check(recipe and recipe.enabled == false, "QLN recipe should start locked: " .. name)
+end
+
+local drive = data.raw.lab["qln-storage-drive"]
+check(drive, "qln-storage-drive must be a lab clone")
+if drive then
+  check(#(drive.inputs or {}) == 0, "qln-storage-drive must have no science inputs")
+  check(drive.module_slots == qmeta.DRIVE_SLOTS, "qln-storage-drive module slots do not match qln_meta")
+  local categories = {}
+  for _, category in ipairs(drive.allowed_module_categories or {}) do
+    categories[category] = true
+  end
+  check(categories["chiptorio-memory"], "qln-storage-drive does not accept memory modules")
+  check(not categories["chiptorio-chip"], "qln-storage-drive must not accept compute chips")
+end
+for _, name in ipairs({ "quantum-entanglement-core" }) do
+  local proto = data.raw.lab[name]
+  check(proto, name .. " must be a lab clone")
+  if proto then
+    check(#(proto.inputs or {}) == 0, name .. " must have no science inputs")
+    check(proto.researching_speed and proto.researching_speed <= 0.001,
+      name .. " must not be usable as a research lab")
+  end
+end
+
+-- The Construction Core reads and writes its `energy` as a build budget, so it
+-- is an accumulator clone: a lab only energies while it researches, and an
+-- idle lab would leave the core permanently at zero.
+local core_proto = data.raw.accumulator["construction-core"]
+check(core_proto, "construction-core must be an accumulator clone")
+check(not data.raw.lab["construction-core"], "construction-core must not be a lab clone")
+if core_proto then
+  check(core_proto.energy_source and core_proto.energy_source.type == "electric",
+    "construction-core is not electric")
+  check(core_proto.energy_source and core_proto.energy_source.buffer_capacity,
+    "construction-core has no battery")
+end
+
+-- The FOUP loader and its sealed carriers. Every process node gets its own
+-- sealed item so a batch can never be confused with another node's batch.
+check(item("foup"), "missing FOUP item")
+local foup_recipe = data.raw.recipe["foup"]
+check(foup_recipe, "missing FOUP recipe")
+check(foup_recipe and foup_recipe.enabled == false, "FOUP recipe should start locked")
+for _, node in ipairs(nodes.NODES) do
+  local sealed = "foup-sealed-" .. node.key
+  local proto = item(sealed)
+  check(proto, "missing sealed FOUP " .. sealed)
+  check(proto and not proto.hidden, "sealed FOUP is hidden: " .. sealed)
+end
+
+-- The neural processor is the tensor source. It must be a real module and the
+-- quantum-advantage technology must unlock its recipe.
+local neural = data.raw.module["neural-processor"]
+check(neural, "missing neural-processor module")
+if neural then
+  check(neural.category == "chiptorio-chip", "neural-processor has the wrong module category")
+  check(neural.effect and next(neural.effect) == nil, "neural-processor must have an empty effect")
+end
+check(unlocked_recipes("quantum-advantage")["neural-processor"],
+  "quantum-advantage does not unlock neural-processor")
+
+local qln_tech = data.raw.technology[qmeta.TECH_QLN]
+check(qln_tech, "missing qln technology")
+if qln_tech then
+  local unlocked = unlocked_recipes(qmeta.TECH_QLN)
+  for _, name in ipairs({
+    "qln-import-node", "qln-export-node", "qln-provider-node", "qln-requester-node",
+    "qln-terminal", "qln-storage-drive", "construction-core",
+  }) do
+    check(unlocked[name], qmeta.TECH_QLN .. " does not unlock " .. name)
+  end
+end
+local quantum_tech = data.raw.technology[qmeta.TECH_QUANTUM]
+check(quantum_tech, "missing qln-quantum technology")
+if quantum_tech then
+  local unlocked = unlocked_recipes(qmeta.TECH_QUANTUM)
+  for _, name in ipairs({
+    "quantum-entanglement-core", "foup-dock", "foup",
+    "network-repeater", "wireless-access-point",
+  }) do
+    check(unlocked[name], qmeta.TECH_QUANTUM .. " does not unlock " .. name)
+  end
+  check(has_prerequisite(quantum_tech, qmeta.TECH_QLN), "qln-quantum must require qln")
+end
+if the_question then
+  check(has_prerequisite(the_question, qmeta.TECH_QLN), "the-question must require qln")
+  check(has_prerequisite(the_question, qmeta.TECH_QUANTUM), "the-question must require qln-quantum")
+end
+
+-- The Construction Core must be a powered accumulator clone with a real
+-- buffer, so the runtime can read and spend its energy as the work budget.
+local core = data.raw.accumulator["construction-core"]
+check(core, "missing construction-core accumulator prototype")
+if core then
+  check(core.energy_source and core.energy_source.type == "electric", "construction-core is not electric")
+  check(core.energy_source and core.energy_source.buffer_capacity, "construction-core has no buffer")
+end
+
+-- Every item the Answer Engine consumes must exist as an item.
+for _, req in ipairs(answer_meta.item_demand or {}) do
+  check(item(req.item), "Answer Engine demand names a missing item: " .. req.item)
+  check(req.rate > 0, "Answer Engine demand has a non-positive rate: " .. req.item)
+end
 
 local overlay_input = data.raw["custom-input"]["chiptorio-network-overlay"]
 check(overlay_input, "missing chiptorio-network-overlay custom input")

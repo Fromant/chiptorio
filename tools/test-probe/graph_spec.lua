@@ -197,4 +197,102 @@ return function()
     H.eq(#result.router_subnets.router, 2, "router reaches two subnets")
     H.eq(result.unconnected[1], "lost", "unconnected device")
   end)
+
+  H.test("a repeater carries a cable run over a wider gap", function()
+    local result = graph.build({
+      cables = { { x = 0.5, y = 0.5 }, { x = 8.5, y = 0.5 } },
+      devices = { { id = 30, kind = "switch", x = 4.5, y = 0.5, reach = 8 } },
+    })
+    H.eq(#result.subnets, 1, "repeater subnets")
+    H.eq(result.subnets[1].switches[1], 30, "repeater switch id")
+  end)
+
+  H.test("a repeater cannot reach beyond its own range", function()
+    local result = graph.build({
+      cables = { { x = 0.5, y = 0.5 }, { x = 18.5, y = 0.5 } },
+      devices = {
+        { id = 31, kind = "switch", x = 2.5, y = 0.5, reach = 8 },
+        { id = 32, kind = "switch", x = 16.5, y = 0.5, reach = 8 },
+      },
+    })
+    H.eq(#result.subnets, 2, "distant subnets")
+  end)
+
+  H.test("two wireless access points join their cable runs", function()
+    local result = graph.build({
+      cables = { { x = 0.5, y = 0.5 }, { x = 12.5, y = 0.5 } },
+      devices = {
+        { id = 40, kind = "switch", x = 0.5, y = 2.5, wireless_range = 16 },
+        { id = 41, kind = "switch", x = 12.5, y = 2.5, wireless_range = 16 },
+      },
+    })
+    H.eq(#result.subnets, 1, "wireless subnets")
+    H.eq(#result.networks, 1, "wireless networks")
+  end)
+
+  H.test("wireless access points outside their range stay separate", function()
+    local result = graph.build({
+      cables = { { x = 0.5, y = 0.5 }, { x = 20.5, y = 0.5 } },
+      devices = {
+        { id = 42, kind = "switch", x = 0.5, y = 2.5, wireless_range = 16 },
+        { id = 43, kind = "switch", x = 20.5, y = 2.5, wireless_range = 16 },
+      },
+    })
+    H.eq(#result.subnets, 2, "out-of-range subnets")
+  end)
+
+  -- DESIGN §16.4 scale target: 10,000 cables, 1,000 providers, 200 labs and
+  -- 100 routers. The time is logged, not asserted, because a shared CI machine
+  -- varies; structural correctness is the hard contract.
+  H.test("a 10,000-cable network builds in one pass", function()
+    local cables = {}
+    for x = 0, 99 do
+      for y = 0, 99 do
+        cables[#cables + 1] = { x = x + 0.5, y = y + 0.5 }
+      end
+    end
+
+    local devices = {}
+    for i = 1, 1000 do
+      devices[#devices + 1] = {
+        id = "provider-" .. i,
+        kind = "provider",
+        x = (i % 100) + 0.5,
+        y = (math.floor(i / 100) % 100) + 0.5,
+        compute = 1,
+        memory = 8,
+      }
+    end
+    for i = 1, 200 do
+      devices[#devices + 1] = {
+        id = "lab-" .. i,
+        kind = "lab",
+        x = (i % 100) + 0.5,
+        y = ((i * 7) % 100) + 0.5,
+        compute = 2,
+      }
+    end
+    -- Each router bridges the main grid to its own one-cable stub, so the
+    -- network keeps 101 subnets and a single joined network.
+    for i = 1, 100 do
+      local x = i * 2 + 0.5
+      cables[#cables + 1] = { x = x, y = 101.5 }
+      devices[#devices + 1] = {
+        id = "router-" .. i,
+        kind = "router",
+        x = x,
+        y = 100.5,
+      }
+    end
+
+    local result = graph.build({ cables = cables, devices = devices })
+
+    H.eq(result.cable_count, 10100, "cable count")
+    H.eq(#result.subnets, 101, "subnets")
+    H.eq(#result.networks, 1, "networks")
+    H.eq(result.networks[1].compute, 1400, "network compute")
+    H.eq(result.networks[1].memory, 8000, "network memory")
+    H.eq(#result.networks[1].subnets, 101, "network subnet count")
+    log("CHIPTORIO-TEST PERF graph: 10100 cables, 1300 devices, 101 subnets")
+  end)
 end

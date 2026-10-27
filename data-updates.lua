@@ -52,6 +52,29 @@ starter_tech.icon_size = nil
 M.add_prerequisite("circuit-network", "electromechanics")
 M.add_prerequisite("advanced-combinators", "electromechanics")
 
+-- 2b. The vanilla `electronics` technology is replaced by the Thermionics chain.
+--     `thermionics` now unlocks vacuum tubes, glass, and the Control Board
+--     (`electronic-circuit`). `electronics` becomes a gate that requires
+--     `thermionics`, so no circuit recipe is available before the tube era.
+local electronics_tech = data.raw.technology["electronics"]
+if electronics_tech then
+  M.add_prerequisite("electronics", "thermionics")
+  local effects = electronics_tech.effects or {}
+  local filtered = {}
+  for _, effect in ipairs(effects) do
+    if effect ~= "electronic-circuit" then
+      table.insert(filtered, effect)
+    end
+  end
+  electronics_tech.effects = filtered
+end
+
+-- 2c. The vanilla `advanced-circuit` and `processing-unit` technologies keep
+--     their existing prerequisites. Progression to the board ladder is enforced
+--     through recipe ingredients (you need chips from the matching node), not
+--     through extra tech prerequisites that would cycle with the node tree.
+--     No changes needed here beyond the `electronics` → `thermionics` swap above.
+
 -- 3. Anything "smart" needs silicon. This is the core promise of the mod:
 --    you cannot build the late game without a chip industry. The era 5-6
 --    upgrades make the most advanced vanilla machines depend on the new

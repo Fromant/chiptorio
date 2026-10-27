@@ -69,6 +69,12 @@ data:extend({
     group = "chiptorio",
     order = "f[providers]",
   },
+  {
+    type = "item-subgroup",
+    name = "chiptorio-qln",
+    group = "chiptorio",
+    order = "g[qln]",
+  },
 })
 
 local function make_material(name, order)
@@ -138,12 +144,25 @@ make_chip_module("microprocessor", "processing-unit", "d[cpu]", 2)
 make_chip_module("system-on-chip", "processing-unit", "e[soc]", 3)
 make_chip_module("multi-core-cpu", "processing-unit", "i[multi-core]", 4)
 make_chip_module("gpu", "processing-unit", "h[gpu]", 5)
-make_chip_module("quantum-processor", "processing-unit", "l[quantum-cpu]", 6)
+make_chip_module("neural-processor", "processing-unit", "j[neural]", 6)
+make_chip_module("quantum-processor", "processing-unit", "l[quantum-cpu]", 7)
 
 -- Memory modules ---------------------------------------------------------
+-- DESIGN §8.3: eleven generations, one per era of the process ladder. The
+-- tier drives only the icon and the icon order; capacity, bandwidth and QLN
+-- cells live in research_meta.MEMORY_PROFILES and qln_meta.DRIVE_CELLS.
 
 make_memory_module("sram-module", "processing-unit", "a[sram]", 1)
 make_memory_module("dram-module", "processing-unit", "b[dram]", 2)
+make_memory_module("sdram-module", "processing-unit", "c[sdram]", 3)
+make_memory_module("ddr-module", "processing-unit", "d[ddr]", 4)
+make_memory_module("ddr2-module", "processing-unit", "e[ddr2]", 5)
+make_memory_module("ddr3-module", "processing-unit", "f[ddr3]", 6)
+make_memory_module("ddr4-module", "processing-unit", "g[ddr4]", 7)
+make_memory_module("ddr5-module", "processing-unit", "h[ddr5]", 8)
+make_memory_module("hbm-module", "processing-unit", "i[hbm]", 9)
+make_memory_module("hbm3-module", "processing-unit", "j[hbm3]", 10)
+make_memory_module("3d-nand-module", "processing-unit", "k[3d-nand]", 11)
 
 -- The three custom workloads. They are item prototypes cloned from a science
 -- pack because labs consume them exactly like one; only the names, icons and

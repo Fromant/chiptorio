@@ -1,4 +1,98 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.0.0
+Date: 2026-10-27
+  Features:
+    - Added the board ladder: Control Board, Advanced Control Board, Compute Board, Accelerator
+      Board, Neural Board and Quantum Board. Boards are crafted in the Circuit Assembler from
+      chips, tubes, and passives; each tier consumes the previous, and GregTech-style efficient
+      recipes let later chips make older boards in bulk. Only the Integrated Circuit chip is still
+      called a "circuit".
+    - Re-themed the three vanilla circuit items as boards: electronic-circuit → Control Board,
+      advanced-circuit → Advanced Control Board, processing-unit → Compute Board. Internal names
+      are unchanged so every existing recipe keeps working; only visible names, icons and recipes
+      change.
+    - Added the Computer Assembler and computer modules: Microcomputer, Server, Supercomputer,
+      Neural Computer and Quantum Computer. Computers are chiptorio-computer modules inserted
+      into server racks and datacenters; each bundles board + chip + memory and supplies its own
+      compute profile. Racks and datacenters now accept computer modules instead of raw chips.
+    - Added power and cooling throttle. Chip Efficiency and Cooling Efficiency infinite research
+      reduce provider power/heat and increase cooling capacity; research decays proportionally on
+      power or cooling shortfall.
+    - Added eight infinite research technologies: Chip Performance, Chip Efficiency, Memory
+      Density, Memory Bandwidth, Network Bandwidth, Cooling Efficiency, Quantum Correction, and
+      Process Yield (recipe productivity, capped at 300%). All join The Question as perpetual
+      endgame sinks.
+    - Added the AI layer: Small Model, Specialist Model, General Model, Frontier Model and AGI
+      Model. The Training Cluster reserves network compute and draws data from QLN storage to
+      produce models; the Inference Lab installs a model and draws compute to grant insight.
+      Five AI technologies (Machine Learning through Artificial General Intelligence) gate the
+      tiers; GPUs train and NPUs infer from the 90 nm era onward.
+    - Added the AI runtime: Training Clusters accumulate progress toward a model while compute and
+      data are available; Inference Labs extend an insight window while supported. Force-level
+      insight multipliers reduce dataset size for technologies.
+    - Added pure QLN deposit function and ai_runtime module, registered in control.lua's tick
+      dispatcher after research so AI consumes from final QLN storage and network capacities.
+    - Added data-contract checks for AI model items, recipes, buildings and technologies, and for
+      provider module categories (chiptorio-computer, chiptorio-memory).
+    - Removed circuits from the Analytical Engine recipe (iron gears, copper plates, iron plates
+      only) and made Thermionics automation-science-only, fixing the bootstrap cycle where
+      logistic science required circuits before circuits existed.
+    - Replaced the vanilla Electronics technology with the Thermionics chain: vacuum tubes →
+      Control Board → board ladder.
+  Balance:
+    - Server Rack recipe: Control Boards instead of Advanced Circuits + Integrated Circuits.
+    - Memory Bank recipe: Control Boards instead of Advanced Circuits + Integrated Circuits.
+    - Datacenter recipe: Control Boards instead of Advanced Circuits + Systems on a Chip.
+    - All provider recipes use the board ladder, so progression flows from tubes through each
+      board tier.
+    - Provider profiles are computer-based: Microcomputer (8 scalar), Server (32 scalar),
+      Supercomputer (8 scalar + 64 vector), Neural Computer (4 scalar + 32 vector + 128 tensor),
+      Quantum Computer (2 scalar + 16 vector + 64 tensor + 256 quantum).
+  Bugfixes:
+    - Fixed technology cycle: vanilla advanced-circuit no longer requires Electronics (which
+      required Thermionics), breaking the loop where logistic science needed circuits before
+      circuits existed.
+    - Added chiptorio-computer module category and removed chiptorio-chip from provider accepted
+      categories; providers now accept computer modules and memory modules only.
+    - QLN deposit function now accepts an entity argument for internal callers (AI training).
+    - All tests pass: smoke test, data contract, unit probe and runtime probe.
+---------------------------------------------------------------------------------------------------
+Version: 0.10.0
+Date: 2026-10-27
+  Features:
+    - Added the Quantum Logistics Network. Import and Export Nodes move items between adjacent inventories and network storage; Provider and Requester Nodes stock neighbouring machines; a Terminal gives search, deposit and withdraw; Storage Drives hold the pool. Storage is memory modules, so a drive is only as large as the SRAM and DRAM installed in it.
+    - Added quantum QLN. Quantum Entanglement Cores pair in build order and union their networks into one storage group, so a base can share one pool across distant subnets. The storage speed of a group is the slowest network in it.
+    - Added FOUP logistics. A FOUP Dock seals a batch of one node's wafers into a sealed carrier and unseals it elsewhere, so a wafer batch moves through QLN as a single item and cannot be split or mixed in transit.
+    - Added advanced networking. Network Repeaters carry a cable run over a wider gap, and Wireless Access Points join access points within range without a cable between them.
+    - Added the Construction Core, the no-bots replacement for construction robots. It mines marked entities into QLN storage and builds ghosts from QLN storage, paying with the entity's own building item and working only while its electric buffer has charge.
+    - Reworked the Answer Engine. It is now a QLN consumer: it draws science packs, microprocessors and quantum processors from storage, and gates the clock on all four compute profiles, a memory dataset and backplane bandwidth. It no longer reads production statistics.
+    - Added scoring and a persistent victory record. The first completion scores 42 and shows the victory screen; later completions add 42 each.
+    - The Question is now an infinite technology. Every level raises the engine's compute, memory, bandwidth and item demand by 25% and adds 42 to the score.
+    - Added the Neural Processor tensor chip, unlocked by Quantum Advantage, so the Answer's tensor profile has a source in the quantum era.
+    - Added a QLN section to the network monitor and a FOUP Dock mode GUI, with locale for every new item, entity and technology and generated icons for all of them.
+    - Added eleven memory generations. SRAM arrives with the Internet; DRAM, SDRAM, DDR, DDR2, DDR3, DDR4, DDR5, HBM, HBM3 and 3D NAND follow the process node of their era, so storage capacity grows with the fab.
+    - The FOUP Dock is a real container with a relative mode panel, so its ten carrier slots stay visible while the player switches between sealing and unsealing. Import and Export Nodes respect the dock mode: they deliver FOUPs and wafers to a sealing dock and take sealed carriers away, or the reverse at an unsealing dock.
+    - The QLN Terminal refreshes once a second while open, so storage changes are visible without clicking, and its search field filters the item rows.
+    - Added pure QLN transport and graph scale tests, data-contract checks for every QLN node, recipe, technology, FOUP, memory generation, neural processor and Answer requirement, and a runtime probe that exercises import/export, machine inventories, the FOUP chain through the network, quantum pairing, repeaters, wireless, construction, Answer pausing and victory.
+    - Added tools/run-mod.ps1, which launches Factorio from an isolated dev mod directory that links the working tree, so a playtest always uses the latest code without copying files.
+  Balance:
+    - Storage Drive: four memory slots. SRAM stores 1024 items per module, DRAM 4096, SDRAM 8192, DDR 12288, DDR2 16384, DDR3 24576, DDR4 32768, DDR5 49152, HBM 65536, HBM3 98304 and 3D NAND 262144. Import/Export/Terminal nodes move 60 items/s; Provider/Requester nodes 120 items/s, and every node is also capped by 4 items/s per unit of network bandwidth.
+    - One FOUP holds 25 wafers of a single process node. A dock has ten carrier slots. A Requester keeps 50 of its filter item in adjacent inventories and consumes nothing from its own slot.
+    - Repeaters reach 8 tiles. Wireless Access Points reach 16 tiles. A force pairs up to 16 Entanglement Cores.
+    - The Construction Core reaches 32 tiles and performs up to 8 actions per second while it has 8000 J in its buffer.
+    - The Answer Engine runs for 42 minutes and requires 128 of each compute profile, 2048 memory and 512 bandwidth. Its draw runs from 10 punched cards/s down to 0.5 qubit arrays/s, plus 2 microprocessors/s and 0.5 quantum processors/s.
+    - QLN unlocks with the QLN technology after production and utility science; the quantum layer, FOUP, repeaters and wireless follow QLN Quantum.
+  Bugfixes:
+    - Restored the network module require in data.lua. Without it the internet technology could not unlock the cable, switch, router and monitor recipes, and map creation failed.
+    - Removed duplicate remote-interface registrations so only control.lua, the Answer Engine and QLN register their own interfaces and one module cannot silently replace another.
+    - Fixed the QLN status report to count nodes per storage group instead of reporting an empty table.
+    - QLN Import and Export Nodes now use the 2.1 crafter inventories (`crafter_input`/`crafter_output`). The removed `furnace_source`, `furnace_result`, `assembler_input`, `assembler_output` and `miner_result` defines silently produced no inventory, so a node beside a furnace or assembling machine moved nothing.
+    - Chunk scanning now covers a margin equal to wireless range, so a device two tiles across a chunk border is indexed and connected on the same tick.
+    - A Construction Core build is indexed immediately. The revived cable now raises the revive event and is visible to the network graph without a configuration change.
+    - The Answer Engine score label reads the force score again instead of the QLN group status, which shadowed it and always displayed zero.
+    - Opening a QLN Terminal, FOUP Dock or any other entity now dismisses the previous custom window instead of leaving it floating underneath.
+    - Removed the unused production-statistics helper now that no mechanic reads flow statistics.
+---------------------------------------------------------------------------------------------------
 Version: 0.9.0
 Date: 2026-10-27
   Features:

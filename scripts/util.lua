@@ -184,6 +184,63 @@ function M.tint_animation(animation, color)
   end
 end
 
+--- Return a deep copy of a base entity's static world sprite, ready to be used
+--- as a container clone's `picture`. Different prototype types keep their
+--- visual in different fields, so the helper looks in every place the base game
+--- actually uses:
+---   * `picture` / `picture_off` / `picture_on` - chests and lamps
+---   * `sprites.north` - combinators and display panels
+---   * `pictures.straight_vertical_single` - pipes (used for the cable run)
+---   * `animation` / `graphics_set.animation` - machines
+--- The copy is tinted unless `tint` is nil, so callers never mutate a donor.
+function M.world_sprite(proto, tint)
+  if type(proto) ~= "table" then
+    return nil
+  end
+
+  local sprite
+  for _, key in ipairs({ "picture", "picture_off", "picture_on" }) do
+    if proto[key] then
+      sprite = proto[key]
+      break
+    end
+  end
+  if not sprite and type(proto.sprites) == "table" then
+    sprite = proto.sprites.north or proto.sprites.east
+  end
+  if not sprite and type(proto.pictures) == "table" then
+    sprite = proto.pictures.straight_vertical_single or proto.pictures.north
+  end
+  if not sprite and type(proto.animation) == "table" then
+    sprite = proto.animation.north or proto.animation
+  end
+  if not sprite and type(proto.graphics_set) == "table" then
+    local animation = proto.graphics_set.animation
+    if type(animation) == "table" then
+      sprite = animation.north or animation
+    end
+  end
+  if not sprite then
+    return nil
+  end
+
+  local copy = deepcopy(sprite)
+  if tint then
+    tint_sprite(copy, tint)
+  end
+  return copy
+end
+
+--- Set a container clone's picture from a donor prototype, failing loudly at
+--- the data stage instead of shipping an invisible entity.
+function M.set_world_picture(entity, donor, tint)
+  local picture = M.world_sprite(donor, tint)
+  if not picture then
+    error("chiptorio: donor prototype '" .. tostring(donor and donor.name) .. "' has no world sprite")
+  end
+  entity.picture = picture
+end
+
 --- Shortcut for a crafting recipe.
 --- 2.1 merged RecipePrototype.category into a `categories` list, so accept
 --- the friendlier single-category form here.

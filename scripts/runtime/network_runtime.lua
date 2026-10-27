@@ -12,10 +12,17 @@
 
 local graph_builder = require("scripts.runtime.network_graph")
 local meta = require("scripts.research_meta")
+local qmeta = require("scripts.qln_meta")
 
 local M = {}
 
 local CHUNK = 32
+-- A device can attach to wiring in a neighbouring chunk: a cable reaches two
+-- tiles, a repeater eight and a wireless access point sixteen. Scanning only
+-- the tracked chunk would therefore miss a lab on the far side of a chunk
+-- border, and a device the graph never sees is never paused. Buffer every
+-- scan by the longest reach.
+local SCAN_MARGIN = qmeta.WIRELESS_RANGE or 16
 local MAX_OVERLAY_LINES = 4000
 local MAX_MONITOR_SUBNETS = 24
 
@@ -24,6 +31,21 @@ local SWITCH = "network-switch"
 local ROUTER = "network-router"
 local MONITOR = "network-monitor"
 local METROLOGY = "metrology-lab"
+local REPEATER = "network-repeater"
+local WIRELESS = "wireless-access-point"
+local ANSWER = "answer-engine"
+
+local QLN_NODE_NAMES = {
+  "qln-import-node",
+  "qln-export-node",
+  "qln-provider-node",
+  "qln-requester-node",
+  "qln-terminal",
+  "qln-storage-drive",
+  "construction-core",
+  "foup-dock",
+  "quantum-entanglement-core",
+}
 
 local PROVIDER_NAMES = { "server-rack", "memory-bank", "datacenter" }
 
@@ -33,11 +55,14 @@ for name in pairs(meta.LAB_DEMAND) do
 end
 table.sort(LAB_NAMES)
 
-local NETWORK_NAMES = { CABLE, SWITCH, ROUTER, MONITOR, METROLOGY }
+local NETWORK_NAMES = { CABLE, SWITCH, ROUTER, MONITOR, METROLOGY, REPEATER, WIRELESS, ANSWER }
 for _, name in ipairs(PROVIDER_NAMES) do
   NETWORK_NAMES[#NETWORK_NAMES + 1] = name
 end
 for _, name in ipairs(LAB_NAMES) do
+  NETWORK_NAMES[#NETWORK_NAMES + 1] = name
+end
+for _, name in ipairs(QLN_NODE_NAMES) do
   NETWORK_NAMES[#NETWORK_NAMES + 1] = name
 end
 
@@ -51,12 +76,18 @@ local NETWORK_KINDS = {
   [ROUTER] = "router",
   [MONITOR] = "monitor",
   [METROLOGY] = "metrology",
+  [REPEATER] = "switch",
+  [WIRELESS] = "switch",
+  [ANSWER] = "answer",
 }
 for _, name in ipairs(PROVIDER_NAMES) do
   NETWORK_KINDS[name] = "provider"
 end
 for _, name in ipairs(LAB_NAMES) do
   NETWORK_KINDS[name] = "lab"
+end
+for _, name in ipairs(QLN_NODE_NAMES) do
+  NETWORK_KINDS[name] = name == "qln-storage-drive" and "qln-drive" or "qln"
 end
 
 -- Capacity a prototype contributes to its subnet. Providers are built from
@@ -65,6 +96,8 @@ local PROFILES = {
   [SWITCH] = { bandwidth = 100 },
   [ROUTER] = { bandwidth = 250 },
   [MONITOR] = { power = 2 },
+  [REPEATER] = { bandwidth = 0 },
+  [WIRELESS] = { bandwidth = 0 },
 }
 
 local SUBNET_COLORS = {
@@ -192,8 +225,8 @@ function M.chip_multipliers(force_index)
 end
 
 --- Read a provider's module inventory and turn it into capacities. Only the
---- first `chip_slots` chips and `memory_slots` memory modules count; extra
---- modules are stored but ignored, so the physical slot count is the limit.
+--- first `computer_slots` computers and `memory_slots` memory modules count;
+--- extra modules are stored but ignored, so the physical slot count is the limit.
 local function provider_descriptor(entity)
   local profile = meta.PROVIDERS[entity.name]
   if not profile then
@@ -203,14 +236,21 @@ local function provider_descriptor(entity)
   local multiplier = M.chip_multipliers(entity.force and entity.force.index or 0)
   local power_scale = multiplier.power or 1
 
+  -- Infinite-research chip-efficiency reduces power and heat; cooling-efficiency
+  -- increases cooling capacity. Both are force-level, read from storage.
+  local force_index = entity.force and entity.force.index or 0
+  local infinite = storage.research.infinite_multipliers[force_index] or {}
+  local efficiency_mult = infinite["chip-efficiency"] or 1
+  local cooling_mult = infinite["cooling-efficiency"] or 1
+
   local device = new_device(entity, "provider")
   device.bandwidth = profile.bandwidth or 0
-  device.power = (profile.power or 0) * power_scale
-  device.heat = (profile.heat or 0) * power_scale
-  device.cooling = profile.cooling or 0
-  device.chip_slots = profile.chip_slots or 0
+  device.power = (profile.power or 0) * power_scale * efficiency_mult
+  device.heat = (profile.heat or 0) * power_scale * efficiency_mult
+  device.cooling = (profile.cooling or 0) * cooling_mult
+  device.computer_slots = profile.computer_slots or 0
   device.memory_slots = profile.memory_slots or 0
-  device.chips = 0
+  device.computers = 0
   device.memory_modules = 0
 
   local inventory = entity.get_module_inventory()
@@ -219,15 +259,15 @@ local function provider_descriptor(entity)
   end
 
   for _, item in ipairs(inventory.get_contents()) do
-    local chip = meta.CHIP_PROFILES[item.name]
+    local computer = meta.COMPUTER_PROFILES[item.name]
     local memory = meta.MEMORY_PROFILES[item.name]
-    if chip and device.chips < device.chip_slots then
+    if computer and device.computers < device.computer_slots then
       local count = item.count
-      if count > device.chip_slots - device.chips then
-        count = device.chip_slots - device.chips
+      if count > device.computer_slots - device.computers then
+        count = device.computer_slots - device.computers
       end
-      device.chips = device.chips + count
-      add_profile(device, chip, count, multiplier)
+      device.computers = device.computers + count
+      add_profile(device, computer, count, multiplier)
     elseif memory and device.memory_modules < device.memory_slots then
       local count = item.count
       if count > device.memory_slots - device.memory_modules then
@@ -262,21 +302,69 @@ local function metrology_descriptor(entity)
   return device
 end
 
+--- A Storage Drive contributes QLN item cells, not research memory. It is a
+--- lab clone with four memory slots; extra modules beyond the slot count are
+--- stored but ignored, exactly like a provider.
+local function qln_drive_descriptor(entity)
+  local device = new_device(entity, "qln-drive")
+  device.qln_cells = 0
+  local inventory = entity.get_module_inventory()
+  if not inventory then
+    return device
+  end
+  local used = 0
+  for _, item in ipairs(inventory.get_contents()) do
+    local cells = qmeta.DRIVE_CELLS[item.name]
+    if cells and used < qmeta.DRIVE_SLOTS then
+      local count = item.count
+      if count > qmeta.DRIVE_SLOTS - used then
+        count = qmeta.DRIVE_SLOTS - used
+      end
+      used = used + count
+      device.qln_cells = device.qln_cells + cells * count
+    end
+  end
+  return device
+end
+
+local function qln_descriptor(entity)
+  return new_device(entity, "qln")
+end
+
+local function answer_descriptor(entity)
+  return new_device(entity, "answer")
+end
+
+local function generic_descriptor(entity, kind)
+  local profile = PROFILES[entity.name] or {}
+  local device = new_device(entity, kind)
+  device.bandwidth = profile.bandwidth or 0
+  device.power = profile.power or 0
+  if entity.name == WIRELESS then
+    device.wireless_range = qmeta.WIRELESS_RANGE
+  elseif entity.name == REPEATER then
+    device.reach = qmeta.REPEATER_REACH
+  end
+  return device
+end
+
 local function rebuild_surface(surface)
   local chunks = storage.network.chunks[surface.index]
   local cables = {}
   local devices = {}
   local seen = {}
+  local found = {}
 
   if chunks then
     for _, chunk in pairs(chunks) do
       local area = {
-        { chunk.cx * CHUNK, chunk.cy * CHUNK },
-        { (chunk.cx + 1) * CHUNK, (chunk.cy + 1) * CHUNK },
+        { chunk.cx * CHUNK - SCAN_MARGIN, chunk.cy * CHUNK - SCAN_MARGIN },
+        { (chunk.cx + 1) * CHUNK + SCAN_MARGIN, (chunk.cy + 1) * CHUNK + SCAN_MARGIN },
       }
       for _, entity in ipairs(surface.find_entities_filtered({ area = area, name = NETWORK_NAMES })) do
         if entity.valid and NETWORK_KINDS[entity.name] and not seen[entity.unit_number] then
           seen[entity.unit_number] = true
+          found[#found + 1] = entity
           if entity.name == CABLE then
             cables[#cables + 1] = { x = entity.position.x, y = entity.position.y }
           else
@@ -288,11 +376,14 @@ local function rebuild_surface(surface)
               device = lab_descriptor(entity)
             elseif kind == "metrology" then
               device = metrology_descriptor(entity)
+            elseif kind == "qln-drive" then
+              device = qln_drive_descriptor(entity)
+            elseif kind == "qln" then
+              device = qln_descriptor(entity)
+            elseif kind == "answer" then
+              device = answer_descriptor(entity)
             else
-              local profile = PROFILES[entity.name] or {}
-              device = new_device(entity, kind)
-              device.bandwidth = profile.bandwidth or 0
-              device.power = profile.power or 0
+              device = generic_descriptor(entity, kind)
             end
             if device then
               devices[#devices + 1] = device
@@ -301,6 +392,12 @@ local function rebuild_surface(surface)
         end
       end
     end
+  end
+
+  -- Index the chunks the margin reached, so a device that sits just across a
+  -- border is scanned directly next time instead of only through the buffer.
+  for _, entity in ipairs(found) do
+    track(entity)
   end
 
   return graph_builder.build({ cables = cables, devices = devices })
@@ -601,12 +698,17 @@ end
 
 local MONITOR_GUI = "chiptorio-network-monitor"
 
--- The qualification runtime registers an extra monitor section. A callback
--- keeps the dependency one-way: network_runtime never requires qualification.
+-- The qualification and QLN runtimes register extra monitor sections. A
+-- callback keeps the dependency one-way: network_runtime never requires them.
 local qualification_provider = nil
+local qln_provider = nil
 
 function M.set_qualification_provider(provider)
   qualification_provider = provider
+end
+
+function M.set_qln_provider(provider)
+  qln_provider = provider
 end
 
 local function monitor_players()
@@ -658,6 +760,9 @@ local function rebuild_monitor(player)
   local graph = M.graph_for(surface)
   if not graph or #graph.networks == 0 then
     body.add({ type = "label", caption = { "chiptorio.network-empty" } })
+    if qln_provider then
+      qln_provider(player, body)
+    end
     if qualification_provider then
       qualification_provider(player, body)
     end
@@ -723,6 +828,10 @@ local function rebuild_monitor(player)
     end
   end
 
+  if qln_provider then
+    qln_provider(player, body)
+  end
+
   if qualification_provider then
     qualification_provider(player, body)
   end
@@ -767,6 +876,12 @@ local function create_monitor(player)
   scroll.style.maximal_height = 520
   scroll.style.minimal_width = 360
 
+  -- Same suppression as the QLN windows: the monitor is a container clone, so
+  -- the default chest GUI opens first. Claiming `player.opened` closes it and
+  -- puts our monitor in front instead of below it.
+  player.opened = frame
+  frame.bring_to_front()
+
   storage.network.monitors[player.index] = true
   rebuild_monitor(player)
 end
@@ -783,8 +898,15 @@ function M.on_gui_opened(event)
     return
   end
   local entity = event.entity
-  if entity and entity.valid and entity.name == MONITOR then
-    create_monitor(player)
+  if entity and entity.valid then
+    if entity.name == MONITOR then
+      create_monitor(player)
+    else
+      -- A screen frame survives the game closing the entity GUI, so opening
+      -- another entity would leave the monitor floating over it.
+      init_storage()
+      destroy_monitor(player)
+    end
   end
 end
 
@@ -794,7 +916,11 @@ function M.on_gui_closed(event)
     return
   end
   init_storage()
-  if storage.network.monitors[player.index] then
+  -- Claiming `player.opened` closes the vanilla chest GUI and arrives here with
+  -- an entity, not our frame. Only dismiss the monitor when our own element is
+  -- the thing that closed.
+  local element = event.element
+  if element and element.valid and element.name == MONITOR_GUI then
     destroy_monitor(player)
   end
 end
@@ -837,6 +963,7 @@ function M.summary(surface_index)
     subnets = #graph.subnets,
     networks = #graph.networks,
     unconnected = #graph.unconnected,
+    unconnected_ids = graph.unconnected,
     contested = #graph.contested,
     compute = 0,
     scalar = 0,

@@ -40,3 +40,20 @@ M.recipe({
   },
   results = { M.item("discrete-transistor", 4) },
 })
+
+-- Tensor compute. The NPU is the only chip that supplies tensor capacity, so
+-- the Answer Engine's four-profile exam has a real source. It is deliberately
+-- late: multi-core CPU, GPU and superconductor feedstock.
+M.recipe({
+  name = "neural-processor",
+  enabled = false,
+  category = "chiptorio-compute",
+  energy_required = 45,
+  ingredients = {
+    M.item("multi-core-cpu", 2),
+    M.item("gpu", 1),
+    M.item("superconductor", 10),
+    M.item("advanced-circuit", 10),
+  },
+  results = { M.item("neural-processor", 1) },
+})

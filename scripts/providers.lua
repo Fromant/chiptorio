@@ -42,8 +42,12 @@ local function make_provider(spec)
   entity.energy_usage = profile.power .. "kW"
   entity.energy_source = entity.energy_source or { type = "electric" }
   entity.energy_source.drain = profile.drain
-  entity.module_slots = profile.chip_slots + profile.memory_slots
-  entity.allowed_module_categories = { "chiptorio-chip", "chiptorio-memory" }
+  local module_categories = { "chiptorio-computer" }
+  if profile.memory_slots and profile.memory_slots > 0 then
+    module_categories[#module_categories + 1] = "chiptorio-memory"
+  end
+  entity.module_slots = profile.computer_slots + profile.memory_slots
+  entity.allowed_module_categories = module_categories
   -- Chips have an empty effect, so the inherited lab effect limits are fine.
   entity.allowed_effects = nil
 
@@ -82,8 +86,7 @@ make_provider({
   tint = { r = 0.55, g = 0.70, b = 0.95 },
   ingredients = {
     M.item("steel-plate", 20),
-    M.item("advanced-circuit", 10),
-    M.item("integrated-circuit", 6),
+    M.item("electronic-circuit", 10),   -- Control Board
     M.item("copper-plate", 20),
   },
 })
@@ -95,8 +98,7 @@ make_provider({
   tint = { r = 0.45, g = 0.85, b = 0.65 },
   ingredients = {
     M.item("steel-plate", 16),
-    M.item("advanced-circuit", 8),
-    M.item("integrated-circuit", 4),
+    M.item("electronic-circuit", 8),    -- Control Board
     M.item("copper-plate", 20),
   },
 })
@@ -108,9 +110,8 @@ make_provider({
   tint = { r = 0.20, g = 0.55, b = 0.75 },
   ingredients = {
     M.item("server-rack", 4),
-    M.item("system-on-chip", 8),
     M.item("cooling-unit", 8),
     M.item("steel-plate", 40),
-    M.item("advanced-circuit", 30),
+    M.item("electronic-circuit", 30),   -- Control Board
   },
 })

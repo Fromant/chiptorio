@@ -71,7 +71,6 @@ make_lab({
     M.item("iron-gear-wheel", 8),
     M.item("copper-plate", 20),
     M.item("iron-plate", 20),
-    M.item("electronic-circuit", 4),
   },
 })
 

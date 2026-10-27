@@ -1,12 +1,18 @@
 -- Runtime: The Answer Engine.
 --
--- The engine itself does not consume science packs. It watches the factory's
--- rolling production statistics and advances a 42-minute clock only while
--- every required line is at or above its target. Dropping below any target
--- pauses the clock; the clock resumes automatically when production recovers.
+-- DESIGN §12. The engine is a network client and a QLN consumer. It advances
+-- its 42-minute clock only while the network behind it supplies every compute
+-- profile, enough memory, enough backplane bandwidth, and the continuous item
+-- draw listed in scripts/answer_meta.lua.
+--
+-- Items are consumed from QLN storage, not from the engine's own inventory:
+-- the engine has no science-pack inputs. That is what makes the endgame a
+-- logistics problem rather than another lab.
 
 local answer = require("scripts.answer_meta")
-local rates = require("scripts.rates")
+local meta = require("scripts.research_meta")
+local network = require("scripts.runtime.network_runtime")
+local qln = require("scripts.runtime.qln_runtime")
 
 local M = {}
 
@@ -17,6 +23,13 @@ local GREEN = { r = 0.55, g = 1.0, b = 0.55 }
 local RED = { r = 1.0, g = 0.45, b = 0.45 }
 local GOLD = { r = 1.0, g = 0.82, b = 0.30 }
 local GREY = { r = 0.75, g = 0.80, b = 0.85 }
+
+local COMPUTE_ROWS = {
+  { profile = "scalar", icon = "microprocessor" },
+  { profile = "vector", icon = "gpu" },
+  { profile = "tensor", icon = "neural-processor" },
+  { profile = "quantum", icon = "quantum-processor" },
+}
 
 local function init_storage()
   storage.answer_engines = storage.answer_engines or {}
@@ -49,19 +62,103 @@ local function demand_scale(force)
   return scale, level
 end
 
-local function requirements_for(force)
-  local scale, level = demand_scale(force)
-  local list = {}
-  for _, req in ipairs(answer.requirements) do
-    list[#list + 1] = { item = req.item, rate = req.rate * scale }
+local function network_stats(entity)
+  local graph = network.graph_for(entity.surface)
+  local network_id = graph.device_network[entity.unit_number]
+  if not network_id then
+    return nil
   end
-  return list, level, scale
+  return graph.networks[network_id]
+end
+
+local function pending_demand(record, scale)
+  local demand = {}
+  local remainder = record.remainder or {}
+  for _, req in ipairs(answer.item_demand) do
+    local amount = (remainder[req.item] or 0) + req.rate * scale
+    local whole = math.floor(amount)
+    if whole > 0 then
+      demand[#demand + 1] = { item = req.item, count = whole }
+    end
+  end
+  return demand
 end
 
 local function check_engine(record)
-  local list, level, scale = requirements_for(record.entity.force)
-  local ok, results = rates.check(record.entity.force, list)
-  return ok, results, level, scale
+  local entity = record.entity
+  local stats = network_stats(entity)
+  local scale, level = demand_scale(entity.force)
+  local results = {}
+  local ok = true
+
+  local function add(line)
+    if not line.ok then
+      ok = false
+    end
+    results[#results + 1] = line
+  end
+
+  for _, profile in ipairs(meta.COMPUTE_PROFILES) do
+    local required = (answer.compute[profile] or 0) * scale
+    local have = stats and stats[profile] or 0
+    add({ kind = "compute", profile = profile, required = required, have = have, ok = have >= required })
+  end
+
+  local memory_required = answer.memory * scale
+  local memory_have = stats and stats.memory or 0
+  add({ kind = "memory", required = memory_required, have = memory_have, ok = memory_have >= memory_required })
+
+  local bandwidth_required = answer.bandwidth * scale
+  local bandwidth_have = stats and stats.bandwidth or 0
+  add({
+    kind = "bandwidth",
+    required = bandwidth_required,
+    have = bandwidth_have,
+    ok = bandwidth_have >= bandwidth_required,
+  })
+
+  local storage = qln.group_status(entity)
+  local demand = pending_demand(record, scale)
+  local want = {}
+  for _, req in ipairs(demand) do
+    want[req.item] = req.count
+  end
+  for _, req in ipairs(answer.item_demand) do
+    local have = storage and storage.items[req.item] or 0
+    local count = want[req.item] or 0
+    add({
+      kind = "item",
+      item = req.item,
+      rate = req.rate * scale,
+      required = count,
+      have = have,
+      ok = have >= count,
+    })
+  end
+
+  return ok, results, level, scale, stats, storage
+end
+
+local function consume_items(record, scale)
+  local next_remainder = {}
+  local demand = {}
+  for _, req in ipairs(answer.item_demand) do
+    local amount = (record.remainder and record.remainder[req.item] or 0) + req.rate * scale
+    local whole = math.floor(amount)
+    next_remainder[req.item] = amount - whole
+    if whole > 0 then
+      demand[#demand + 1] = { item = req.item, count = whole }
+    end
+  end
+  if #demand == 0 then
+    record.remainder = next_remainder
+    return true, {}
+  end
+  local ok, missing = qln.consume(record.entity, demand)
+  if ok then
+    record.remainder = next_remainder
+  end
+  return ok, missing
 end
 
 local function ensure_record(entity)
@@ -78,14 +175,15 @@ local function ensure_record(entity)
   record.elapsed = record.elapsed or 0
   record.runs = record.runs or 0
   record.next_warn = record.next_warn or 0
+  record.stability = record.stability or 1
+  record.remainder = record.remainder or {}
   return record
 end
 
 local function reconcile()
   local seen = {}
   for _, surface in pairs(game.surfaces) do
-    local entities = surface.find_entities_filtered({ name = "answer-engine" })
-    for _, entity in ipairs(entities) do
+    for _, entity in ipairs(surface.find_entities_filtered({ name = "answer-engine" })) do
       if entity.valid and entity.unit_number then
         seen[entity.unit_number] = true
         ensure_record(entity)
@@ -102,6 +200,16 @@ end
 local function format_time(seconds)
   seconds = math.max(0, math.floor(seconds + 0.5))
   return string.format("%d:%02d", math.floor(seconds / 60), seconds % 60)
+end
+
+local function format_value(value)
+  if value >= 10000 then
+    return string.format("%.1fk", value / 1000)
+  end
+  if value >= 100 then
+    return string.format("%.0f", value)
+  end
+  return string.format("%.1f", value)
 end
 
 local function frame_for(player)
@@ -122,9 +230,11 @@ local function refresh_gui(player, record)
     return
   end
 
-  local ok, results, level, scale = check_engine(record)
+  local ok, results, level, scale, _, pool = check_engine(record)
   local status = frame["answer-status"]
   local progress = frame["answer-progress"]
+  -- `pool` is the QLN group status; the score lives in game storage, which the
+  -- QLN result must not shadow or the score label would always read zero.
   local score = storage.answer_score[record.entity.force.name] or 0
 
   if status then
@@ -153,16 +263,60 @@ local function refresh_gui(player, record)
     progress.value = math.max(0, math.min(1, record.elapsed / DURATION_TICKS))
   end
 
-  for _, req in ipairs(results) do
-    local label = frame["answer-req-" .. req.item]
+  for _, line in ipairs(results) do
+    local label
+    if line.kind == "compute" then
+      label = frame["answer-compute-" .. line.profile]
+      if label then
+        label.caption = {
+          "chiptorio.answer-compute",
+          { "chiptorio.compute-" .. line.profile },
+          format_value(line.have),
+          format_value(line.required),
+        }
+      end
+    elseif line.kind == "item" then
+      label = frame["answer-req-" .. line.item]
+      if label then
+        label.caption = {
+          "chiptorio.answer-requirement",
+          { "item-name." .. line.item },
+          format_value(line.have),
+          format_value(line.rate),
+        }
+      end
+    elseif line.kind == "memory" then
+      label = frame["answer-memory"]
+      if label then
+        label.caption = { "chiptorio.answer-memory", format_value(line.have), format_value(line.required) }
+      end
+    elseif line.kind == "bandwidth" then
+      label = frame["answer-bandwidth"]
+      if label then
+        label.caption = {
+          "chiptorio.answer-bandwidth",
+          format_value(line.have),
+          format_value(line.required),
+        }
+      end
+    end
     if label then
-      label.caption = {
-        "chiptorio.answer-requirement",
-        { "item-name." .. req.item },
-        string.format("%.2f", req.rate),
-        string.format("%.2f", req.required),
+      label.style.font_color = line.ok and GREEN or RED
+    end
+  end
+
+  local storage_label = frame["answer-qln"]
+  if storage_label then
+    if pool then
+      storage_label.caption = {
+        "chiptorio.answer-qln",
+        format_value(pool.used),
+        format_value(pool.capacity),
       }
-      label.style.font_color = req.ok and GREEN or RED
+      storage_label.style.font_color = pool.used < pool.capacity and GREEN or GOLD
+    else
+      storage_label.caption = { "chiptorio.answer-qln-missing" }
+      storage_label.style.font_color = RED
     end
   end
 
@@ -173,6 +327,11 @@ local function refresh_gui(player, record)
       tostring(level),
       string.format("%.2f", scale),
     }
+  end
+
+  local stability = frame["answer-stability"]
+  if stability then
+    stability.caption = { "chiptorio.answer-stability", tostring(math.floor((record.stability or 1) * 100)) }
   end
 
   local score_label = frame["answer-score"]
@@ -220,7 +379,35 @@ local function create_gui(player, record)
   frame.add({ type = "progressbar", name = "answer-progress", size = { 380, 20 }, style = "progressbar" })
 
   local req_table = frame.add({ type = "table", name = "answer-requirements", column_count = 2 })
-  for _, req in ipairs(answer.requirements) do
+  for _, row in ipairs(COMPUTE_ROWS) do
+    req_table.add({
+      type = "sprite-button",
+      name = "answer-icon-compute-" .. row.profile,
+      sprite = "item/" .. row.icon,
+      enabled = false,
+      style = "slot_button",
+      tooltip = { "chiptorio.compute-" .. row.profile },
+    })
+    req_table.add({
+      type = "label",
+      name = "answer-compute-" .. row.profile,
+      caption = "",
+    })
+  end
+
+  for _, spec in ipairs({ { kind = "memory", icon = "memory-bank" }, { kind = "bandwidth", icon = "network-switch" } }) do
+    req_table.add({
+      type = "sprite-button",
+      name = "answer-icon-" .. spec.kind,
+      sprite = "item/" .. spec.icon,
+      enabled = false,
+      style = "slot_button",
+      tooltip = { "chiptorio.answer-" .. spec.kind },
+    })
+    req_table.add({ type = "label", name = "answer-" .. spec.kind, caption = "" })
+  end
+
+  for _, req in ipairs(answer.item_demand) do
     req_table.add({
       type = "sprite-button",
       name = "answer-icon-" .. req.item,
@@ -236,7 +423,9 @@ local function create_gui(player, record)
     })
   end
 
+  frame.add({ type = "label", name = "answer-qln" })
   frame.add({ type = "label", name = "answer-demand" })
+  frame.add({ type = "label", name = "answer-stability" })
   frame.add({ type = "label", name = "answer-score" })
   frame.add({ type = "button", name = "answer-boot", caption = { "chiptorio.answer-boot" } })
 
@@ -262,8 +451,7 @@ local function complete(record)
     return
   end
 
-  local _, level, _ = requirements_for(entity.force)
-  level = math.max(1, level)
+  local level = math.max(1, question_level(entity.force))
 
   record.state = "complete"
   record.elapsed = DURATION_TICKS
@@ -320,6 +508,15 @@ local function complete(record)
   end
 end
 
+local function pause(record, reason)
+  record.state = "paused"
+  local entity = record.entity
+  if entity.valid and game.tick >= (record.next_warn or 0) then
+    record.next_warn = game.tick + WARN_INTERVAL
+    force_print(entity.force, { reason or "chiptorio.answer-paused" })
+  end
+end
+
 local function update_record(record)
   local entity = record.entity
   if not (entity and entity.valid) then
@@ -327,20 +524,23 @@ local function update_record(record)
   end
 
   if record.state == "running" then
-    local ok = check_engine(record)
+    local ok, _, _, scale = check_engine(record)
     if ok then
-      record.elapsed = record.elapsed + 60
-      if record.elapsed >= DURATION_TICKS then
-        complete(record)
+      local consumed = consume_items(record, scale)
+      if consumed then
+        record.elapsed = record.elapsed + 60
+        record.stability = math.min(1, (record.stability or 1) + 0.01)
+        if record.elapsed >= DURATION_TICKS then
+          complete(record)
+        end
+      else
+        pause(record, "chiptorio.answer-paused-items")
       end
     else
-      record.state = "paused"
-      if game.tick >= (record.next_warn or 0) then
-        record.next_warn = game.tick + WARN_INTERVAL
-        force_print(entity.force, { "chiptorio.answer-paused" })
-      end
+      pause(record)
     end
   elseif record.state == "paused" then
+    record.stability = math.max(0, (record.stability or 1) - answer.stability_decay_per_minute)
     local ok = check_engine(record)
     if ok then
       record.state = "running"
@@ -411,6 +611,7 @@ local function on_gui_click(event)
   if record.state == "complete" then
     record.state = "idle"
     record.elapsed = 0
+    record.remainder = {}
   end
   if record.state ~= "idle" then
     return
@@ -426,6 +627,7 @@ local function on_gui_click(event)
   record.state = "running"
   record.elapsed = 0
   record.next_warn = 0
+  record.stability = 1
   player.print({ "chiptorio.answer-booted" })
   refresh_gui(player, record)
 end
@@ -434,26 +636,118 @@ M.on_gui_opened = on_gui_opened
 M.on_gui_closed = on_gui_closed
 M.on_gui_click = on_gui_click
 
+--- Advance every engine without waiting for the 60-tick dispatcher. Test and
+--- debug helper, analogous to the research and qualification step hooks.
+function M.step(seconds)
+  init_storage()
+  reconcile()
+  local count = math.max(0, math.floor(seconds or 60))
+  for _ = 1, count do
+    for _, record in pairs(storage.answer_engines) do
+      update_record(record)
+    end
+  end
+  update_open_guis()
+  return count
+end
+
+local function first_engine()
+  for _, record in pairs(storage.answer_engines) do
+    if record.entity and record.entity.valid then
+      return record
+    end
+  end
+  return nil
+end
+
+--- Test/debug helper: the current gate and clock as a plain table.
+function M.evaluate()
+  init_storage()
+  reconcile()
+  local record = first_engine()
+  if not record then
+    return nil
+  end
+  local ok, results, level, scale = check_engine(record)
+  local lines = {}
+  for _, line in ipairs(results) do
+    lines[#lines + 1] = {
+      kind = line.kind,
+      item = line.item,
+      profile = line.profile,
+      required = line.required,
+      have = line.have,
+      rate = line.rate,
+      ok = line.ok,
+    }
+  end
+  return {
+    ok = ok,
+    state = record.state,
+    elapsed = record.elapsed,
+    duration = DURATION_TICKS,
+    level = level,
+    scale = scale,
+    stability = record.stability,
+    runs = record.runs,
+    score = storage.answer_score[record.entity.force.name] or 0,
+    victory = storage.answer_victory,
+    lines = lines,
+  }
+end
+
+--- Test/debug helper: boot the first engine without opening its window.
+function M.boot()
+  init_storage()
+  reconcile()
+  local record = first_engine()
+  if not record then
+    return false
+  end
+  record.state = "idle"
+  record.elapsed = 0
+  record.remainder = {}
+  if not check_engine(record) then
+    return false
+  end
+  record.state = "running"
+  record.elapsed = 0
+  record.next_warn = 0
+  record.stability = 1
+  return true
+end
+
 remote.add_interface("chiptorio-answer", {
   -- Debug helper: /c remote.call("chiptorio-answer", "status")
   status = function()
     init_storage()
     for unit_number, record in pairs(storage.answer_engines) do
       if record.entity and record.entity.valid then
-        local ok, _, level = check_engine(record)
+        local ok, _, level, scale = check_engine(record)
         log(string.format(
-          "CHIPTORIO ANSWER status engine=%d state=%s elapsed=%d/%d level=%d ok=%s score=%d",
+          "CHIPTORIO ANSWER status engine=%d state=%s elapsed=%d/%d level=%d scale=%.2f ok=%s stability=%.2f score=%d",
           unit_number,
           tostring(record.state),
           record.elapsed,
           DURATION_TICKS,
           level,
+          scale,
           tostring(ok),
+          record.stability or 1,
           storage.answer_score[record.entity.force.name] or 0
         ))
       end
     end
   end,
+
+  -- Test/debug helpers. `evaluate` returns the gate as a table and `boot`
+  -- starts the first engine without the GUI, so the probe does not depend on
+  -- window layout.
+  evaluate = M.evaluate,
+  boot = M.boot,
+
+  -- /c remote.call("chiptorio-answer", "step", 600)
+  step = M.step,
 
   -- Test helper. Completes every engine immediately and exercises the victory
   -- screen, fanfare and score path.

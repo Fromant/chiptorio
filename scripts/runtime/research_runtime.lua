@@ -17,6 +17,11 @@ local M = {}
 local function init_storage()
   storage.research = storage.research or {}
   storage.research.version = 1
+  storage.research.infinite_multipliers = storage.research.infinite_multipliers or {}
+  for _, force in pairs(game.forces) do
+    storage.research.infinite_multipliers[force.index] =
+      storage.research.infinite_multipliers[force.index] or {}
+  end
 end
 
 local function forces()
@@ -52,10 +57,46 @@ local function labs_for(force)
   return labs
 end
 
+--- Force-level infinite-research multipliers. Returns a table of tech_name ->
+--- multiplier for the given force. Level 0 means not researched (multiplier 1).
+local function force_multipliers(force_index)
+  local levels = storage.research.infinite_multipliers[force_index] or {}
+  local result = {}
+  for tech_name, spec in pairs(meta.INFINITE_RESEARCH_SCALES) do
+    local level = levels[tech_name] or 0
+    if level > 0 then
+      result[spec.field] = meta.infinite_multiplier(tech_name, level)
+    end
+  end
+  return result
+end
+
+--- Apply force-level multipliers to a network table before it reaches the
+--- allocator. Compute fields are scaled; memory and bandwidth are scaled.
+local function apply_multipliers(network, mults)
+  if mults.compute then
+    network.scalar = network.scalar * mults.compute
+    network.vector = network.vector * mults.compute
+    network.tensor = network.tensor * mults.compute
+    network.quantum = network.quantum * mults.compute
+  end
+  if mults.quantum then
+    network.quantum = network.quantum * mults.quantum
+  end
+  if mults.memory then
+    network.memory = network.memory * mults.memory
+  end
+  if mults.bandwidth then
+    network.bandwidth = network.bandwidth * mults.bandwidth
+  end
+end
+
 --- Plain per-force network tables for the allocator. Network ids are prefixed
---- with the surface index so two surfaces cannot collide.
+--- with the surface index so two surfaces cannot collide. Force-level infinite
+--- research multipliers are applied before the table reaches the allocator.
 local function networks_for(force)
   local list = {}
+  local mults = force_multipliers(force.index)
   for surface_index, graph in pairs(network.graphs()) do
     for _, net in ipairs(graph.networks) do
       local labs = {}
@@ -69,7 +110,7 @@ local function networks_for(force)
           }
         end
       end
-      list[#list + 1] = {
+      local entry = {
         id = surface_index .. ":" .. net.id,
         surface_index = surface_index,
         scalar = net.scalar,
@@ -80,6 +121,8 @@ local function networks_for(force)
         bandwidth = net.bandwidth,
         labs = labs,
       }
+      apply_multipliers(entry, mults)
+      list[#list + 1] = entry
     end
   end
   return list

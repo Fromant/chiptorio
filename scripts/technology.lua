@@ -44,7 +44,6 @@ local techs = {
     time = 15,
     cost = {
       ["automation-science-pack"] = 1,
-      ["logistic-science-pack"] = 1,
     },
     prerequisites = { "electromechanics" },
     effects = {
@@ -194,7 +193,6 @@ local techs = {
     effects = {
       "datacenter",
       "datacenter-lab",
-      "dram-module",
     },
   },
   {
@@ -268,8 +266,138 @@ local techs = {
     },
     prerequisites = { "quantum-error-correction" },
     -- A pure gate: the quantum processor itself is packaged by the 7 nm,
-    -- 3 nm and 1.4 nm node recipes.
-    effects = {},
+    -- 3 nm and 1.4 nm node recipes. The neural processor is the tensor source
+    -- the Answer Engine needs, so it arrives with the quantum era.
+    effects = {
+      "neural-processor",
+    },
+  },
+  {
+    -- Machine learning: the first AI tier. Unlocks the Training Cluster,
+    -- Inference Lab and Small Model. GPU-era compute trains models on data.
+    name = "machine-learning",
+    order = "a[chiptorio]-n1",
+    count = 600,
+    time = 60,
+    cost = {
+      ["production-science-pack"] = 1,
+      ["utility-science-pack"] = 1,
+      ["chiptorio-hbm-science-pack"] = 1,
+    },
+    prerequisites = { "quantum-advantage" },
+    effects = {
+      "training-cluster",
+      "inference-lab",
+      "small-model",
+    },
+  },
+  {
+    -- Specialist AI: inference on early NPU hardware.
+    name = "ai-specialist",
+    order = "a[chiptorio]-n2",
+    count = 800,
+    time = 60,
+    cost = {
+      ["production-science-pack"] = 1,
+      ["utility-science-pack"] = 1,
+      ["chiptorio-hbm-science-pack"] = 1,
+    },
+    prerequisites = { "machine-learning", "heterogeneous-compute" },
+    effects = {
+      "specialist-model",
+    },
+  },
+  {
+    -- General AI: tensor compute on NPU hardware.
+    name = "ai-general",
+    order = "a[chiptorio]-n3",
+    count = 1000,
+    time = 60,
+    cost = {
+      ["production-science-pack"] = 1,
+      ["utility-science-pack"] = 1,
+      ["chiptorio-hbm-science-pack"] = 2,
+    },
+    prerequisites = { "ai-specialist", "process-14nm" },
+    effects = {
+      "general-model",
+    },
+  },
+  {
+    -- Frontier AI: quantum-adjacent compute.
+    name = "ai-frontier",
+    order = "a[chiptorio]-n4",
+    count = 1200,
+    time = 60,
+    cost = {
+      ["production-science-pack"] = 1,
+      ["utility-science-pack"] = 1,
+      ["chiptorio-quantum-science-pack"] = 1,
+    },
+    prerequisites = { "ai-general", "quantum-error-correction" },
+    effects = {
+      "frontier-model",
+    },
+  },
+  {
+    -- Artificial General Intelligence: the capstone.
+    name = "artificial-general-intelligence",
+    order = "a[chiptorio]-n5",
+    count = 1500,
+    time = 60,
+    cost = {
+      ["production-science-pack"] = 1,
+      ["utility-science-pack"] = 1,
+      ["chiptorio-quantum-science-pack"] = 2,
+    },
+    prerequisites = { "ai-frontier", "quantum-advantage" },
+    effects = {
+      "agi-model",
+    },
+  },
+  {
+    -- Pre-quantum QLN (DESIGN §9.1). Storage is memory modules in Storage
+    -- Drives, transport is the ordinary cable graph, and the Construction Core
+    -- is the no-bots replacement for construction robots.
+    name = "qln",
+    order = "a[chiptorio]-i2",
+    count = 350,
+    time = 40,
+    cost = {
+      ["production-science-pack"] = 1,
+      ["utility-science-pack"] = 1,
+    },
+    prerequisites = { "datacenter" },
+    effects = {
+      "qln-import-node",
+      "qln-export-node",
+      "qln-provider-node",
+      "qln-requester-node",
+      "qln-terminal",
+      "qln-storage-drive",
+      "construction-core",
+    },
+  },
+  {
+    -- Quantum QLN (DESIGN §9.2), FOUP logistics and the advanced network
+    -- hardware. A quantum core pairs two networks into one global storage
+    -- group; a FOUP Dock seals and unseals wafer carriers.
+    name = "qln-quantum",
+    order = "a[chiptorio]-n2",
+    count = 700,
+    time = 60,
+    cost = {
+      ["chiptorio-quantum-science-pack"] = 1,
+      ["utility-science-pack"] = 1,
+    },
+    prerequisites = { "qln", "quantum-error-correction" },
+    effects = {
+      "quantum-entanglement-core",
+      "foup-dock",
+      "foup",
+      "network-repeater",
+      "wireless-access-point",
+    },
   },
   {
     -- The final technology is infinite: level 1 unlocks the Answer Engine,
@@ -306,11 +434,118 @@ local techs = {
       "quantum-computing",
       "quantum-error-correction",
       "quantum-advantage",
+      "qln",
+      "qln-quantum",
       "process-1-4nm",
     },
     effects = {
       "answer-engine",
     },
+    infinite = true,
+  },
+  {
+    -- Infinite research: +5% compute per level, uncapped.
+    name = "chip-performance",
+    order = "a[chiptorio]-z1",
+    count = 500,
+    time = 30,
+    cost = {
+      ["production-science-pack"] = 1,
+      ["utility-science-pack"] = 1,
+      ["chiptorio-hbm-science-pack"] = 1,
+    },
+    prerequisites = { "the-question" },
+    effects = {},
+    infinite = true,
+  },
+  {
+    -- Infinite research: −2% power per level, floor at 10% (90% reduction).
+    name = "chip-efficiency",
+    order = "a[chiptorio]-z2",
+    count = 500,
+    time = 30,
+    cost = {
+      ["production-science-pack"] = 1,
+      ["utility-science-pack"] = 1,
+      ["chiptorio-hbm-science-pack"] = 1,
+    },
+    prerequisites = { "chip-performance" },
+    effects = {},
+    infinite = true,
+  },
+  {
+    -- Infinite research: +5% memory capacity per level, uncapped.
+    name = "memory-density",
+    order = "a[chiptorio]-z3",
+    count = 500,
+    time = 30,
+    cost = {
+      ["production-science-pack"] = 1,
+      ["utility-science-pack"] = 1,
+      ["chiptorio-optical-science-pack"] = 1,
+    },
+    prerequisites = { "chip-performance" },
+    effects = {},
+    infinite = true,
+  },
+  {
+    -- Infinite research: +5% memory bandwidth per level, uncapped.
+    name = "memory-bandwidth",
+    order = "a[chiptorio]-z4",
+    count = 500,
+    time = 30,
+    cost = {
+      ["production-science-pack"] = 1,
+      ["utility-science-pack"] = 1,
+      ["chiptorio-optical-science-pack"] = 1,
+    },
+    prerequisites = { "memory-density" },
+    effects = {},
+    infinite = true,
+  },
+  {
+    -- Infinite research: +5% link throughput per level, uncapped.
+    name = "network-bandwidth",
+    order = "a[chiptorio]-z5",
+    count = 500,
+    time = 30,
+    cost = {
+      ["production-science-pack"] = 1,
+      ["utility-science-pack"] = 1,
+      ["chiptorio-quantum-science-pack"] = 1,
+    },
+    prerequisites = { "chip-performance" },
+    effects = {},
+    infinite = true,
+  },
+  {
+    -- Infinite research: +5% cooling capacity per level, uncapped.
+    name = "cooling-efficiency",
+    order = "a[chiptorio]-z6",
+    count = 500,
+    time = 30,
+    cost = {
+      ["production-science-pack"] = 1,
+      ["utility-science-pack"] = 1,
+      ["chiptorio-quantum-science-pack"] = 1,
+    },
+    prerequisites = { "chip-efficiency" },
+    effects = {},
+    infinite = true,
+  },
+  {
+    -- Infinite research: +5% QPU compute per level, uncapped.
+    name = "quantum-correction",
+    order = "a[chiptorio]-z7",
+    count = 500,
+    time = 30,
+    cost = {
+      ["production-science-pack"] = 1,
+      ["utility-science-pack"] = 1,
+      ["chiptorio-quantum-science-pack"] = 1,
+    },
+    prerequisites = { "chip-performance" },
+    effects = {},
     infinite = true,
   },
 }
@@ -319,7 +554,9 @@ local techs = {
 -- (mask/wafer/die recipes and chip packaging) is generated from the pure node
 -- table in scripts/process_nodes.lua; this table only says when it unlocks.
 -- The two custom science packs ride on the node that introduces their
--- feedstock: optical discs at 350 nm, HBM stacks at 90 nm.
+-- feedstock: optical discs at 350 nm, HBM stacks at 90 nm. Every era also
+-- unlocks its memory generation (DESIGN §8.3), so the memory ladder advances
+-- with the process ladder instead of needing a second technology column.
 local NODE_TECHS = {
   ["10um"] = {
     order = "a[chiptorio]-f1",
@@ -332,56 +569,63 @@ local NODE_TECHS = {
     count = 200,
     time = 30,
     prerequisites = { "process-10um" },
+    extra_effects = { "dram-module" },
   },
   ["1um"] = {
     order = "a[chiptorio]-g3",
     count = 250,
     time = 30,
     prerequisites = { "process-3um", "microarchitecture" },
+    extra_effects = { "sdram-module" },
   },
   ["350nm"] = {
     order = "a[chiptorio]-h1",
     count = 300,
     time = 35,
     prerequisites = { "process-1um", "vlsi-process" },
-    extra_effects = { "chiptorio-optical-science-pack" },
+    extra_effects = { "chiptorio-optical-science-pack", "ddr-module" },
   },
   ["180nm"] = {
     order = "a[chiptorio]-i1",
     count = 350,
     time = 35,
     prerequisites = { "process-350nm" },
+    extra_effects = { "ddr2-module" },
   },
   ["90nm"] = {
     order = "a[chiptorio]-j1",
     count = 450,
     time = 40,
     prerequisites = { "process-180nm", "advanced-packaging" },
-    extra_effects = { "chiptorio-hbm-science-pack" },
+    extra_effects = { "chiptorio-hbm-science-pack", "ddr3-module" },
   },
   ["45nm"] = {
     order = "a[chiptorio]-j2",
     count = 550,
     time = 45,
     prerequisites = { "process-90nm" },
+    extra_effects = { "ddr4-module" },
   },
   ["22nm"] = {
     order = "a[chiptorio]-k1",
     count = 650,
     time = 45,
     prerequisites = { "process-45nm", "heterogeneous-compute" },
+    extra_effects = { "ddr5-module" },
   },
   ["14nm"] = {
     order = "a[chiptorio]-k2",
     count = 800,
     time = 50,
     prerequisites = { "process-22nm" },
+    extra_effects = { "hbm-module" },
   },
   ["7nm"] = {
     order = "a[chiptorio]-l1",
     count = 1000,
     time = 55,
     prerequisites = { "process-14nm", "quantum-computing" },
+    extra_effects = { "hbm3-module", "3d-nand-module" },
   },
   ["3nm"] = {
     order = "a[chiptorio]-m1",

@@ -251,6 +251,241 @@ Rect $g 7 7 2 2 $gold
 Rect $g 3 3 1 1 $cyan
 Save-Icon $b "microprocessor"
 
+# --- boards ----------------------------------------------------------------
+
+$b, $g = New-Canvas
+Rect $g 2 2 12 12 $panel
+for ($y = 3; $y -le 11; $y += 2) {
+  Line $g 2 $y 14 $y $line
+}
+for ($x = 4; $x -le 12; $x += 2) {
+  Line $g $x 2 $x 14 $line
+}
+Rect $g 5 5 6 6 $ink
+Rect $g 6 6 4 4 $gold
+Rect $g 7 7 2 2 $panel
+Save-Icon $b "electronic-circuit"
+
+$b, $g = New-Canvas
+Rect $g 2 2 12 12 $panel
+for ($y = 3; $y -le 11; $y += 2) {
+  Line $g 2 $y 14 $y $line
+}
+for ($x = 4; $x -le 12; $x += 2) {
+  Line $g $x 2 $x 14 $line
+}
+Rect $g 4 4 8 8 $ink
+Rect $g 5 5 6 6 $gold
+Rect $g 6 6 4 4 $panel
+Rect $g 7 7 2 2 $red
+Save-Icon $b "advanced-circuit"
+
+$b, $g = New-Canvas
+Rect $g 2 2 12 12 $panel
+for ($y = 3; $y -le 11; $y += 1) {
+  Line $g 2 $y 14 $y $line
+}
+for ($x = 3; $x -le 13; $x += 1) {
+  Line $g $x 2 $x 14 $line
+}
+Rect $g 3 3 10 10 $ink
+Rect $g 4 4 8 8 $gold
+Rect $g 5 5 6 6 $panel
+Rect $g 6 6 4 4 $blue
+Save-Icon $b "processing-unit"
+
+$b, $g = New-Canvas
+Rect $g 2 2 12 12 $panel
+Disc $g 8 8 4 $ink
+Rect $g 6 6 4 4 $gold
+Rect $g 7 7 2 2 $panel
+Rect $g 4 4 2 2 $green
+Rect $g 10 4 2 2 $green
+Rect $g 4 10 2 2 $green
+Rect $g 10 10 2 2 $green
+Save-Icon $b "accelerator-board"
+
+$b, $g = New-Canvas
+Rect $g 2 2 12 12 $panel
+Disc $g 8 8 4 $ink
+Rect $g 6 6 4 4 $gold
+Rect $g 7 7 2 2 $panel
+Line $g 4 4 12 12 $magenta
+Line $g 4 12 12 4 $magenta
+Save-Icon $b "neural-board"
+
+$b, $g = New-Canvas
+Rect $g 2 2 12 12 $panel
+Disc $g 8 8 4 $ink
+Rect $g 6 6 4 4 $gold
+Rect $g 7 7 2 2 $panel
+Disc $g 4 4 2 $cyan
+Disc $g 10 4 2 $cyan
+Disc $g 4 10 2 $cyan
+Disc $g 10 10 2 $cyan
+Save-Icon $b "quantum-board"
+
+# --- circuit assembler -----------------------------------------------------
+
+$b, $g = New-Canvas
+Rect $g 2 3 12 11 $panel
+Rect $g 3 4 10 2 $line
+Rect $g 3 8 10 2 $line
+Rect $g 4 6 8 2 $ink
+Rect $g 6 7 2 2 $gold
+Rect $g 7 9 2 1 $steel
+Save-Icon $b "circuit-assembler"
+
+# --- computers -------------------------------------------------------------
+
+$b, $g = New-Canvas
+Rect $g 3 3 10 10 $panel
+Rect $g 4 4 8 8 $ink
+Rect $g 5 5 6 6 $gold
+Rect $g 6 6 4 4 $panel
+Rect $g 7 7 2 2 $blue
+Save-Icon $b "microcomputer"
+
+$b, $g = New-Canvas
+Rect $g 3 3 10 10 $panel
+Rect $g 4 4 8 8 $ink
+Rect $g 5 5 6 6 $gold
+Rect $g 6 6 4 4 $panel
+Rect $g 7 7 2 2 $green
+Rect $g 4 4 1 1 $green
+Rect $g 11 4 1 1 $green
+Rect $g 4 11 1 1 $green
+Rect $g 11 11 1 1 $green
+Save-Icon $b "server"
+
+$b, $g = New-Canvas
+Rect $g 3 3 10 10 $panel
+Disc $g 8 8 4 $ink
+Rect $g 6 6 4 4 $gold
+Rect $g 7 7 2 2 $panel
+Rect $g 4 4 2 2 $green
+Rect $g 10 4 2 2 $green
+Rect $g 4 10 2 2 $green
+Rect $g 10 10 2 2 $green
+Rect $g 6 10 2 2 $blue
+Rect $g 10 6 2 2 $blue
+Save-Icon $b "supercomputer"
+
+$b, $g = New-Canvas
+Rect $g 3 3 10 10 $panel
+Disc $g 8 8 4 $ink
+Rect $g 6 6 4 4 $gold
+Rect $g 7 7 2 2 $panel
+Line $g 4 4 12 12 $magenta
+Line $g 4 12 12 4 $magenta
+Rect $g 6 10 2 2 $blue
+Rect $g 10 6 2 2 $blue
+Rect $g 5 5 1 1 $blue
+Rect $g 11 5 1 1 $blue
+Rect $g 5 11 1 1 $blue
+Rect $g 11 11 1 1 $blue
+Save-Icon $b "neural-computer"
+
+$b, $g = New-Canvas
+Rect $g 3 3 10 10 $panel
+Disc $g 8 8 4 $ink
+Rect $g 6 6 4 4 $gold
+Rect $g 7 7 2 2 $panel
+Disc $g 4 4 2 $cyan
+Disc $g 10 4 2 $cyan
+Disc $g 4 10 2 $cyan
+Disc $g 10 10 2 $cyan
+Rect $g 6 6 2 2 $blue
+Rect $g 10 10 2 2 $blue
+Rect $g 6 10 2 2 $blue
+Rect $g 10 6 2 2 $blue
+Save-Icon $b "quantum-computer"
+
+# --- AI models -------------------------------------------------------------
+
+$b, $g = New-Canvas
+Rect $g 3 3 10 10 $panel
+Rect $g 4 4 8 8 $ink
+Rect $g 5 5 6 6 $gold
+Rect $g 6 6 4 4 $panel
+Rect $g 7 7 2 2 $orange
+Save-Icon $b "small-model"
+
+$b, $g = New-Canvas
+Rect $g 3 3 10 10 $panel
+Rect $g 4 4 8 8 $ink
+Rect $g 5 5 6 6 $gold
+Rect $g 6 6 4 4 $panel
+Rect $g 7 7 2 2 $red
+Rect $g 5 5 1 1 $red
+Rect $g 10 5 1 1 $red
+Rect $g 5 10 1 1 $red
+Rect $g 10 10 1 1 $red
+Save-Icon $b "specialist-model"
+
+$b, $g = New-Canvas
+Rect $g 3 3 10 10 $panel
+Disc $g 8 8 4 $ink
+Rect $g 6 6 4 4 $gold
+Rect $g 7 7 2 2 $panel
+Rect $g 4 4 2 2 $purple
+Rect $g 10 4 2 2 $purple
+Rect $g 4 10 2 2 $purple
+Rect $g 10 10 2 2 $purple
+Save-Icon $b "general-model"
+
+$b, $g = New-Canvas
+Rect $g 3 3 10 10 $panel
+Disc $g 8 8 4 $ink
+Rect $g 6 6 4 4 $gold
+Rect $g 7 7 2 2 $panel
+Line $g 4 4 12 12 $magenta
+Line $g 4 12 12 4 $magenta
+Rect $g 6 6 2 2 $blue
+Rect $g 10 10 2 2 $blue
+Rect $g 6 10 2 2 $blue
+Rect $g 10 6 2 2 $blue
+Save-Icon $b "frontier-model"
+
+$b, $g = New-Canvas
+Rect $g 3 3 10 10 $panel
+Disc $g 8 8 4 $ink
+Rect $g 6 6 4 4 $gold
+Rect $g 7 7 2 2 $panel
+Disc $g 4 4 2 $blue
+Disc $g 10 4 2 $blue
+Disc $g 4 10 2 $blue
+Disc $g 10 10 2 $blue
+Rect $g 6 6 2 2 $magenta
+Rect $g 10 10 2 2 $magenta
+Rect $g 6 10 2 2 $magenta
+Rect $g 10 6 2 2 $magenta
+Save-Icon $b "agi-model"
+
+# --- AI buildings ----------------------------------------------------------
+
+$b, $g = New-Canvas
+Rect $g 2 3 12 11 $panel
+Rect $g 3 4 10 2 $line
+Rect $g 3 8 10 2 $line
+Rect $g 4 6 8 2 $ink
+Rect $g 6 7 2 2 $gold
+Rect $g 7 9 2 1 $steel
+Rect $g 4 9 2 2 $orange
+Rect $g 10 9 2 2 $orange
+Save-Icon $b "training-cluster"
+
+$b, $g = New-Canvas
+Rect $g 2 3 12 11 $panel
+Rect $g 3 4 10 2 $line
+Rect $g 3 8 10 2 $line
+Rect $g 4 6 8 2 $ink
+Rect $g 6 7 2 2 $gold
+Rect $g 7 9 2 1 $steel
+Rect $g 4 9 2 2 $purple
+Rect $g 10 9 2 2 $purple
+Save-Icon $b "inference-lab"
+
 # --- era 5-6 -----------------------------------------------------------
 
 $b, $g = New-Canvas
@@ -644,6 +879,44 @@ for ($y = 4; $y -le 8; $y += 2) {
 for ($x = 2; $x -le 13; $x += 2) { Rect $g $x 13 1 1 $gold }
 Save-Icon $b "dram-module"
 
+# Memory generations: one package silhouette with a per-generation accent and
+# an increasing chip count, so the ladder reads at a glance in the inventory
+# and in the technology tree.
+$memoryGenerations = @(
+  @{ name = "sdram-module";   accent = $cyan;   rows = 2; pins = 5 }
+  @{ name = "ddr-module";     accent = $green;  rows = 2; pins = 6 }
+  @{ name = "ddr2-module";    accent = $gold;   rows = 2; pins = 6 }
+  @{ name = "ddr3-module";    accent = $orange; rows = 3; pins = 7 }
+  @{ name = "ddr4-module";    accent = $red;    rows = 3; pins = 7 }
+  @{ name = "ddr5-module";    accent = $purple; rows = 3; pins = 8 }
+  @{ name = "hbm-module";     accent = $cyan;   rows = 3; pins = 4 }
+  @{ name = "hbm3-module";    accent = $green;  rows = 4; pins = 4 }
+  @{ name = "3d-nand-module"; accent = $gold;   rows = 4; pins = 3 }
+)
+foreach ($gen in $memoryGenerations) {
+  $b, $g = New-Canvas
+  # Package body and edge connector.
+  Rect $g 1 2 14 12 $ink
+  Rect $g 2 3 12 9 $panel
+  Rect $g 2 3 12 1 $line
+  Rect $g 2 11 12 1 $gen.accent
+  # Memory dies: more rows for the denser generations.
+  for ($r = 0; $r -lt $gen.rows; $r++) {
+    $y = 4 + $r * 2
+    for ($c = 0; $c -lt 3; $c++) {
+      $x = 3 + $c * 3
+      Rect $g $x $y 2 1 $silver
+      Rect $g ($x + 1) $y 1 1 $gen.accent
+    }
+  }
+  # Contact pins along the bottom edge.
+  $step = [Math]::Floor(13 / $gen.pins)
+  for ($p = 0; $p -lt $gen.pins; $p++) {
+    Rect $g (2 + $p * $step) 13 1 1 $gold
+  }
+  Save-Icon $b $gen.name
+}
+
 $b, $g = New-Canvas
 Rect $g 1 2 14 12 $ink
 Rect $g 1 2 14 1 $line
@@ -772,6 +1045,157 @@ Rect $g 4 12 2 1 $gold
 Rect $g 10 12 2 1 $green
 Save-Icon $b "metrology-lab"
 
+# --- QLN ---------------------------------------------------------------
+
+$b, $g = New-Canvas
+Rect $g 1 3 14 10 $panel
+Rect $g 1 3 14 1 $line
+Rect $g 3 5 8 7 $ink
+Rect $g 6 6 2 4 $cyan
+Poly $g @(4,9,9,4,14,9) $cyan
+Rect $g 12 3 1 9 $gold
+Save-Icon $b "qln-import-node"
+
+$b, $g = New-Canvas
+Rect $g 1 3 14 10 $panel
+Rect $g 1 3 14 1 $line
+Rect $g 3 5 8 7 $ink
+Rect $g 6 8 2 4 $cyan
+Poly $g @(4,7,9,12,14,7) $cyan
+Rect $g 12 3 1 9 $gold
+Save-Icon $b "qln-export-node"
+
+$b, $g = New-Canvas
+Disc $g 8 8 6 $panel
+Disc $g 8 8 4 $ink
+Rect $g 6 5 1 3 $green
+Rect $g 9 5 1 3 $green
+Poly $g @(5,8,8,4,11,8) $green
+Rect $g 3 8 1 5 $gold
+Rect $g 12 8 1 5 $gold
+Save-Icon $b "qln-provider-node"
+
+$b, $g = New-Canvas
+Disc $g 8 8 6 $panel
+Disc $g 8 8 4 $ink
+Rect $g 6 5 1 3 $cyan
+Rect $g 9 5 1 3 $cyan
+Poly $g @(5,7,8,11,11,7) $cyan
+Rect $g 3 8 1 5 $gold
+Rect $g 12 8 1 5 $gold
+Save-Icon $b "qln-requester-node"
+
+$b, $g = New-Canvas
+Rect $g 1 2 14 12 $ink
+Rect $g 2 3 12 9 $panel
+Rect $g 2 2 12 1 $line
+Rect $g 4 5 8 1 $cyan
+Rect $g 4 7 6 1 $silver
+Rect $g 4 9 7 1 $silver
+Rect $g 12 10 1 2 $gold
+Rect $g 2 12 10 1 $line
+Save-Icon $b "qln-terminal"
+
+$b, $g = New-Canvas
+Rect $g 2 2 12 3 $panel
+Rect $g 2 6 12 3 $panel
+Rect $g 2 10 12 3 $panel
+Rect $g 2 2 12 1 $line
+Rect $g 2 6 12 1 $line
+Rect $g 2 10 12 1 $line
+for ($x = 4; $x -le 11; $x += 3) {
+  Rect $g $x 3 2 1 $cyan
+  Rect $g $x 7 2 1 $green
+  Rect $g $x 11 2 1 $gold
+}
+Save-Icon $b "qln-storage-drive"
+
+$b, $g = New-Canvas
+Rect $g 3 3 10 10 $panel
+Rect $g 3 3 10 1 $line
+Rect $g 5 5 6 6 $ink
+Rect $g 6 6 4 1 $orange
+Rect $g 6 8 4 2 $orange
+Rect $g 1 7 2 2 $steel
+Rect $g 13 7 2 2 $steel
+Rect $g 7 1 2 2 $steel
+Rect $g 7 13 2 2 $steel
+Save-Icon $b "construction-core"
+
+$b, $g = New-Canvas
+Disc $g 6 8 4 $purple
+Disc $g 10 8 4 $cyan
+Disc $g 6 8 3 $ink
+Disc $g 10 8 3 $ink
+Disc $g 8 8 1 $gold
+Rect $g 1 7 2 2 $silver
+Rect $g 13 7 2 2 $silver
+Save-Icon $b "quantum-entanglement-core"
+
+$b, $g = New-Canvas
+Rect $g 2 11 12 2 $panel
+Rect $g 2 11 12 1 $line
+Rect $g 5 4 6 7 $silver
+Rect $g 5 4 6 1 $cream
+Rect $g 6 6 4 3 $ink
+Rect $g 7 7 2 1 $cyan
+Rect $g 3 9 1 3 $steel
+Rect $g 12 9 1 3 $steel
+Save-Icon $b "foup-dock"
+
+$b, $g = New-Canvas
+Rect $g 1 7 4 2 $steel
+Rect $g 11 7 4 2 $steel
+Rect $g 5 6 6 4 $panel
+Rect $g 5 6 6 1 $cyan
+Rect $g 7 3 2 3 $gold
+Poly $g @(9,3,12,1,12,4) $gold
+Rect $g 3 9 2 1 $green
+Rect $g 11 9 2 1 $green
+Save-Icon $b "network-repeater"
+
+$b, $g = New-Canvas
+Rect $g 7 7 2 6 $steel
+Rect $g 5 13 6 2 $panel
+Disc $g 8 5 2 $cyan
+Disc $g 8 5 1 $ink
+Line $g 3 5 1 3 $gold
+Line $g 13 5 15 3 $gold
+Line $g 4 8 2 10 $gold
+Line $g 12 8 14 10 $gold
+Save-Icon $b "wireless-access-point"
+
+$b, $g = New-Canvas
+Rect $g 3 2 10 12 $silver
+Rect $g 3 2 10 1 $cream
+Rect $g 3 5 10 1 $panel
+Rect $g 3 9 10 1 $panel
+Rect $g 4 13 2 1 $ink
+Rect $g 10 13 2 1 $ink
+Rect $g 7 4 2 6 $cyan
+Save-Icon $b "foup"
+
+$b, $g = New-Canvas
+Rect $g 2 2 12 12 $ink
+for ($i = 4; $i -le 11; $i += 2) {
+  Rect $g 1 $i 1 1 $gold
+  Rect $g 14 $i 1 1 $gold
+}
+Disc $g 5 5 1 $cyan
+Disc $g 8 5 1 $cyan
+Disc $g 11 5 1 $cyan
+Disc $g 5 8 1 $cyan
+Disc $g 8 8 1 $gold
+Disc $g 11 8 1 $cyan
+Disc $g 5 11 1 $cyan
+Disc $g 8 11 1 $cyan
+Disc $g 11 11 1 $cyan
+Line $g 5 5 8 5 $line
+Line $g 8 5 11 5 $line
+Line $g 5 11 8 11 $line
+Line $g 8 11 11 11 $line
+Save-Icon $b "neural-processor"
+
 # --- contact sheet -----------------------------------------------------
 
 $order = @(
@@ -783,6 +1207,8 @@ $order = @(
   "microprocessor", "photoresist", "etchant", "wafer-fab",
   "crystal-puller", "server-rack", "assembly-fab", "memory-bank",
   "sram-module", "dram-module", "analytical-engine", "tube-mainframe",
+  "sdram-module", "ddr-module", "ddr2-module", "ddr3-module", "ddr4-module",
+  "ddr5-module", "hbm-module", "hbm3-module", "3d-nand-module",
   "mainframe-cluster", "phase-shift-mask", "cmp-slurry", "low-k-dielectric",
   "cooling-unit", "vlsi-wafer", "vlsi-die", "system-on-chip",
   "chiplet", "hbm-stack", "gpu", "multi-core-cpu",
@@ -792,7 +1218,16 @@ $order = @(
   "cryogen", "answer-engine", "network-cable", "network-switch",
   "optical-disc", "hbm-science",
   "network-router", "network-monitor",
-  "qualification-wafer", "metrology-test-structure", "metrology-lab"
+  "qualification-wafer", "metrology-test-structure", "metrology-lab",
+  "qln-import-node", "qln-export-node", "qln-provider-node", "qln-requester-node",
+  "qln-terminal", "qln-storage-drive", "construction-core", "quantum-entanglement-core",
+  "foup-dock", "network-repeater", "wireless-access-point", "foup",
+  "neural-processor",
+  "electronic-circuit", "advanced-circuit", "processing-unit",
+  "accelerator-board", "neural-board", "quantum-board", "circuit-assembler",
+  "microcomputer", "server", "supercomputer", "neural-computer", "quantum-computer", "computer-assembler",
+  "small-model", "specialist-model", "general-model", "frontier-model", "agi-model",
+  "training-cluster", "inference-lab"
 )
 
 $cols = 8
@@ -849,6 +1284,8 @@ $techIcons = @{
   "quantum-error-correction"   = "error-corrected-qubit"
   "quantum-advantage"          = "quantum-processor"
   "the-question"               = "answer-engine"
+  "qln"                        = "qln-terminal"
+  "qln-quantum"                = "quantum-entanglement-core"
   "refine-6um"                 = "qualification-wafer"
   "refine-1-5um"               = "qualification-wafer"
   "refine-800nm"               = "qualification-wafer"

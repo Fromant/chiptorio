@@ -8,16 +8,17 @@ Start with a mechanical Analytical Engine and punched cards. End with a cryogeni
 
 - **Factorio:** 2.1 (tested with 2.1.23)
 - **DLC:** none required; Nauvis only
-- **Status:** 0.9.0 — redesign in progress: enemies and robots removed, network research, the twelve-node process ladder and half-node process qualification in, QLN next
+- **Status:** 0.10.0 — the redesign is implemented: enemies and robots are gone, research runs on network compute, the twelve-node process ladder and half-node qualification are in, and QLN (with eleven memory generations) plus the reworked Answer Engine ship for playtesting before 1.0.0
 
 ## What makes it different
 
 - **Research runs on compute, not flasks.** The six vanilla science packs are repurposed as storage media: punched cards, punched tape, magnetic tape, disk packs, SSDs, and mainframe modules. Three more workloads join them: optical discs, HBM stacks, and Qubit Arrays.
-- **No biters, no bots.** Enemy generation is disabled and existing enemies are cleaned up. Robots, roboports, and the spidertron are gone. The map is an industrial and engineering puzzle, and item logistics will move to the Quantum Logistics Network.
+- **No biters, no bots.** Enemy generation is disabled and existing enemies are cleaned up. Robots, roboports, and the spidertron are gone. Item logistics runs on the **Quantum Logistics Network** (QLN), and a scripted Construction Core does the building that robots used to do.
 - **Chips are infrastructure.** Twelve process nodes take you from 10 µm to 1.4 nm. Each node adds mask sets, wafers and dies, and packages the architecture chips of its era: integrated circuits, microprocessors, systems on a chip, GPUs, multi-core CPUs and quantum processors.
+- **Storage is memory.** A QLN Storage Drive is only as large as the modules installed in it. Eleven memory generations run from 1k SRAM to 256k 3D NAND, and each arrives with the process node of its era, so a finer fab really does mean a bigger pool.
 - **The factory is the network.** The **Internet** technology unlocks cables, switches, routers, and a monitor. Cables run under machines, switches merge a subnet, routers join subnets, and the monitor shows compute, memory, bandwidth, and latency per network. `ALT + N` draws the topology in-world.
 - **Five research computers.** The Analytical Engine, Tube Mainframe, Mainframe Cluster, Datacenter, and Cryostat get faster and accept more modules. They all accept every workload, so the vanilla tech tree cannot deadlock.
-- **A real ending.** Build the 5x5 Answer Engine, keep every production line running for 42 minutes, and find out what the factory was for.
+- **A real ending.** Build the 5x5 Answer Engine, supply every compute profile, dataset, bandwidth and item line for 42 minutes, and find out what the factory was for.
 - **The redesign** replaces the old sustained-production gate with network compute, memory, and bandwidth. Labs become network clients; datacenters supply compute; twelve process nodes gate the chip ladder, and ten half-node refinements are qualified by running a pilot line through a Metrology Lab. The full plan is in [`DESIGN.md`](DESIGN.md).
 
 ## Progression at a glance
@@ -41,7 +42,7 @@ The full design, balance targets, and per-era production chains are in [`DESIGN.
    - macOS: `~/Library/Application Support/factorio/mods`
 3. Enable **Chiptorio** in the mod list and start a new game.
 
-Alternatively, zip the repository root (so `info.json` is at the top of the archive) as `chiptorio_0.9.0.zip` and place it in the `mods` directory.
+Alternatively, zip the repository root (so `info.json` is at the top of the archive) as `chiptorio_0.10.0.zip` and place it in the `mods` directory.
 
 ## Getting started
 
@@ -56,7 +57,7 @@ Nothing before the Analytical Engine needs a lab, a chip, or research. See DESIG
 
 ## The Answer
 
-The endgame is a machine, not a menu button. The **Answer Engine** is a 5x5 lab clone assembled in an Assembly Fab from every era of the factory. Booting it requires sustained production of all nine workloads plus microprocessors.
+The endgame is a machine, not a menu button. The **Answer Engine** is a 5x5 lab clone assembled in an Assembly Fab from every era of the factory. Booting it requires the network behind it to supply all four compute profiles, a large memory dataset, backplane bandwidth, and a continuous QLN draw of science packs, microprocessors and quantum processors. It does not read production statistics or accept science packs directly.
 
 - The computation takes **42 minutes** of real time.
 - Dropping below any target pauses the clock; recovering resumes it.
@@ -66,6 +67,21 @@ The endgame is a machine, not a menu button. The **Answer Engine** is a 5x5 lab 
 ## Development
 
 This is a Lua mod with no build step. All verification runs through headless Factorio.
+
+### Play
+
+```powershell
+# Launch Factorio with the current working tree as the active mod
+powershell -ExecutionPolicy Bypass -File tools\run-mod.ps1
+
+# Snapshot the tree instead of linking it
+powershell -ExecutionPolicy Bypass -File tools\run-mod.ps1 -Copy
+
+# Launch and return without waiting for the game to exit
+powershell -ExecutionPolicy Bypass -File tools\run-mod.ps1 -NoWait
+```
+
+The run script creates an isolated dev mod directory at `%TEMP%\chiptorio-dev\mods`, links the repository into it, enables Chiptorio in `mod-list.json`, and launches Factorio with `--mod-directory`. A directory junction means every launch uses the latest working tree; `-Copy` takes a snapshot instead. Start a new Nauvis game and leave Space Age off.
 
 ### Tests
 
@@ -86,7 +102,9 @@ Both scripts resolve the Factorio executable automatically:
 
 If automatic detection fails, copy `.env.example` to `.env` and set its `FACTORIO_EXE` value. The `.env` file is gitignored, so it can stay machine-specific.
 
-The contract probe lives in `tools/test-probe/`. It loads as a second mod, unit-tests the pure graph, research allocator and process-node table in the data stage, asserts the data contract after every mod has loaded, and then checks the fresh map at runtime. The wrappers look for `CHIPTORIO-TEST PASS` and fail on `CHIPTORIO-TEST FAIL`. Both scripts support `-Keep` to retain the temporary save for inspection.
+The contract probe lives in `tools/test-probe/`. It loads as a second mod, unit-tests the pure graph, research allocator, process-node table, qualification allocator and QLN transport in the data stage, asserts the data contract after every mod has loaded, and then checks the fresh map at runtime. The wrappers look for `CHIPTORIO-TEST PASS` and fail on `CHIPTORIO-TEST FAIL`. Both scripts support `-Keep` to retain the temporary save for inspection.
+
+A benchmark map has no player and Factorio 2.1 has no script API to create one, so the probe logs `CHIPTORIO-TEST SKIP qln-gui` and skips the QLN Terminal and FOUP Dock window checks. To exercise those paths, enable `tools/test-probe` as a second mod in a normal save that has a character and watch `factorio-current.log` for the runtime `PASS` markers. Do this in a disposable save: the probe clears and rebuilds a test area, drives the Answer Engine, and destroys the entities it created.
 
 ### Generated assets
 
@@ -114,4 +132,6 @@ More detail, including the 2.1 API pitfalls and module map, is in DESIGN §15. [
 
 ## Status
 
-Version 0.9.0 adds half-node process qualification. Enemies and robots are gone, the throughput gate is removed, labs run on network compute, memory and bandwidth, twelve process nodes carry the chip line from 10 µm to 1.4 nm, and ten refinements between them are unlocked by research but only take effect after a pilot line has been analysed in a Metrology Lab. QLN logistics and the Answer Engine rework are the next milestones; `1.0.0` is the complete redesign.
+Version 0.10.0 implements the rest of the redesign. Enemies and robots are gone, the throughput gate is removed, labs run on network compute, memory and bandwidth, twelve process nodes carry the chip line from 10 µm to 1.4 nm, and ten refinements between them are unlocked by research but only take effect after a pilot line has been analysed in a Metrology Lab. QLN covers the Data Bus, quantum-linked storage, FOUP logistics, repeaters and wireless access points, and a Construction Core replaces construction robots. The Answer Engine now draws its items from QLN and scales forever through The Question.
+
+What remains before `1.0.0` is a defined set of gameplay and verification work, not a rewrite. [`TODO.md`](TODO.md) is the gap register: it lists the missing power/cooling throttle, the infinite research ladder, monitor diagnostics, save/load and multiplayer coverage, the deferred FOUP gate, and the decision on the vanilla circuit items.

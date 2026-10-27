@@ -28,6 +28,11 @@ M.ROUTER_LATENCY = 10
 -- own backplane on top; the cable is the bottleneck of a bare subnet.
 M.CABLE_BANDWIDTH = 10
 
+-- A wireless access point reaches another access point over this many tiles.
+-- It is a conductor like a switch, so a pair of APs joins two cable runs
+-- without a cable between them.
+M.WIRELESS_REACH = 16
+
 local CAPACITY_FIELDS = {
   "compute",
   "scalar",
@@ -157,8 +162,11 @@ local function build_conductor_union(cable_list, cable_at, switches)
     local node = #cable_list + offset
     local sx = tile_of(device.x)
     local sy = tile_of(device.y)
-    for dx = -M.REACH, M.REACH do
-      for dy = -M.REACH, M.REACH do
+    -- A repeater is a switch with a longer reach: it is how a cable run jumps
+    -- a gap. Ordinary switches keep the normal two-tile reach.
+    local reach = device.reach or M.REACH
+    for dx = -reach, reach do
+      for dy = -reach, reach do
         local k = tile_key(sx + dx, sy + dy)
         local cable = cable_at[k]
         if cable then
@@ -167,6 +175,24 @@ local function build_conductor_union(cable_list, cable_at, switches)
         local peer = switch_at[k]
         if peer and peer ~= node then
           union(node, peer)
+        end
+      end
+    end
+  end
+
+  -- Wireless APs conduct to each other over their own range. This is a second
+  -- pass because the normal switch reach is deliberately only two tiles.
+  for offset, device in ipairs(switches) do
+    local range = device.wireless_range
+    if range and range > 0 then
+      local node = #cable_list + offset
+      local sx = tile_of(device.x)
+      local sy = tile_of(device.y)
+      for other_offset, other in ipairs(switches) do
+        if other_offset ~= offset and (other.wireless_range or 0) > 0 then
+          if chebyshev(sx, sy, tile_of(other.x), tile_of(other.y)) <= range then
+            union(node, #cable_list + other_offset)
+          end
         end
       end
     end
