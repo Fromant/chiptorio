@@ -143,38 +143,44 @@ if not remote.interfaces["chiptorio-network"] then
   })
 end
 
-remote.add_interface("chiptorio-research", {
-  -- /c remote.call("chiptorio-research", "status")
-  status = research.status,
-  -- /c remote.call("chiptorio-research", "evaluate", "vlsi-process")
-  evaluate = research.evaluate,
-  -- /c remote.call("chiptorio-research", "step", 60)
-  step = research.step,
-})
+if not remote.interfaces["chiptorio-research"] then
+  remote.add_interface("chiptorio-research", {
+    -- /c remote.call("chiptorio-research", "status")
+    status = research.status,
+    -- /c remote.call("chiptorio-research", "evaluate", "vlsi-process")
+    evaluate = research.evaluate,
+    -- /c remote.call("chiptorio-research", "step", 60)
+    step = research.step,
+  })
+end
 
-remote.add_interface("chiptorio-qualification", {
-  -- /c remote.call("chiptorio-qualification", "status")
-  status = qualification.status,
-  -- /c remote.call("chiptorio-qualification", "state")
-  state = qualification.state,
-  -- /c remote.call("chiptorio-qualification", "evaluate", "6um")
-  evaluate = qualification.evaluate,
-  -- /c remote.call("chiptorio-qualification", "step", 600)
-  step = qualification.step,
-})
+if not remote.interfaces["chiptorio-qualification"] then
+  remote.add_interface("chiptorio-qualification", {
+    -- /c remote.call("chiptorio-qualification", "status")
+    status = qualification.status,
+    -- /c remote.call("chiptorio-qualification", "state")
+    state = qualification.state,
+    -- /c remote.call("chiptorio-qualification", "evaluate", "6um")
+    evaluate = qualification.evaluate,
+    -- /c remote.call("chiptorio-qualification", "step", 600)
+    step = qualification.step,
+  })
+end
 
 -- chiptorio-qln and chiptorio-answer register their own interfaces from
 -- scripts/runtime/qln_runtime.lua and scripts/answer_engine.lua. Registering
 -- them here as well would silently replace the module's interface.
 
-remote.add_interface("chiptorio-ai", {
-  -- /c remote.call("chiptorio-ai", "status")
-  status = ai.status,
-  -- /c remote.call("chiptorio-ai", "set_model", entity, "small-model")
-  set_model = ai.set_model,
-  -- /c remote.call("chiptorio-ai", "install_model", entity, "small-model")
-  install_model = ai.install_model,
-  -- /c remote.call("chiptorio-ai", "uninstall_model", entity)
-  uninstall_model = ai.uninstall_model,
-})
+if not remote.interfaces["chiptorio-ai"] then
+  remote.add_interface("chiptorio-ai", {
+    -- /c remote.call("chiptorio-ai", "status")
+    status = ai.status,
+    -- /c remote.call("chiptorio-ai", "set_model", entity, "small-model")
+    set_model = ai.set_model,
+    -- /c remote.call("chiptorio-ai", "install_model", entity, "small-model")
+    install_model = ai.install_model,
+    -- /c remote.call("chiptorio-ai", "uninstall_model", entity)
+    uninstall_model = ai.uninstall_model,
+  })
+end
 
