@@ -1323,14 +1323,17 @@ remote.add_interface("chiptorio-network", {
   -- /c remote.call("chiptorio-network", "status")
   status = function()
     init_storage()
+    M.graphs()
     for _, surface in pairs(game.surfaces) do
       local graph = scan_surface(surface)
+      local nets = graph.networks or {}
+      local unconn = graph.unconnected or {}
       log(string.format(
         "CHIPTORIO NETWORK surface=%d cables=%d networks=%d unconnected=%d",
         surface.index,
         graph.cable_count or 0,
-        #graph.networks,
-        #graph.unconnected
+        #nets,
+        #unconn
       ))
     end
   end,
