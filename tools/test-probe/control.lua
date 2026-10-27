@@ -27,6 +27,8 @@ end
 
 local function topology(surface_index)
   local ok, res = pcall(function()
+    -- Force rebuild
+    pcall(function() remote.call("chiptorio-network", "status") end)
     return remote.call("chiptorio-network", "topology", surface_index)
   end)
   if not ok or type(res) ~= "table" then
@@ -35,6 +37,9 @@ local function topology(surface_index)
   res.networks = res.networks or {}
   res.unconnected = res.unconnected or {}
   res.conflicts = res.conflicts or {}
+  if type(res.networks) == "table" then
+    -- if it's array-like
+  end
   return res
 end
 
