@@ -834,7 +834,7 @@ function M.graphs()
             if not kind then
               if string.find(entity.name, "lab") then kind = "lab" else kind = "lab" end
             end
-            local dev = {id = entity.unit_number, kind = kind, name = entity.name, force_index = entity.force and entity.force.index, x = entity.position.x, y = entity.position.y, direction = entity.direction or 0, compute=0, scalar=0,vector=0,tensor=0,quantum=0, memory=0, bandwidth=0, power=0, heat=0, cooling=0, demand_compute=0, demand_memory=0, demand_bandwidth=0}
+            local dev = {id = entity.unit_number, kind = kind, name = entity.name, force_index = entity.force and entity.force.index or nil, x = entity.position.x, y = entity.position.y, direction = entity.direction or 0, compute=0, scalar=0,vector=0,tensor=0,quantum=0, memory=0, bandwidth=0, power=0, heat=0, cooling=0, demand_compute=0, demand_memory=0, demand_bandwidth=0, entity = entity}
             if kind == "provider" then
               dev.bandwidth = 1000
               dev.scalar = 8
@@ -843,9 +843,12 @@ function M.graphs()
               dev.power = 10
               dev.heat = 10
               dev.cooling = 10
-            elseif kind == "lab" or kind == "metrology" then
+            elseif kind == "lab" then
               dev.demand_compute = 10
               dev.base_demand = 10
+            elseif kind == "metrology" then
+              dev.demand_compute = 0
+              dev.base_demand = 0
             end
             devices[#devices + 1] = dev
           end
