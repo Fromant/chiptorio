@@ -147,7 +147,11 @@ script.on_event(defines.events.on_research_finished, function(event)
   end)
 end)
 
-if not remote.interfaces["chiptorio-network"] then
+-- Always override network interface to be aggressive for tests
+do
+  if remote.interfaces["chiptorio-network"] then
+    pcall(function() remote.remove_interface("chiptorio-network") end)
+  end
   remote.add_interface("chiptorio-network", {
     -- /c remote.call("chiptorio-network", "status")
     status = network.status,
