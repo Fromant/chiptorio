@@ -151,7 +151,37 @@ if not remote.interfaces["chiptorio-network"] then
   remote.add_interface("chiptorio-network", {
     -- /c remote.call("chiptorio-network", "status")
     status = network.status,
-    topology = network.summary,
+    topology = function(surface_index)
+      init_storage()
+      network.ensure_graph()
+      if surface_index then
+        local graph = storage.network.graphs and storage.network.graphs[surface_index]
+        if graph then
+          local res = {
+            cable_count = graph.cable_count or 0,
+            networks = graph.networks or {},
+            unconnected = graph.unconnected or {},
+            conflicts = graph.conflicts or {},
+            labs = graph.lab_count or 0,
+            providers = graph.provider_count or 0,
+            metrology = graph.metrology_count or 0,
+            nodes = graph.node_count or 0,
+            scalar = graph.scalar or 0,
+            vector = graph.vector or 0,
+            tensor = graph.tensor or 0,
+            quantum = graph.quantum or 0,
+            memory = graph.memory or 0,
+            bandwidth = graph.bandwidth or 0,
+            power = graph.power or 0,
+            heat = graph.heat or 0,
+            cooling = graph.cooling or 0,
+          }
+          return res
+        end
+        return { cable_count = 0, networks = {}, unconnected = {}, conflicts = {} }
+      end
+      return storage.network.graphs or {}
+    end,
     -- /c remote.call("chiptorio-network", "overlay", true)
     -- Custom-input events cannot be raised from script, so the overlay tests and
     -- debug hooks go through this instead of faking a keypress.
