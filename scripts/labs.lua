@@ -32,7 +32,9 @@ local function make_lab(spec)
   entity.hidden_in_factoriopedia = false
   entity.corpse = nil
   M.set_entity_icon(entity, spec.name)
-  if spec.tint then
+  if spec.custom_animation then
+    M.set_custom_animation(entity, spec.custom_animation or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
+  elseif spec.tint then
     M.tint_animation(entity.on_animation, spec.tint)
     M.tint_animation(entity.off_animation, spec.tint)
   end
@@ -66,7 +68,10 @@ make_lab({
   power = "90kW",
   modules = 0,
   craft_time = 5,
-  tint = { r = 0.75, g = 0.62, b = 0.45 },
+  custom_animation = "analytical-engine",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   ingredients = {
     M.item("iron-gear-wheel", 8),
     M.item("copper-plate", 20),
@@ -82,7 +87,10 @@ make_lab({
   modules = 2,
   craft_time = 10,
   enabled = false,
-  tint = { r = 0.65, g = 0.72, b = 0.85 },
+  custom_animation = "tube-mainframe",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   ingredients = {
     M.item("steel-plate", 20),
     M.item("vacuum-tube", 30),
@@ -98,7 +106,10 @@ make_lab({
   modules = 4,
   craft_time = 15,
   enabled = false,
-  tint = { r = 0.35, g = 0.45, b = 0.55 },
+  custom_animation = "mainframe-cluster",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   ingredients = {
     M.item("steel-plate", 40),
     M.item("discrete-transistor", 20),
@@ -115,7 +126,10 @@ make_lab({
   modules = 6,
   craft_time = 30,
   enabled = false,
-  tint = { r = 0.20, g = 0.55, b = 0.75 },
+  custom_animation = "datacenter-lab",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   ingredients = {
     M.item("server-rack", 4),
     M.item("system-on-chip", 8),
@@ -133,7 +147,10 @@ make_lab({
   modules = 8,
   craft_time = 45,
   enabled = false,
-  tint = { r = 0.55, g = 0.80, b = 1.0 },
+  custom_animation = "cryostat",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   ingredients = {
     M.item("datacenter-lab", 1),
     M.item("cooling-unit", 8),

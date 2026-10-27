@@ -72,7 +72,8 @@ local function force_multipliers(force_index)
 end
 
 --- Apply force-level multipliers to a network table before it reaches the
---- allocator. Compute fields are scaled; memory and bandwidth are scaled.
+--- allocator. Compute fields are scaled; memory, bandwidth, power and cooling
+--- are scaled.
 local function apply_multipliers(network, mults)
   if mults.compute then
     network.scalar = network.scalar * mults.compute
@@ -88,6 +89,15 @@ local function apply_multipliers(network, mults)
   end
   if mults.bandwidth then
     network.bandwidth = network.bandwidth * mults.bandwidth
+  end
+  if mults.network_bandwidth then
+    network.bandwidth = network.bandwidth * mults.network_bandwidth
+  end
+  if mults.power then
+    network.power = network.power * mults.power
+  end
+  if mults.cooling then
+    network.cooling = network.cooling * mults.cooling
   end
 end
 
@@ -119,6 +129,9 @@ local function networks_for(force)
         quantum = net.quantum,
         memory = net.memory,
         bandwidth = net.bandwidth,
+        power = net.power or 0,
+        heat = net.heat or 0,
+        cooling = net.cooling or 0,
         labs = labs,
       }
       apply_multipliers(entry, mults)
@@ -309,6 +322,26 @@ function M.step(seconds)
     end
   end
   return applied
+end
+
+--- Handle a technology being researched. Infinite researches increment their
+--- level in storage, which changes the force-level multipliers on the next
+--- graph rebuild. Returns true if the level changed.
+function M.on_technology_researched(force, tech_name)
+  init_storage()
+  local spec = meta.INFINITE_RESEARCH_SCALES[tech_name]
+  if not spec then
+    return false
+  end
+  local levels = storage.research.infinite_multipliers[force.index] or {}
+  local old_level = levels[tech_name] or 0
+  local new_level = old_level + 1
+  levels[tech_name] = new_level
+  storage.research.infinite_multipliers[force.index] = levels
+  -- Multipliers changed: force the network graph to rebuild so the new
+  -- values reach the allocator.
+  network.mark_dirty()
+  return true, old_level, new_level
 end
 
 return M

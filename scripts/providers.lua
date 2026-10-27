@@ -52,7 +52,9 @@ local function make_provider(spec)
   entity.allowed_effects = nil
 
   M.set_entity_icon(entity, spec.name)
-  if spec.tint then
+  if spec.custom_animation then
+    M.set_custom_animation(entity, spec.custom_animation or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
+  elseif spec.tint then
     M.tint_animation(entity.on_animation, spec.tint)
     M.tint_animation(entity.off_animation, spec.tint)
   end
@@ -83,7 +85,10 @@ make_provider({
   name = "server-rack",
   order = "a[server-rack]",
   craft_time = 12,
-  tint = { r = 0.55, g = 0.70, b = 0.95 },
+  custom_animation = "server-rack",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   ingredients = {
     M.item("steel-plate", 20),
     M.item("electronic-circuit", 10),   -- Control Board
@@ -95,7 +100,10 @@ make_provider({
   name = "memory-bank",
   order = "b[memory-bank]",
   craft_time = 10,
-  tint = { r = 0.45, g = 0.85, b = 0.65 },
+  custom_animation = "memory-bank",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   ingredients = {
     M.item("steel-plate", 16),
     M.item("electronic-circuit", 8),    -- Control Board
@@ -107,7 +115,10 @@ make_provider({
   name = "datacenter",
   order = "c[datacenter]",
   craft_time = 30,
-  tint = { r = 0.20, g = 0.55, b = 0.75 },
+  custom_animation = "datacenter",
+  size_w = 160,
+  size_h = 160,
+  scale = 0.5,
   ingredients = {
     M.item("server-rack", 4),
     M.item("cooling-unit", 8),

@@ -122,7 +122,10 @@ M.ASSEMBLER = {
   modules = 2,
   craft_time = 12,
   order = "b[computer-assembler]",
-  tint = { r = 0.50, g = 0.40, b = 0.60 },
+  custom_graphics = "computer-assembler",
+  size_w = 160,
+  size_h = 160,
+  scale = 0.5,
   ingredients = {
     { type = "item", name = "iron-plate", amount = 15 },
     { type = "item", name = "steel-plate", amount = 10 },

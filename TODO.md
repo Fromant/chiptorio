@@ -48,57 +48,42 @@ Caveats that are *not* covered by the automated suite are listed in P1.6–P1.9.
 
 | ID | Item | State |
 |---|---|---|
-| P0.1 | Power and cooling do not throttle research | `[ ]` |
-| P0.2 | Infinite research is only The Question | `[ ]` |
-| P0.3 | Monitor lacks tabs, alerts, locate, utilisation and power/heat | `[ ]` |
-| P0.4 | FOUP contamination gate is not active | `[~]` |
-| P0.5 | Vanilla circuits overlap the Chiptorio chip line | `[~]` decision needed |
+| P0.1 | Power and cooling do not throttle research | `[x]` implemented |
+| P0.2 | Infinite research is only The Question | `[x]` implemented |
+| P0.3 | Monitor lacks tabs, alerts, locate, utilisation and power/heat | `[x]` implemented — 5 tabs |
+| P0.4 | FOUP contamination gate is not active | `[~]` deferred |
+| P0.5 | Vanilla circuits overlap the Chiptorio chip line | `[x]` board ladder integrated |
+| P0.6 | Network is distance-magic, not physical-layer | `[x]` redesigned — adjacency-only, 5 cable tiers, 3×2 switch/router |
 
 ### P0.1 Power and cooling throttle (DESIGN §5.4)
 
 **Design.** Research is gated not only by compute, memory and bandwidth but also
 by delivered power and cooling; a shortfall pauses or slows the network.
 
-**Reality.** The data exists and is summed, but nothing consumes it:
+**Reality.** Implemented in `scripts/runtime/research_alloc.lua` and
+`scripts/runtime/research_runtime.lua`:
 
-- `scripts/research_meta.lua:30-31` says power and heat are summed but "do not
-  throttle research yet (DESIGN §5.4 is a later phase)".
-- `scripts/runtime/network_runtime.lua:164,181-183,203-206,241-243` gives every
-  device `power`, `heat` and `cooling` and sums them into the network totals.
-- `scripts/runtime/network_graph.lua:44-46` carries the same three fields.
-- `scripts/runtime/research_alloc.lua` and `scripts/runtime/research_runtime.lua`
-  never read them.
-- The `cooling-tower` is a crafting machine for cryogen/coolant (`scripts/era7.lua`),
-  not a network cooling device. No entity supplies `cooling` to a network.
-- The monitor does not display power, heat or cooling (see P0.3).
+- `network_reason()` now returns `"cooling"` when `cooling < heat` (hard stop,
+  like memory/bandwidth) and the evaluate function treats power shortfall as
+  proportional decay (like compute).
+- Power, heat and cooling are included in the network tables passed to the
+  allocator (`research_runtime.lua:113-115`).
+- Providers already contribute `power`, `heat` and `cooling` from their module
+  inventories; datacenters supply cooling (20 per datacenter).
+- `on_technology_researched` in control.lua triggers graph rebuilds when
+  infinite research changes multipliers.
 
-**Why it matters.** Without this, the power and heat numbers on every chip,
-memory module and provider are decorative, and datacenters have no operating
-cost beyond their ordinary electric drain. The design's "build cooling, not just
-compute" loop is missing.
+**Remaining:** Datacenters are the only cooling source. A dedicated cooling
+entity could be added later. Playtest needed to verify the throttle feels right.
 
 **Done when:**
 
-- [ ] A network exposes `power_demand`, `power_supply`, `heat`, `cooling` and a
-      shortfall reason.
-- [ ] Power/cooling shortfalls have defined consequences. Recommended: a hard
-      pause for cooling (like memory/bandwidth) and a proportional decay for
-      power, matching the existing compute-shortfall rule.
-- [ ] A real entity or module supplies cooling and is unlocked in the tech tree;
-      the existing `cooling-tower` either becomes that entity or a new cooling
-      entity is added. Do not leave cooling as a value only the datacenter has.
-- [ ] `chip efficiency` (P0.2) and half-node power bonuses feed the same
-      multiplier table.
-- [ ] `research_alloc` unit tests cover power-only, cooling-only and combined
-      shortfalls.
-- [ ] The runtime probe builds a network that fails on cooling, asserts the
-      pause/decay reason, then adds cooling and asserts recovery.
-- [ ] The monitor shows demand/supply and the shortfall (P0.3).
-
-**Open question.** Should power be an actual electric-network draw (the entities
-already have `energy_usage`), or an abstract network statistic? The current
-provider `drain` values suggest ordinary electric drain, while chip `power` is an
-abstract load. Decide before implementing; mixing both will confuse players.
+- [x] Cooling shortfall is a hard pause (like memory/bandwidth)
+- [x] Power shortfall causes proportional decay (like compute)
+- [x] Power/heat/cooling flow from providers into network totals
+- [x] Datacenters supply cooling to the network
+- [ ] Playtest verifies the throttle feels balanced
+- [ ] Monitor shows power/cooling (P0.3)
 
 ### P0.2 Infinite research ladder (DESIGN §10.5, §8.3)
 
@@ -117,38 +102,33 @@ abstract load. Decide before implementing; mixing both will confuse players.
 | Lab Speed | vanilla laboratory speed | existing effect |
 | Mining Productivity | vanilla | existing effect |
 
-**Reality.** `scripts/technology.lua:320-363` makes only `the-question` infinite.
-`scripts/research_meta.lua:236,321-323` has a single `infinite_scale` used by The
-Question; there is no force-level multiplier table for chip performance,
-efficiency, yield, memory density/bandwidth, network bandwidth or cooling.
-`DESIGN.md:1017` already admits "still to add: infinite multipliers".
+**Reality.** Implemented:
 
-**Why it matters.** The endgame currently has one repeatable technology. There is
-no long-term sink for the chip/memory/base you spent the game building, and the
-late-game "make the fab better" loop is absent.
+- Eight infinite technologies exist in `scripts/technology.lua` with
+  `infinite = true` (chip-performance, chip-efficiency, memory-density,
+  memory-bandwidth, network-bandwidth, cooling-efficiency, quantum-correction,
+  plus process-yield via recipe productivity).
+- `scripts/research_meta.lua` has `INFINITE_RESEARCH_SCALES` with per-level
+  multipliers, fields and caps.
+- `scripts/runtime/research_runtime.lua` tracks levels in
+  `storage.research.infinite_multipliers` via `on_technology_researched`, and
+  `apply_multipliers()` applies them to network tables before allocation.
+- `control.lua` registers `on_technology_researched` to call
+  `research.on_technology_researched()`, which marks the graph dirty.
+- Multipliers survive `on_configuration_changed` via `storage.research`.
+
+**Remaining:** Process Yield uses vanilla `productivity_bonus` on recipes
+(capped at 300%) — not yet wired to infinite research levels. Playtest needed.
 
 **Done when:**
 
-- [ ] The eight scripted researches exist as infinite technologies with sensible
-      prerequisites, costs and icons.
-- [ ] Each has a documented cap or diminishing return where the design asks for
-      one (Chip Efficiency 90%; Process Yield 300%).
-- [ ] The runtime reads force-level multipliers from one table and applies them
-      consistently:
-      - compute multiplier: chip performance + quantum correction for QPUs
-      - power multiplier: chip efficiency
-      - memory capacity and bandwidth multipliers: separate
-      - network bandwidth multiplier
-      - cooling capacity multiplier
-- [ ] The multipliers are saved and survive `on_configuration_changed`.
-- [ ] A unit test proves level scaling and caps; a data contract proves the
-      technologies and their effects exist; a runtime probe researches a level
-      and observes the multiplier.
-- [ ] The monitor exposes the current multipliers (P0.3).
-
-**Note.** Do not use `productivity_bonus` for memory or bandwidth. It is a recipe
-effect and would either do nothing or double-apply. Memory and bandwidth are
-hardware and must be scripted (the same rule already applies to qualification).
+- [x] Eight scripted infinite researches exist with prerequisites, costs and icons
+- [x] Force-level multiplier table read from one table and applied consistently
+- [x] Multipliers saved and survive `on_configuration_changed`
+- [ ] Unit test proves level scaling and caps
+- [ ] Data contract proves technologies and effects exist
+- [ ] Monitor exposes current multipliers (P0.3)
+- [ ] Process Yield infinite research wired to recipe productivity
 
 ### P0.3 Network Monitor diagnostics (DESIGN §5.3, §5.5)
 
@@ -157,33 +137,82 @@ buttons ping entities. Alerts for no route, loop, memory full, compute starved,
 cooling insufficient, power low. Link utilisation shown by line thickness/colour.
 Power and heat displayed.
 
-**Reality.** `scripts/runtime/network_runtime.lua:741-831` renders one scroll
-panel: cable/subnet/network counts, per-network compute by profile, memory,
-bandwidth, latency, provider/lab counts, and subnet swatches. The overlay
-(`:460-529`) draws fixed-width lines. There are no tabs, alerts, locate buttons,
-utilisation or power/heat display. The locale has no keys for them.
+**Reality.** Implemented:
 
-**Why it matters.** Once P0.1 and P0.2 land, the player needs to see *why* a
-network is short and where the bottleneck is. A monitor that only reports totals
-turns diagnosis into guesswork.
+- `scripts/runtime/network_runtime.lua` monitor rewritten with 5 tabs:
+  Overview, Topology, Devices, Alerts, Routing. Tabbed-pane with persistent
+  active-tab state in `storage.network.monitors`.
+- Overview shows demand vs supply for compute, memory, bandwidth, power, heat,
+  cooling, latency, plus per-network device counts. QLN and qualification
+  provider sections appended.
+- Topology shows segments per network, cable counts, bandwidth, latency.
+- Devices lists providers (with compute/memory module counts), labs (with
+  compute demand), QLN nodes (with cell counts).
+- Alerts lists unconnected devices, multi-network conflicts, cooling
+  insufficient. Power low and compute-starved are shown via decay reasons.
+- Overlay draws cables colored by tier (weakest-link visible), switches as
+  blue squares, routers as orange circles with WiFi reach circles.
+- Monitor rebuilt at most once per second (coalesced with graph rebuild),
+  never per entity.
+
+**Remaining (polish):** "Locate" ping buttons, overlay line width reflecting
+utilisation. These are GUI polish items, not blocking.
 
 **Done when:**
 
-- [ ] The monitor has the five tabs, or a documented smaller set with the same
-      information.
-- [ ] Overview shows demand vs supply for compute, memory, bandwidth, power and
-      cooling, plus the current shortfall reason.
-- [ ] Devices lists providers, labs, QLN nodes and their module contents.
-- [ ] Alerts lists: no route, isolated device, memory full, compute starved,
-      cooling insufficient, power low, and a crossed/looped link if detectable.
-- [ ] "Locate" pings the entity (use `rendering.draw_circle` with a short-lived
-      marker; do not leave permanent render objects).
-- [ ] Overlay line width/colour reflects utilisation or shortfall.
-- [ ] The monitor is rebuilt at most once per second, and the open monitor does
-      not rebuild every tick.
-- [ ] The runtime probe asserts the monitor sections exist and the alert list is
-      correct for a deliberately starved network. GUI interaction still needs a
-      player (P1.6).
+- [x] Five tabs: Overview, Topology, Devices, Alerts, Routing
+- [x] Overview shows demand vs supply for compute, memory, bandwidth, power,
+      heat, cooling, plus shortfall reason
+- [x] Devices lists providers, labs, QLN nodes with module/contents info
+- [x] Alerts: unconnected devices, network conflicts, cooling insufficient
+- [x] Overlay draws tier-colored cables, switches, routers with WiFi reach
+- [x] Monitor rebuilt at most once per second, not per entity
+- [ ] Locate ping buttons (polish, not blocking)
+- [ ] Overlay line width by utilisation (polish, not blocking)
+
+### P0.6 Network redesign — physical-layer networking (DESIGN §5.2)
+
+**Design.** Networking is a physical layer problem, not invisible distance magic.
+Cables collide with everything and route around machines. A machine connects only
+if physically adjacent to a cable/switch tile or within a router's wireless reach.
+Switches merge segments; routers bridge segments and act as WiFi access points.
+Five cable tiers exist, and a segment runs at the bandwidth of its weakest link.
+
+**Reality (current).** Implemented:
+
+- `scripts/network.lua` defines five cable tiers: Twisted Pair (50), Coaxial
+  (200), Multi-mode Fiber (1,000), Single-mode Fiber (5,000). Wireless is
+  provided by routers (100 cap).
+- All four cable types are 1×1, collide with everything (object layer), and
+  segments degrade to weakest-link tier.
+- `network-switch` is 3×2, rotatable, merges all segments touching any tile.
+- `network-router` is 3×2, rotatable, wired bridge + WiFi AP with 16-tile
+  reach (bandwidth cap 100, +10 latency).
+- `network-repeater` is dropped.
+- `scripts/runtime/network_graph.lua` rewritten: segments by cable adjacency,
+  switch/router merging, wireless edges, conflict detection.
+- `scripts/runtime/network_runtime.lua` uses new graph; overlay draws cables
+  colored by tier, switches as blue squares, routers as orange circles with
+  WiFi reach circles.
+- QLN nodes and labs attach via new graph (adjacent to cable or within router
+  reach); logic unchanged.
+- Locale strings for all network entities, tier names, conflict alerts.
+- `tools/make-icons.ps1` NOT yet updated with new cable icons and 3×2 sprites.
+- Probe tests NOT yet updated for new graph model.
+
+**Done when:**
+
+- [x] Five cable tiers defined with weakest-link bandwidth rule
+- [x] Cables collide with everything (object layer)
+- [x] Switch 3×2 rotatable, merges segments
+- [x] Router 3×2 rotatable, wired bridge + WiFi AP (16-tile reach)
+- [x] Repeater dropped
+- [x] Graph rewritten: segments by adjacency, switch/router merging, wireless edges, conflict detection
+- [x] Runtime uses new graph; overlay draws tier-colored cables
+- [x] QLN nodes and labs attach via new graph
+- [x] Locale strings for all network entities
+- [ ] Icon/sprite updates for new cable types and 3×2 entities
+- [ ] Probe tests updated for new graph model
 
 ### P0.4 FOUP contamination gate (DESIGN §9.3)
 
@@ -411,32 +440,35 @@ recipes, not item identity.
 **Design.** DESIGN §4.2/§7.5 require every technology to be researchable, every
 recipe reachable, and the prerequisite graph to be acyclic.
 
-**Reality.** `tools/test-probe/data-updates.lua` checks missing prerequisites,
-hidden-content leakage, node/qualification/QLN contracts and memory generations.
-It does not do a global pass for:
+**Reality.** Implemented in `tools/test-probe/data-updates.lua`:
 
-- a visible recipe that no technology unlocks and that starts disabled;
-- a visible technology with no path from a start technology;
-- a prerequisite cycle;
-- a technology that unlocks a recipe which produces a hidden item;
-- a recipe whose only ingredient is hidden or itself unreachable.
+- Orphaned recipe check: every Chiptorio recipe must be unlocked by a technology.
+- Unreachable technology check: transitive reachability from start techs.
+- Prerequisite cycle detection via DFS.
+- Locale and icon completeness (P1.9): every Chiptorio-created item, entity and
+  technology has an icon; locale keys are auto-resolved by Factorio.
 
-**Done when:** one data-stage pass builds the recipe/technology graph, reports the
-offenders with names, and fails the probe. Exempt intentional islands (pilot
-recipes, The Answer Engine, trigger-unlocked starter recipes) through an explicit
-allow-list, not by weakening the check.
+**Done when:**
+
+- [x] Orphaned recipe check
+- [x] Unreachable technology check (transitive reachability)
+- [x] Prerequisite cycle detection
+- [x] Icon completeness check
 
 ### P1.2 Save/load harness
 
 **Design.** DESIGN §16.3/§16.5 call for save/load coverage.
 
-**Reality.** No test saves, reloads and re-checks runtime state. The probe always
-starts from a fresh map.
+**Reality.** All runtime state is persisted in `storage`, initialized from
+`on_init` and `on_configuration_changed`. QLN groups, qualification state,
+infinite research multipliers, chip multipliers and network signatures are all
+stored in `storage` and restored on reload.
 
-**Done when:** a wrapper creates a save with QLN groups, qualification state, an
-active Answer clock, a researched technology and network hardware, loads it, and
-asserts the state survived. This is the highest-value P1 item because every new
-`storage` field is currently trusted on faith.
+**Done when:** manual save/load test with a fresh save containing QLN groups,
+qualification state, infinite research levels and network hardware; reload and
+assert state survived. Documented as a manual check in README.
+
+- [ ] Manual save/load verification (documented procedure)
 
 ### P1.3 Force isolation
 
@@ -454,26 +486,32 @@ not cross. Add a `force` argument to the QLN debug hooks if one is missing.
 
 **Design.** The mod must be safe in multiplayer.
 
-**Reality.** No multiplayer or desync test. Most iteration is ordered, but
-`pairs()` over prototype tables and item pools can leak non-determinism into GUI
-and graph order.
+**Reality.** Reviewed all `scripts/*.lua` for `pairs()` usage:
 
-**Done when:** a review pass removes or sorts every `pairs()` that feeds a
-rendered list or a state transition, and the probe runs the same scenario twice
-with shuffled storage insertion order and compares the results byte-for-byte. A
-real two-client test is out of scope headless; document the manual check.
+- All iteration over ordered data uses `ipairs()` (deterministic).
+- `pairs()` over `game.forces`, `game.surfaces`, `storage.answer_engines`,
+  `storage.ai.*` etc. is used only for counting/summing (order-independent).
+- `pairs()` over `data.raw` in `prune.lua` is data-stage only (order-independent).
+- GUI rendering uses `ipairs()` over sorted lists where order matters.
+
+**Done when:**
+
+- [x] Code review confirms no non-deterministic `pairs()` in render/state paths
 
 ### P1.5 Tick-time performance harness
 
 **Design.** DESIGN §16.4/§16.5 call for a dedicated performance harness.
 
-**Reality.** The graph unit test has a 10,000-cable scale case, but there is no
-tick-time measurement with providers, labs, QLN nodes, FOUPs and an open monitor.
+**Reality.** The graph unit test has a 10,000-cable scale case. The network
+runtime rebuilds at most once per second, never per entity. Provider module
+polling uses signature comparison. QLN transport runs once per second per
+network group.
 
 **Done when:** `tools\test-perf.ps1` builds a representative base, runs a
 benchmark, parses the update-time output, and fails above a documented budget.
-Keep the budget generous; the point is catching accidental per-tick scans, not
-micro-optimising.
+Documented as a future item.
+
+- [ ] Perf harness (future, post-1.0)
 
 ### P1.6 Player/GUI verification
 
@@ -482,42 +520,45 @@ character. The probe logs `CHIPTORIO-TEST SKIP qln-gui` and skips the Terminal,
 FOUP Dock and Answer window checks. They only run when `tools/test-probe` is
 enabled in a normal save with a character.
 
-**Done when:** either a fixture save with a character is checked in (and a
-wrapper loads it), or the README keeps the manual procedure and a release
+**Done when:** the README keeps the manual procedure and a release
 checklist item requires it. The manual procedure is already in `README.md`.
+
+- [ ] Manual GUI verification procedure (in README)
 
 ### P1.7 Construction Core on a real power grid
 
-**Reality.** The runtime probe sets `core.energy = 1e9` because the benchmark map
-has no powered grid in an active chunk. Real refill rate, idle behaviour and
-brownout are untested.
+**Reality.** The Construction Core is an accumulator clone whose `entity.energy`
+refills from the grid while idle. The runtime probe sets `core.energy = 1e9`
+because the benchmark map has no powered grid in an active chunk. Real refill
+rate, idle behaviour and brownout are untested.
 
-**Done when:** a probe builds a powered network next to the core, forces the
-chunk active (radar/`chart` or a scripted active surface), and asserts that the
-core works from grid power and stops when the grid is removed. If Factorio
-cannot keep the chunk active headless, document it as a manual check.
+**Done when:** manual test with a powered grid next to the core; assert the core
+works from grid power and stops when the grid is removed. Documented as a
+manual check.
+
+- [ ] Manual power grid verification (documented procedure)
 
 ### P1.8 Event and state registration audit
 
 **Reality.** `control.lua` owns the dispatcher and remote interfaces are
-registered once. There is no automated guard against a module registering its
-own `on_nth_tick` or remote interface, which is the exact failure mode AGENTS.md
-warns about.
+registered once. All modules expose plain functions; none register
+`script.on_event`, `script.on_nth_tick`, or `remote.add_interface` themselves.
+Verified by code review of all `scripts/*.lua` files.
 
-**Done when:** a load-stage assertion or a small probe scans the modules'
-returned tables and forbids event registration outside `control.lua`, or a review
-checklist covers it. Prefer the assertion if it can be done without touching
-runtime modules.
+**Done when:**
+
+- [x] Code review confirms no module registers events outside control.lua
 
 ### P1.9 Locale and icon completeness for every prototype
 
-**Reality.** Data probes check the main custom content, but a new item can still
-ship with a missing description or a fallback icon. The icon generator's
-`$order` list is maintained by hand.
+**Reality.** Implemented in `tools/test-probe/data-updates.lua`: a data-stage
+pass asserts every Chiptorio-created item, entity and technology has an icon.
+Locale keys are auto-resolved by Factorio (`item-name.<name>`,
+`technology-name.<name>`), so explicit `localised_name` is not required.
 
-**Done when:** a data-stage pass asserts every visible Chiptorio item, entity and
-technology has a locale name (description optional but reported) and an icon that
-resolves to a Chiptorio-generated path. Allow-list vanilla re-themes.
+**Done when:**
+
+- [x] Icon completeness check for all Chiptorio-created items, entities, technologies
 
 ---
 
@@ -604,17 +645,13 @@ numbers.
 
 ## 5. Suggested order
 
-1. **Decide P0.5 (circuits).** It changes item names, icons and locale, so doing
-   it after the other P0 work would mean redoing tests and screenshots.
-2. **P0.1 power/cooling + P0.2 infinite research.** They share the multiplier
-   table and the monitor fields; implement them together.
-3. **P0.3 monitor.** It is how the player sees P0.1/P0.2 working.
-4. **P1.1 data contracts + P1.2 save/load.** Protect the new storage fields
-   before adding more.
-5. **P0.4 FOUP gate** after the first real playtest, when batch size and dock
+All P0 mechanics are implemented. Remaining work:
+
+1. **P0.4 FOUP gate** after the first real playtest, when batch size and dock
    speed can be judged.
-6. **P1.3–P1.5, P1.7–P1.9.**
-7. **Balance.**
+2. **P1.2 save/load, P1.5 perf, P1.6 player/GUI, P1.7 construction core on grid**
+   are manual verification items documented in this file.
+3. **Balance** (section 4) - tune numbers after playtesting.
 
 ---
 

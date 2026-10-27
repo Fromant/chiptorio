@@ -176,4 +176,67 @@ return function()
     H.eq(meta.lab_demand({ per_lab = 4 }, "analytical-engine"), 4, "per-lab floor raises demand")
     H.eq(meta.lab_demand({ per_lab = 0.1 }, "analytical-engine"), 0.5, "base demand is a floor")
   end)
+
+  H.test("cooling below heat is a hard stop", function()
+    local result = alloc.evaluate(
+      { floor = 8, memory = 16, bandwidth = 100, profiles = { scalar = 1 } },
+      {
+        { id = 1, scalar = 8, memory = 16, bandwidth = 100, power = 20, heat = 30, cooling = 10, labs = { lab(1, 1) } },
+      }
+    )
+    H.eq(result.supported, false, "supported")
+    H.eq(result.reason, "cooling", "reason")
+    close(result.decay, meta.MAX_DECAY_PER_MINUTE, "decay")
+  end)
+
+  H.test("cooling meets heat and compute is fine: research runs", function()
+    local result = alloc.evaluate(
+      { floor = 8, memory = 16, bandwidth = 100, profiles = { scalar = 1 } },
+      {
+        { id = 1, scalar = 8, memory = 16, bandwidth = 100, power = 30, heat = 30, cooling = 30, labs = { lab(1, 1) } },
+      }
+    )
+    H.eq(result.supported, true, "supported")
+    H.eq(result.reason, "ok", "reason")
+    H.eq(result.decay, 0, "decay")
+  end)
+
+  H.test("power below heat causes proportional decay like compute", function()
+    local result = alloc.evaluate(
+      { floor = 8, memory = 16, bandwidth = 100, profiles = { scalar = 1 } },
+      {
+        { id = 1, scalar = 8, memory = 16, bandwidth = 100, power = 15, heat = 30, cooling = 30, labs = { lab(1, 1) } },
+      }
+    )
+    H.eq(result.supported, true, "supported - power shortfall decays, does not stop")
+    H.eq(result.reason, "power", "reason")
+    -- power ratio = 15/30 = 0.5, missing = 0.5, decay = MAX * 0.5
+    close(result.decay, meta.MAX_DECAY_PER_MINUTE * 0.5, "decay")
+  end)
+
+  H.test("compute and power shortfall: the worse one sets decay", function()
+    -- compute = 4/8 = 0.5 missing, power = 10/30 = 0.33 missing
+    -- missing = max(0.5, 0.67) = 0.67 (power is worse)
+    local result = alloc.evaluate(
+      { floor = 8, memory = 16, bandwidth = 100, profiles = { scalar = 1 } },
+      {
+        { id = 1, scalar = 4, memory = 16, bandwidth = 100, power = 10, heat = 30, cooling = 30, labs = { lab(1, 1) } },
+      }
+    )
+    H.eq(result.supported, false, "supported")
+    H.eq(result.reason, "power", "reason")
+    close(result.decay, meta.MAX_DECAY_PER_MINUTE * (1 - 10 / 30), "decay")
+  end)
+
+  H.test("no labs still decays even with cooling and power", function()
+    local result = alloc.evaluate(
+      { floor = 8, memory = 16, bandwidth = 100, profiles = { scalar = 1 } },
+      {
+        { id = 1, scalar = 8, memory = 16, bandwidth = 100, power = 20, heat = 30, cooling = 30, labs = {} },
+      }
+    )
+    H.eq(result.supported, true, "supported")
+    H.eq(result.reason, "no-labs", "reason")
+    close(result.decay, meta.MAX_DECAY_PER_MINUTE, "decay")
+  end)
 end

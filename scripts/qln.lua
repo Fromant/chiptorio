@@ -48,6 +48,9 @@ local function make_node(spec)
   entity.hidden_in_factoriopedia = false
   entity.inventory_size = spec.inventory_size or 0
   Mutil.set_world_picture(entity, donor(spec.donor_type or "container", spec.donor or "wooden-chest"), spec.tint)
+  if spec.custom_picture then
+    Mutil.set_custom_picture(entity, spec.custom_picture or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
+  end
   entity.icon_draw_specification = { scale = 0.5 }
   entity.max_health = spec.health or 150
   entity.collision_box = spec.collision_box or { { -0.35, -0.35 }, { 0.35, 0.35 } }
@@ -103,7 +106,9 @@ local function make_lab_node(spec)
   entity.collision_box = spec.collision_box or { { -1.2, -1.2 }, { 1.2, 1.2 } }
   entity.selection_box = spec.selection_box or { { -1.5, -1.5 }, { 1.5, 1.5 } }
   Mutil.set_entity_icon(entity, spec.icon)
-  if spec.tint then
+  if spec.custom_animation then
+    Mutil.set_custom_animation(entity, spec.custom_animation or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
+  elseif spec.tint then
     Mutil.tint_animation(entity.on_animation, spec.tint)
     Mutil.tint_animation(entity.off_animation, spec.tint)
   end
@@ -159,7 +164,9 @@ local function make_accumulator_node(spec)
   entity.energy_source.buffer_capacity = spec.buffer_capacity or qmeta.CONSTRUCTION_BUFFER
   entity.energy_source.input_flow_limit = spec.input_flow_limit or qmeta.CONSTRUCTION_POWER
   Mutil.set_entity_icon(entity, spec.icon)
-  if spec.tint then
+  if spec.custom_accumulator then
+    Mutil.set_custom_accumulator(entity, spec.custom_accumulator or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
+  elseif spec.tint then
     local graphics = entity.chargable_graphics
     if graphics then
       Mutil.tint_animation(graphics.picture, spec.tint)
@@ -201,6 +208,10 @@ make_node({
   order = "a[qln-import]",
   donor = "wooden-chest",
   tint = rgba(0.45, 0.85, 1.0),
+  custom_picture = "qln-import-node",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   craft_time = 5,
   ingredients = {
     Mutil.item("network-cable", 2),
@@ -215,6 +226,10 @@ make_node({
   order = "b[qln-export]",
   donor = "iron-chest",
   tint = rgba(1.0, 0.72, 0.42),
+  custom_picture = "qln-export-node",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   craft_time = 5,
   ingredients = {
     Mutil.item("network-cable", 2),
@@ -229,6 +244,10 @@ make_node({
   order = "c[qln-provider]",
   donor = "steel-chest",
   tint = rgba(0.50, 1.0, 0.60),
+  custom_picture = "qln-provider-node",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   craft_time = 6,
   inventory_size = 8,
   ingredients = {
@@ -244,6 +263,10 @@ make_node({
   order = "d[qln-requester]",
   donor = "steel-chest",
   tint = rgba(1.0, 0.55, 0.55),
+  custom_picture = "qln-requester-node",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   craft_time = 6,
   -- One slot holds the filter item. The requester never consumes it; it is the
   -- "request this" template, the same trick as a filtered inserter.
@@ -262,6 +285,10 @@ make_node({
   donor_type = "display-panel",
   donor = "display-panel",
   tint = rgba(0.45, 1.0, 0.90),
+  custom_picture = "qln-terminal",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   craft_time = 6,
   ingredients = {
     Mutil.item("network-monitor", 1),
@@ -275,6 +302,10 @@ make_lab_node({
   icon = "qln-storage-drive",
   order = "f[qln-storage-drive]",
   craft_time = 8,
+  custom_animation = "qln-storage-drive",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   module_slots = qmeta.DRIVE_SLOTS,
   allowed_module_categories = { "chiptorio-memory" },
   energy_usage = "25kW",
@@ -293,6 +324,10 @@ make_accumulator_node({
   icon = "construction-core",
   order = "g[construction-core]",
   craft_time = 30,
+  custom_accumulator = "construction-core",
+  size_w = 160,
+  size_h = 160,
+  scale = 0.5,
   tint = rgba(1.0, 0.75, 0.35),
   ingredients = {
     Mutil.item("assembly-fab", 1),
@@ -311,6 +346,10 @@ make_lab_node({
   icon = "quantum-entanglement-core",
   order = "h[quantum-entanglement-core]",
   craft_time = 60,
+  custom_animation = "quantum-entanglement-core",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   module_slots = 0,
   allowed_module_categories = {},
   energy_usage = "10MW",
@@ -331,6 +370,10 @@ make_node({
   donor_type = "constant-combinator",
   donor = "constant-combinator",
   tint = rgba(0.80, 0.60, 1.0),
+  custom_picture = "foup-dock",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   craft_time = 10,
   inventory_size = qmeta.FOUP_SLOTS,
   ingredients = {
@@ -341,27 +384,16 @@ make_node({
 })
 
 make_node({
-  name = "network-repeater",
-  icon = "network-repeater",
-  order = "j[network-repeater]",
-  donor_type = "constant-combinator",
-  donor = "constant-combinator",
-  tint = rgba(0.40, 0.90, 1.0),
-  craft_time = 3,
-  ingredients = {
-    Mutil.item("network-cable", 4),
-    Mutil.item("electronic-circuit", 2),
-    Mutil.item("steel-plate", 2),
-  },
-})
-
-make_node({
   name = "wireless-access-point",
   icon = "wireless-access-point",
-  order = "k[wireless-access-point]",
+  order = "j[wireless-access-point]",
   donor_type = "display-panel",
   donor = "display-panel",
   tint = rgba(0.65, 0.55, 1.0),
+  custom_picture = "wireless-access-point",
+  size_w = 128,
+  size_h = 128,
+  scale = 0.5,
   craft_time = 8,
   health = 200,
   ingredients = {

@@ -1,10 +1,11 @@
 <#
 .SYNOPSIS
-  Generates the placeholder pixel-art icon set for Chiptorio.
+  Regenerates the Chiptorio icon set in the rosy-42 style.
 
 .DESCRIPTION
-  Every icon is drawn at 16x16 and upscaled 4x with nearest-neighbour, which
-  gives a consistent chunky look and keeps the source code readable.
+  Every icon is drawn at 64x64 native with transparency and soft shading to
+  match the hand-drawn aseprite exports. Technology icons are 256x256,
+  thumbnail is 144x144, and the victory image is 400x600.
   Re-run this after editing the palette or adding new prototypes.
 #>
 
@@ -18,1197 +19,1317 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 function Col([string]$hex) { [System.Drawing.ColorTranslator]::FromHtml($hex) }
 
 function New-Canvas {
-  $bmp = New-Object System.Drawing.Bitmap 16, 16
+  $bmp = New-Object System.Drawing.Bitmap 64, 64
   $g = [System.Drawing.Graphics]::FromImage($bmp)
   $g.Clear([System.Drawing.Color]::Transparent)
-  $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::None
+  $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+  $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+  $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
   return @($bmp, $g)
 }
 
-function Rect($g, [int]$x, [int]$y, [int]$w, [int]$h, [string]$c) {
-  $br = New-Object System.Drawing.SolidBrush -ArgumentList (Col $c)
+function Rect($g, [int]$x, [int]$y, [int]$w, [int]$h, [System.Drawing.Color]$c) {
+  $br = New-Object System.Drawing.SolidBrush -ArgumentList $c
   $g.FillRectangle($br, $x, $y, $w, $h)
   $br.Dispose()
 }
 
-function Disc($g, [double]$x, [double]$y, [double]$r, [string]$c) {
-  $br = New-Object System.Drawing.SolidBrush -ArgumentList (Col $c)
+function Disc($g, [double]$x, [double]$y, [double]$r, [System.Drawing.Color]$c) {
+  $br = New-Object System.Drawing.SolidBrush -ArgumentList $c
   $g.FillEllipse($br, [single]($x - $r), [single]($y - $r), [single](2 * $r), [single](2 * $r))
   $br.Dispose()
 }
 
-function Line($g, [int]$x1, [int]$y1, [int]$x2, [int]$y2, [string]$c) {
-  $p = New-Object System.Drawing.Pen -ArgumentList (Col $c), 1
+function Line($g, [int]$x1, [int]$y1, [int]$x2, [int]$y2, [System.Drawing.Color]$c, [float]$w = 1) {
+  $p = New-Object System.Drawing.Pen -ArgumentList $c, $w
   $g.DrawLine($p, $x1, $y1, $x2, $y2)
   $p.Dispose()
 }
 
-function Poly($g, [int[]]$flat, [string]$c) {
+function Poly($g, [int[]]$flat, [System.Drawing.Color]$c) {
   $points = @()
   for ($i = 0; $i -lt $flat.Count; $i += 2) { $points += New-Object System.Drawing.Point($flat[$i], $flat[$i + 1]) }
-  $br = New-Object System.Drawing.SolidBrush -ArgumentList (Col $c)
+  $br = New-Object System.Drawing.SolidBrush -ArgumentList $c
   $g.FillPolygon($br, $points)
   $br.Dispose()
+}
+
+function RoundRect($g, [int]$x, [int]$y, [int]$w, [int]$h, [int]$r, [System.Drawing.Color]$c) {
+  $gp = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $gp.AddArc($x, $y, $r*2, $r*2, 180, 90)
+  $gp.AddArc($x+$w-$r*2, $y, $r*2, $r*2, 270, 90)
+  $gp.AddArc($x+$w-$r*2, $y+$h-$r*2, $r*2, $r*2, 0, 90)
+  $gp.AddArc($x, $y+$h-$r*2, $r*2, $r*2, 90, 90)
+  $gp.CloseFigure()
+  $br = New-Object System.Drawing.SolidBrush -ArgumentList $c
+  $g.FillPath($br, $gp)
+  $br.Dispose()
+  $gp.Dispose()
+}
+
+function ShadedRect($g, [int]$x, [int]$y, [int]$w, [int]$h, [System.Drawing.Color]$base, [System.Drawing.Color]$light, [System.Drawing.Color]$dark) {
+  $gp = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $gp.AddRectangle([System.Drawing.Rectangle]::new($x, $y, $w, $h))
+  $pth = New-Object System.Drawing.Drawing2D.PathGradientBrush $gp
+  $pth.CenterColor = $base
+  $pth.SurroundColors = @($light, $dark)
+  $g.FillRectangle($pth, $x, $y, $w, $h)
+  $pth.Dispose(); $gp.Dispose()
+}
+
+function ShadedDisc($g, [double]$cx, [double]$cy, [double]$r, [System.Drawing.Color]$base, [System.Drawing.Color]$light, [System.Drawing.Color]$dark) {
+  $pth = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $pth.AddEllipse([single]($cx - $r), [single]($cy - $r), [single](2*$r), [single](2*$r))
+  $gb = New-Object System.Drawing.Drawing2D.PathGradientBrush $pth
+  $gb.CenterColor = $base
+  $gb.SurroundColors = @($light, $dark)
+  $g.FillEllipse($gb, [single]($cx - $r), [single]($cy - $r), [single](2*$r), [single](2*$r))
+  $gb.Dispose(); $pth.Dispose()
 }
 
 function Save-Icon($bmp, [string]$name) {
   $big = New-Object System.Drawing.Bitmap 64, 64
   $bg = [System.Drawing.Graphics]::FromImage($big)
   $bg.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
-  $bg.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
   $bg.DrawImage($bmp, 0, 0, 64, 64)
   $big.Save((Join-Path $outDir "$name.png"), [System.Drawing.Imaging.ImageFormat]::Png)
   $bg.Dispose(); $big.Dispose(); $bmp.Dispose()
 }
 
-# palette
-$ink    = "#0c1116"
-$panel  = "#1a2430"
-$line   = "#33475a"
-$cyan   = "#45e0c0"
-$blue   = "#5b8ff9"
-$gold   = "#e0b040"
-$red    = "#e05555"
-$green  = "#4fbf6a"
-$silver = "#b9c6d4"
-$steel  = "#7d8b99"
-$cream  = "#e8dcc0"
-$brown  = "#8a5a3a"
-$purple = "#9a6ee0"
-$orange = "#e08a3a"
+# --- rosy-42 palette (System.Drawing.Color objects) -----------------------
+$ink      = Col "#21181b"  # deep rosy dark / outlines
+$panel    = Col "#1a2430"  # chassis, dark metal
+$line     = Col "#2a3a4a"  # traces, slate
+$slate    = Col "#686f99"  # cooling, liquid, quantum
+$slateL   = Col "#a3a7c2"  # light periwinkle highlight
+$cream    = Col "#dfe0e8"  # ceramic, light plastic
+$gold     = Col "#f0b541"  # contacts, pins, gold plating
+$orange   = Col "#cf752b"  # heat sinks, copper
+$burnt    = Col "#ab5130"  # warm accent
+$red      = Col "#7d3833"  # rosy red, heat/warnings
+$brown    = Col "#a3652a"  # substrate, wood
+$steel    = Col "#7d8b99"  # structural metal, frames
+$silver   = Col "#b9c6d4"  # aluminum, bare metal, solder
+$blue     = Col "#5b8ff9"  # AI trace accent
+$magenta  = Col "#c06ec8"  # AGI radiant accent
+$cyan     = Col "#686f99"  # cooling accent (rosy slate, alias of $slate)
+$green    = Col "#4fbf6a"  # go / online
+$purple   = Col "#9a6ee0"  # magic/quantum
 
-# --- storage media -----------------------------------------------------
+Write-Host "Rosy-42 palette loaded."
 
+# =========================================================================
+# 1. STORAGE MEDIA
+# =========================================================================
+
+# punched-card: cream card with rosy ink holes
 $b, $g = New-Canvas
-Rect $g 2 3 12 10 $cream
-Rect $g 2 3 12 1 $steel
-for ($y = 5; $y -le 11; $y += 2) {
-  for ($x = 4; $x -le 12; $x += 2) {
-    if (($x + $y) % 4 -eq 0) { Rect $g $x $y 1 1 $ink }
+RoundRect $g 4 2 56 60 6 $cream
+Rect $g 4 2 56 2 $line
+for ($y = 8; $y -le 56; $y += 8) {
+  for ($x = 6; $x -le 54; $x += 8) {
+    if (($x + $y) % 16 -eq 0) { Rect $g $x $y 4 4 $ink }
   }
 }
 Save-Icon $b "punched-card"
 
+# punched-tape: brown tape with cream edge + ink holes
 $b, $g = New-Canvas
-Rect $g 1 5 14 6 $brown
-Rect $g 1 5 14 1 $cream
-for ($x = 2; $x -le 14; $x += 2) { Rect $g $x 6 1 1 $ink; Rect $g $x 9 1 1 $ink }
+Rect $g 4 20 56 24 $brown
+Rect $g 4 20 56 2 $cream
+for ($x = 6; $x -le 54; $x += 6) {
+  Disc $g $x 26 2 $ink; Disc $g $x 38 2 $ink
+  Disc $g $x 32 2 $ink
+}
 Save-Icon $b "punched-tape"
 
+# magnetic-tape: silver reel with ink hub + gold center
 $b, $g = New-Canvas
-Disc $g 8 7 6 $panel
-Disc $g 8 7 2 $ink
-Disc $g 8 7 1 $gold
-Rect $g 3 13 10 2 $brown
-Rect $g 3 13 10 1 $cream
+ShadedDisc $g 32 32 18 $silver $cream $ink
+Disc $g 32 32 8 $ink
+Disc $g 32 32 4 $gold
+Rect $g 14 52 36 4 $brown
+Rect $g 14 52 36 2 $cream
 Save-Icon $b "magnetic-tape"
 
+# disk-pack: silver disk with ink center + gold center dot + steel arm
 $b, $g = New-Canvas
-Disc $g 8 8 6 $silver
-Disc $g 8 8 2 $ink
-Disc $g 8 8 1 $gold
-Line $g 8 8 13 4 $steel
+ShadedDisc $g 32 32 18 $silver $cream $ink
+Disc $g 32 32 6 $ink
+Disc $g 32 32 2 $gold
+Line $g 32 32 48 18 $steel 2
 Save-Icon $b "disk-pack"
 
+# solid-state-drive: ink body with slate window + gold edge connector
 $b, $g = New-Canvas
-Rect $g 2 4 12 8 $ink
-Rect $g 3 5 10 3 $cyan
-Rect $g 3 9 10 1 $line
-Rect $g 3 11 10 1 $gold
+RoundRect $g 8 10 48 44 4 $ink
+RoundRect $g 12 14 40 20 2 $slate
+Rect $g 16 36 8 6 $line
+Rect $g 10 50 44 2 $gold
 Save-Icon $b "solid-state-drive"
 
+# mainframe-module: green/gold chip block on panel base
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $green
-Rect $g 2 2 12 1 $gold
-Rect $g 4 4 3 3 $panel
-Rect $g 8 4 3 3 $panel
-Rect $g 4 9 7 3 $panel
-Rect $g 4 4 1 1 $cyan
+RoundRect $g 8 6 48 52 6 $panel
+Rect $g 8 6 48 2 $gold
+Rect $g 16 16 12 12 $panel
+Rect $g 36 16 12 12 $panel
+Rect $g 16 32 32 12 $panel
+Disc $g 18 18 2 $cream
+Disc $g 26 18 2 $cream
+Disc $g 40 18 2 $cream
 Save-Icon $b "mainframe-module"
 
-# --- silicon -----------------------------------------------------------
+Write-Host "storage media icons done."
 
+# =========================================================================
+# 2. SILICON / FEEDSTOCK
+# =========================================================================
+
+# silica: tan grain pile (cream + brown specks)
 $b, $g = New-Canvas
-Poly $g @(1,14,3,10,6,9,7,14) $cream
-Disc $g 9 12 3 $cream
-Disc $g 13 12 2 $cream
-Rect $g 3 13 10 1 $steel
+Poly $g @(6,60,10,44,16,40,24,42,30,40,38,44,42,48,46,60) $cream
+Disc $g 38 50 12 $cream
+Disc $g 46 50 8 $cream
+Rect $g 6 54 40 2 $steel
+for ($i = 0; $i -lt 14; $i++) { Disc $g (10 + ($i*3)) (56 - ($i%3)) 1 $brown }
 Save-Icon $b "silica"
 
+# glass: cyan glass block with ink cracks
 $b, $g = New-Canvas
-Poly $g @(3,13,5,3,13,4,11,13) $cyan
-Line $g 6 5 6 9 $ink
-Line $g 8 5 8 10 $ink
+Poly $g @(10,52,14,18,28,16,34,20,30,52) $slate
+Line $g 18 18 18 26 $ink 2
+Line $g 24 18 24 26 $ink 2
 Save-Icon $b "glass"
 
+# metallurgical-silicon: dark chunk with silver sparkles
 $b, $g = New-Canvas
-Poly $g @(2,13,4,6,8,5,9,9,6,13) $steel
-Poly $g @(8,13,10,7,13,8,12,13) $line
-Rect $g 4 8 2 1 $silver
+Poly $g @(10,52,14,34,30,28,36,36,24,52) $steel
+Poly $g @(28,52,30,34,34,28,38,34,26,52) $line
+Rect $g 14 38 4 4 $silver
+Rect $g 26 34 2 2 $silver
+Rect $g 32 40 2 2 $silver
 Save-Icon $b "metallurgical-silicon"
 
+# polysilicon: silver rod with cream grain lines
 $b, $g = New-Canvas
-Poly $g @(2,12,4,4,11,3,13,8,10,12) $silver
-Line $g 5 6 5 10 $cream
-Line $g 7 4 7 9 $cream
-Rect $g 11 5 1 1 $cyan
+Poly $g @(10,52,14,30,46,28,50,52) $silver
+Poly $g @(30,52,34,28,38,28,42,32,40,52) $steel
+Line $g 16 36 16 46 $cream
+Line $g 28 30 28 44 $cream
+Line $g 36 34 36 48 $cream
+Rect $g 46 30 2 2 $slate
 Save-Icon $b "polysilicon"
 
+# monocrystalline-ingot: silver cylinder, flat end with gold X lattice
 $b, $g = New-Canvas
-Poly $g @(2,11,5,5,13,4,14,8,11,12,4,12) $silver
-Poly $g @(5,10,7,6,11,5,12,8) $steel
-Line $g 6 8 10 7 $cream
+Poly $g @(10,52,16,40,34,36,50,40,44,52) $silver
+Poly $g @(18,40,20,36,32,36,34,40) $steel
+Line $g 22 42 26 46 $cream
+Line $g 26 42 22 46 $cream
+Line $g 30 42 34 46 $cream
+Line $g 34 42 30 46 $cream
 Save-Icon $b "monocrystalline-ingot"
 
+# silicon-wafer: silver circle with flat notch
 $b, $g = New-Canvas
-Disc $g 8 8 6 $silver
-Disc $g 8 8 1 $steel
-Rect $g 7 13 2 1 $ink
-Line $g 4 6 4 9 $cream
-Line $g 5 4 5 6 $cream
+ShadedDisc $g 32 32 18 $silver $cream $ink
+Disc $g 32 32 2 $steel
+Rect $g 30 50 4 2 $ink
+Line $g 20 22 20 40 $cream
+Line $g 26 18 26 44 $cream
 Save-Icon $b "silicon-wafer"
 
+# litho-mask: gold square with ink grid lines + panel mounting tab
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $gold
-for ($i = 5; $i -le 11; $i += 2) {
-  Line $g $i 4 $i 12 $ink
-  Line $g 4 $i 12 $i $ink
+Rect $g 12 12 40 40 $gold
+for ($i = 14; $i -le 50; $i += 4) {
+  Line $g $i 12 $i 52 $ink
+  Line $g 12 $i 52 $i $ink
 }
-Rect $g 12 6 2 4 $panel
-Rect $g 12 7 1 1 $cyan
+Rect $g 50 24 4 16 $panel
+Rect $g 50 28 2 8 $slate
 Save-Icon $b "litho-mask"
 
+# exposed-wafer: silver wafer with purple crosshair
 $b, $g = New-Canvas
-Disc $g 8 8 6 $silver
-Line $g 4 8 12 8 $purple
-Line $g 8 4 8 12 $purple
-Disc $g 8 8 1 $steel
+ShadedDisc $g 32 32 18 $silver $cream $ink
+Line $g 14 32 50 32 $slate
+Line $g 32 14 32 50 $slate
+Disc $g 32 32 2 $steel
 Save-Icon $b "exposed-wafer"
 
+# etched-wafer: silver wafer with slate crosshair
 $b, $g = New-Canvas
-Disc $g 8 8 6 $silver
-Line $g 4 8 12 8 $cyan
-Line $g 8 4 8 12 $cyan
-Disc $g 8 8 1 $steel
+ShadedDisc $g 32 32 18 $silver $cream $ink
+Line $g 14 32 50 32 $slate
+Line $g 32 14 32 50 $slate
+Disc $g 32 32 2 $steel
 Save-Icon $b "etched-wafer"
 
+# processed-wafer: silver wafer with gold crosshair
 $b, $g = New-Canvas
-Disc $g 8 8 6 $silver
-Line $g 4 8 12 8 $gold
-Line $g 8 4 8 12 $gold
-Disc $g 8 8 1 $steel
+ShadedDisc $g 32 32 18 $silver $cream $ink
+Line $g 14 32 50 32 $gold
+Line $g 32 14 32 50 $gold
+Disc $g 32 32 2 $steel
 Save-Icon $b "processed-wafer"
 
+# bare-die: panel square with gold border + four cyan squares + center
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $panel
-Rect $g 3 3 10 1 $gold
-Rect $g 3 12 10 1 $gold
-Rect $g 4 4 3 3 $cyan
-Rect $g 9 4 3 3 $cyan
-Rect $g 4 9 3 3 $cyan
-Rect $g 9 9 3 3 $cyan
+Rect $g 12 12 40 40 $panel
+Rect $g 12 12 40 2 $gold
+Rect $g 12 52 40 2 $gold
+Rect $g 12 12 2 40 $gold
+Rect $g 52 12 2 40 $gold
+Rect $g 16 16 12 12 $slate
+Rect $g 36 16 12 12 $slate
+Rect $g 16 36 12 12 $slate
+Rect $g 36 36 12 12 $slate
+Rect $g 26 26 12 12 $ink
 Save-Icon $b "bare-die"
 
-# --- devices -----------------------------------------------------------
+Write-Host "silicon icons done."
 
+# =========================================================================
+# 3. DEVICES (chips, tubes, transistors)
+# =========================================================================
+
+# vacuum-tube: glass cylinder, orange filament, silver base pins
 $b, $g = New-Canvas
-Poly $g @(5,11,5,5,6,2,10,2,11,5,11,11) $cyan
-Line $g 7 4 8 8 $orange
-Line $g 8 8 9 4 $orange
-Rect $g 5 11 6 3 $steel
-Rect $g 5 14 1 1 $ink
-Rect $g 8 14 1 1 $ink
-Rect $g 10 14 1 1 $ink
+Poly $g @(22,14,22,46,42,46,42,14) $slateL
+Line $g 22 14 22 46 $ink 2
+Line $g 42 14 42 46 $ink 2
+Disc $g 24 20 3 $burnt
+Disc $g 40 20 3 $burnt
+Line $g 24 20 40 44 $orange
+Line $g 40 20 24 44 $orange
+Rect $g 20 46 24 6 $steel
+Rect $g 22 52 2 2 $ink
+Rect $g 30 52 2 2 $ink
+Rect $g 38 52 2 2 $ink
 Save-Icon $b "vacuum-tube"
 
+# discrete-transistor: black body, 3 silver leads, rosy red band
 $b, $g = New-Canvas
-Disc $g 8 7 5 $ink
-Rect $g 8 11 1 4 $steel
-Rect $g 5 13 1 2 $steel
-Rect $g 10 13 1 2 $steel
-Rect $g 6 5 1 1 $green
+Disc $g 32 28 10 $ink
+Rect $g 32 38 1 6 $steel
+Rect $g 29 44 1 2 $steel
+Rect $g 35 44 1 2 $steel
+Disc $g 32 28 2 $red
 Save-Icon $b "discrete-transistor"
 
+# integrated-circuit: black square chip, gold pins all sides, dot at pin 1
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $ink
-for ($y = 4; $y -le 11; $y += 2) {
-  Rect $g 1 $y 2 1 $gold
-  Rect $g 13 $y 2 1 $gold
+Rect $g 12 12 40 40 $ink
+for ($y = 14; $y -le 50; $y += 6) {
+  Rect $g 10 $y 2 2 $gold
+  Rect $g 52 $y 2 2 $gold
 }
-Rect $g 4 4 1 1 $cyan
-Rect $g 7 7 2 2 $panel
+for ($x = 14; $x -le 50; $x += 6) {
+  Rect $g $x 10 2 2 $gold
+  Rect $g $x 52 2 2 $gold
+}
+Rect $g 14 14 1 1 $slate
 Save-Icon $b "integrated-circuit"
 
+# microprocessor: larger chip, silver heat spreader center, gold pins
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $ink
-for ($i = 4; $i -le 11; $i += 2) {
-  Rect $g 1 $i 1 1 $gold
-  Rect $g 14 $i 1 1 $gold
-  Rect $g $i 1 1 1 $gold
-  Rect $g $i 14 1 1 $gold
+Rect $g 10 10 44 44 $ink
+for ($i = 12; $i -le 52; $i += 4) {
+  Rect $g 10 $i 1 1 $gold
+  Rect $g 53 $i 1 1 $gold
+  Rect $g $i 10 1 1 $gold
+  Rect $g $i 53 1 1 $gold
 }
-Rect $g 6 6 4 4 $red
-Rect $g 7 7 2 2 $gold
-Rect $g 3 3 1 1 $cyan
+Rect $g 22 22 20 20 $red
+Rect $g 26 26 12 12 $gold
+Rect $g 12 12 2 2 $slate
 Save-Icon $b "microprocessor"
 
-# --- boards ----------------------------------------------------------------
+Write-Host "device icons done."
 
+# =========================================================================
+# 4. BOARDS
+# =========================================================================
+
+# electronic-circuit: brown fiberglass, copper traces, 2 tube cylinders
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $panel
-for ($y = 3; $y -le 11; $y += 2) {
-  Line $g 2 $y 14 $y $line
-}
-for ($x = 4; $x -le 12; $x += 2) {
-  Line $g $x 2 $x 14 $line
-}
-Rect $g 5 5 6 6 $ink
-Rect $g 6 6 4 4 $gold
-Rect $g 7 7 2 2 $panel
+RoundRect $g 8 8 48 48 4 $panel
+for ($y = 12; $y -le 52; $y += 8) { Line $g 8 $y 56 $y $line }
+for ($x = 12; $x -le 52; $x += 8) { Line $g $x 8 $x 56 $line }
+Rect $g 20 20 24 24 $ink
+Rect $g 22 22 20 20 $gold
+Rect $g 26 26 12 12 $panel
+Disc $g 18 18 3 $cream
+Disc $g 46 18 3 $cream
 Save-Icon $b "electronic-circuit"
 
+# advanced-circuit: dark green PCB, SMD chips
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $panel
-for ($y = 3; $y -le 11; $y += 2) {
-  Line $g 2 $y 14 $y $line
-}
-for ($x = 4; $x -le 12; $x += 2) {
-  Line $g $x 2 $x 14 $line
-}
-Rect $g 4 4 8 8 $ink
-Rect $g 5 5 6 6 $gold
-Rect $g 6 6 4 4 $panel
-Rect $g 7 7 2 2 $red
+RoundRect $g 8 8 48 48 4 $panel
+for ($y = 10; $y -le 54; $y += 6) { Line $g 8 $y 56 $y $line }
+for ($x = 10; $x -le 54; $x += 6) { Line $g $x 8 $x 56 $line }
+Rect $g 14 14 36 36 $ink
+Rect $g 16 16 32 32 $gold
+Rect $g 20 20 24 24 $panel
+Rect $g 22 22 20 20 $red
 Save-Icon $b "advanced-circuit"
 
+# processing-unit: dark blue PCB, microprocessor square
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $panel
-for ($y = 3; $y -le 11; $y += 1) {
-  Line $g 2 $y 14 $y $line
-}
-for ($x = 3; $x -le 13; $x += 1) {
-  Line $g $x 2 $x 14 $line
-}
-Rect $g 3 3 10 10 $ink
-Rect $g 4 4 8 8 $gold
-Rect $g 5 5 6 6 $panel
-Rect $g 6 6 4 4 $blue
+RoundRect $g 8 8 48 48 4 $panel
+for ($y = 8; $y -le 56; $y += 4) { Line $g 8 $y 56 $y $line }
+for ($x = 8; $x -le 56; $x += 4) { Line $g $x 8 $x 56 $line }
+Rect $g 16 16 32 32 $ink
+Rect $g 18 18 28 28 $gold
+Rect $g 22 22 20 20 $panel
+Rect $g 24 24 16 16 $slate
 Save-Icon $b "processing-unit"
 
+# accelerator-board: black PCB, GPU chip, HBM stack, cyan accents
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $panel
-Disc $g 8 8 4 $ink
-Rect $g 6 6 4 4 $gold
-Rect $g 7 7 2 2 $panel
-Rect $g 4 4 2 2 $green
-Rect $g 10 4 2 2 $green
-Rect $g 4 10 2 2 $green
-Rect $g 10 10 2 2 $green
+RoundRect $g 8 8 48 48 4 $panel
+Disc $g 32 32 16 $ink
+Rect $g 26 26 12 12 $gold
+Rect $g 28 28 8 8 $panel
+Rect $g 14 14 4 20 $slate
+Rect $g 46 14 4 20 $slate
+Disc $g 16 32 4 $cream
+Disc $g 48 32 4 $cream
 Save-Icon $b "accelerator-board"
 
+# neural-board: purple PCB, NPU chip, tensor grid, silver traces
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $panel
-Disc $g 8 8 4 $ink
-Rect $g 6 6 4 4 $gold
-Rect $g 7 7 2 2 $panel
-Line $g 4 4 12 12 $magenta
-Line $g 4 12 12 4 $magenta
+RoundRect $g 8 8 48 48 4 $panel
+Disc $g 32 32 16 $ink
+Rect $g 26 26 12 12 $gold
+Rect $g 28 28 8 8 $panel
+for ($y = 14; $y -le 50; $y += 12) { Line $g 14 $y 50 $y $burnt 1 }
+for ($x = 14; $x -le 50; $x += 12) { Line $g $x 14 $x 50 $burnt 1 }
 Save-Icon $b "neural-board"
 
+# quantum-board: silver PCB, QPU chip, cryogenic wiring lines
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $panel
-Disc $g 8 8 4 $ink
-Rect $g 6 6 4 4 $gold
-Rect $g 7 7 2 2 $panel
-Disc $g 4 4 2 $cyan
-Disc $g 10 4 2 $cyan
-Disc $g 4 10 2 $cyan
-Disc $g 10 10 2 $cyan
+RoundRect $g 8 8 48 48 4 $panel
+Disc $g 32 32 16 $ink
+Rect $g 26 26 12 12 $gold
+Rect $g 28 28 8 8 $panel
+Disc $g 14 14 3 $slate
+Disc $g 50 14 3 $slate
+Disc $g 14 50 3 $slate
+Disc $g 50 50 3 $slate
+Line $g 32 32 14 14 $slateL 1
+Line $g 32 32 50 14 $slateL 1
+Line $g 32 32 14 50 $slateL 1
+Line $g 32 32 50 50 $slateL 1
 Save-Icon $b "quantum-board"
 
-# --- circuit assembler -----------------------------------------------------
+Write-Host "board icons done."
 
+# =========================================================================
+# 5. COMPUTERS (module cards)
+# =========================================================================
+
+# microcomputer: green PCB card, chip, 2 RAM sticks, gold edge connector
 $b, $g = New-Canvas
-Rect $g 2 3 12 11 $panel
-Rect $g 3 4 10 2 $line
-Rect $g 3 8 10 2 $line
-Rect $g 4 6 8 2 $ink
-Rect $g 6 7 2 2 $gold
-Rect $g 7 9 2 1 $steel
-Save-Icon $b "circuit-assembler"
-
-$b, $g = New-Canvas
-Rect $g 2 3 12 11 $panel
-Rect $g 3 4 10 1 $line
-Rect $g 3 10 10 1 $line
-Rect $g 4 5 8 2 $ink
-Rect $g 5 7 2 2 $gold
-Rect $g 8 7 2 2 $gold
-Rect $g 6 9 4 1 $blue
-Rect $g 7 10 2 1 $steel
-Save-Icon $b "computer-assembler"
-
-# --- computers -------------------------------------------------------------
-
-$b, $g = New-Canvas
-Rect $g 3 3 10 10 $panel
-Rect $g 4 4 8 8 $ink
-Rect $g 5 5 6 6 $gold
-Rect $g 6 6 4 4 $panel
-Rect $g 7 7 2 2 $blue
+RoundRect $g 10 10 44 44 4 $panel
+Rect $g 12 12 40 40 $ink
+Rect $g 14 14 36 36 $gold
+Rect $g 18 18 28 28 $panel
+Rect $g 22 22 20 20 $slate
+Disc $g 24 24 2 $cream
+Disc $g 40 24 2 $cream
+Rect $g 16 46 2 4 $gold
+Rect $g 46 46 2 4 $gold
 Save-Icon $b "microcomputer"
 
+# server: black PCB, chip, 4 RAM sticks, heatsink
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $panel
-Rect $g 4 4 8 8 $ink
-Rect $g 5 5 6 6 $gold
-Rect $g 6 6 4 4 $panel
-Rect $g 7 7 2 2 $green
-Rect $g 4 4 1 1 $green
-Rect $g 11 4 1 1 $green
-Rect $g 4 11 1 1 $green
-Rect $g 11 11 1 1 $green
+RoundRect $g 10 10 44 44 4 $panel
+Rect $g 12 12 40 40 $ink
+Rect $g 14 14 36 36 $gold
+Rect $g 18 18 28 28 $panel
+Rect $g 22 22 20 20 $green
+Disc $g 20 20 2 $cream
+Disc $g 44 20 2 $cream
+Disc $g 20 44 2 $cream
+Disc $g 44 44 2 $cream
+Rect $g 16 46 2 4 $gold
+Rect $g 46 46 2 4 $gold
 Save-Icon $b "server"
 
+# supercomputer: black PCB, GPU chip, HBM stack, heat pipes
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $panel
-Disc $g 8 8 4 $ink
-Rect $g 6 6 4 4 $gold
-Rect $g 7 7 2 2 $panel
-Rect $g 4 4 2 2 $green
-Rect $g 10 4 2 2 $green
-Rect $g 4 10 2 2 $green
-Rect $g 10 10 2 2 $green
-Rect $g 6 10 2 2 $blue
-Rect $g 10 6 2 2 $blue
+RoundRect $g 10 10 44 44 4 $panel
+Disc $g 32 32 14 $ink
+Rect $g 26 26 12 12 $gold
+Rect $g 28 28 8 8 $panel
+Rect $g 16 30 3 14 $slate
+Rect $g 45 30 3 14 $slate
+Disc $g 18 46 4 $cream
+Disc $g 46 46 4 $cream
 Save-Icon $b "supercomputer"
 
+# neural-computer: purple accents, NPU chip, tensor grid, cyan traces
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $panel
-Disc $g 8 8 4 $ink
-Rect $g 6 6 4 4 $gold
-Rect $g 7 7 2 2 $panel
-Line $g 4 4 12 12 $magenta
-Line $g 4 12 12 4 $magenta
-Rect $g 6 10 2 2 $blue
-Rect $g 10 6 2 2 $blue
-Rect $g 5 5 1 1 $blue
-Rect $g 11 5 1 1 $blue
-Rect $g 5 11 1 1 $blue
-Rect $g 11 11 1 1 $blue
+RoundRect $g 10 10 44 44 4 $panel
+Disc $g 32 32 14 $ink
+Rect $g 26 26 12 12 $gold
+Rect $g 28 28 8 8 $panel
+Line $g 14 14 50 50 $burnt 1
+Line $g 14 50 50 14 $burnt 1
+Rect $g 16 46 2 4 $gold
+Rect $g 46 46 2 4 $gold
 Save-Icon $b "neural-computer"
 
+# quantum-computer: silver card, QPU chip, qubit circle, dilution wires
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $panel
-Disc $g 8 8 4 $ink
-Rect $g 6 6 4 4 $gold
-Rect $g 7 7 2 2 $panel
-Disc $g 4 4 2 $cyan
-Disc $g 10 4 2 $cyan
-Disc $g 4 10 2 $cyan
-Disc $g 10 10 2 $cyan
-Rect $g 6 6 2 2 $blue
-Rect $g 10 10 2 2 $blue
-Rect $g 6 10 2 2 $blue
-Rect $g 10 6 2 2 $blue
+RoundRect $g 10 10 44 44 4 $panel
+Disc $g 32 32 14 $ink
+Rect $g 26 26 12 12 $gold
+Rect $g 28 28 8 8 $panel
+Disc $g 14 14 3 $slate
+Disc $g 50 14 3 $slate
+Disc $g 14 50 3 $slate
+Disc $g 50 50 3 $slate
+Line $g 32 32 14 14 $slateL 1
+Line $g 32 32 50 50 $slateL 1
+Rect $g 16 46 2 4 $gold
+Rect $g 46 46 2 4 $gold
 Save-Icon $b "quantum-computer"
 
-# --- AI models -------------------------------------------------------------
+Write-Host "computer icons done."
 
+# =========================================================================
+# 6. AI MODELS
+# =========================================================================
+
+# small-model: silver disk with orange AI circuit trace
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $panel
-Rect $g 4 4 8 8 $ink
-Rect $g 5 5 6 6 $gold
-Rect $g 6 6 4 4 $panel
-Rect $g 7 7 2 2 $orange
+ShadedDisc $g 32 32 18 $silver $cream $ink
+Disc $g 32 32 6 $ink
+Rect $g 30 30 4 4 $orange
+Line $g 32 16 32 24 $orange 2
+Line $g 32 40 32 48 $orange 2
+Line $g 16 32 24 32 $orange 2
+Line $g 40 32 48 32 $orange 2
 Save-Icon $b "small-model"
 
+# specialist-model: disk with 3 domain slices, red AI trace
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $panel
-Rect $g 4 4 8 8 $ink
-Rect $g 5 5 6 6 $gold
-Rect $g 6 6 4 4 $panel
-Rect $g 7 7 2 2 $red
-Rect $g 5 5 1 1 $red
-Rect $g 10 5 1 1 $red
-Rect $g 5 10 1 1 $red
-Rect $g 10 10 1 1 $red
+ShadedDisc $g 32 32 18 $silver $cream $ink
+Disc $g 32 32 6 $ink
+Line $g 32 16 32 48 $red 2
+Line $g 16 32 48 32 $red 2
+Disc $g 16 32 3 $red
+Disc $g 48 32 3 $red
+Disc $g 32 16 3 $red
+Disc $g 32 48 3 $red
 Save-Icon $b "specialist-model"
 
+# general-model: disk with neural nodes connected by lines
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $panel
-Disc $g 8 8 4 $ink
-Rect $g 6 6 4 4 $gold
-Rect $g 7 7 2 2 $panel
-Rect $g 4 4 2 2 $purple
-Rect $g 10 4 2 2 $purple
-Rect $g 4 10 2 2 $purple
-Rect $g 10 10 2 2 $purple
+ShadedDisc $g 32 32 18 $silver $cream $ink
+Disc $g 32 32 6 $ink
+Disc $g 16 16 3 $purple
+Disc $g 48 16 3 $purple
+Disc $g 16 48 3 $purple
+Disc $g 48 48 3 $purple
+Line $g 16 16 48 16 $purple 1
+Line $g 16 48 48 48 $purple 1
+Line $g 32 32 16 16 $purple 1
+Line $g 32 32 48 48 $purple 1
 Save-Icon $b "general-model"
 
+# frontier-model: disk with cyan quantum nodes, blue AI trace
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $panel
-Disc $g 8 8 4 $ink
-Rect $g 6 6 4 4 $gold
-Rect $g 7 7 2 2 $panel
-Line $g 4 4 12 12 $magenta
-Line $g 4 12 12 4 $magenta
-Rect $g 6 6 2 2 $blue
-Rect $g 10 10 2 2 $blue
-Rect $g 6 10 2 2 $blue
-Rect $g 10 6 2 2 $blue
+ShadedDisc $g 32 32 18 $silver $cream $ink
+Disc $g 32 32 6 $ink
+Line $g 16 16 48 48 $blue 2
+Line $g 16 48 48 16 $blue 2
+Rect $g 14 14 4 4 $slate
+Rect $g 46 14 4 4 $slate
+Rect $g 14 46 4 4 $slate
+Rect $g 46 46 4 4 $slate
+Rect $g 30 30 4 4 $slate
 Save-Icon $b "frontier-model"
 
+# agi-model: disk with gold glowing center, magenta AI trace radiating
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $panel
-Disc $g 8 8 4 $ink
-Rect $g 6 6 4 4 $gold
-Rect $g 7 7 2 2 $panel
-Disc $g 4 4 2 $blue
-Disc $g 10 4 2 $blue
-Disc $g 4 10 2 $blue
-Disc $g 10 10 2 $blue
-Rect $g 6 6 2 2 $magenta
-Rect $g 10 10 2 2 $magenta
-Rect $g 6 10 2 2 $magenta
-Rect $g 10 6 2 2 $magenta
+ShadedDisc $g 32 32 18 $silver $cream $ink
+Disc $g 32 32 6 $ink
+Disc $g 32 32 4 $gold
+Line $g 32 32 14 14 $magenta 2
+Line $g 32 32 50 14 $magenta 2
+Line $g 32 32 14 50 $magenta 2
+Line $g 32 32 50 50 $magenta 2
+Disc $g 14 14 2 $gold
+Disc $g 50 14 2 $gold
+Disc $g 14 50 2 $gold
+Disc $g 50 50 2 $gold
 Save-Icon $b "agi-model"
 
-# --- AI buildings ----------------------------------------------------------
+Write-Host "AI model icons done."
 
+# =========================================================================
+# 7. AI BUILDINGS
+# =========================================================================
+
+# training-cluster: mini rack with 3 bays and blinking orange LEDs
 $b, $g = New-Canvas
-Rect $g 2 3 12 11 $panel
-Rect $g 3 4 10 2 $line
-Rect $g 3 8 10 2 $line
-Rect $g 4 6 8 2 $ink
-Rect $g 6 7 2 2 $gold
-Rect $g 7 9 2 1 $steel
-Rect $g 4 9 2 2 $orange
-Rect $g 10 9 2 2 $orange
+RoundRect $g 8 6 48 52 6 $panel
+Rect $g 8 6 48 2 $purple
+for ($y = 12; $y -le 48; $y += 12) {
+  Rect $g 16 $y 32 8 $ink
+  Disc $g 20 ($y+4) 2 $cream
+  Disc $g 44 ($y+4) 2 $cream
+}
+Rect $g 18 28 2 2 $orange
+Rect $g 44 28 2 2 $orange
 Save-Icon $b "training-cluster"
 
+# inference-lab: mini workstation with purple accents + steel tray
 $b, $g = New-Canvas
-Rect $g 2 3 12 11 $panel
-Rect $g 3 4 10 2 $line
-Rect $g 3 8 10 2 $line
-Rect $g 4 6 8 2 $ink
-Rect $g 6 7 2 2 $gold
-Rect $g 7 9 2 1 $steel
-Rect $g 4 9 2 2 $purple
-Rect $g 10 9 2 2 $purple
+RoundRect $g 8 6 48 52 6 $panel
+Rect $g 8 6 48 2 $purple
+Rect $g 16 14 32 12 $ink
+Rect $g 18 16 28 8 $slateL
+Rect $g 24 32 16 6 $steel
+Disc $g 28 35 2 $purple
+Disc $g 36 35 2 $purple
+Rect $g 18 44 28 4 $line
 Save-Icon $b "inference-lab"
 
-# --- era 5-6 -----------------------------------------------------------
+Write-Host "AI building icons done."
 
+# =========================================================================
+# 8. ERA 5-6 FEEDSTOCK & PACKAGES
+# =========================================================================
+
+# phase-shift-mask: gold square with purple grid + cyan diagonal
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $gold
-for ($i = 5; $i -le 11; $i += 3) {
-  Line $g $i 4 $i 12 $purple
-  Line $g 4 $i 12 $i $purple
+Rect $g 12 12 40 40 $gold
+for ($i = 14; $i -le 50; $i += 6) {
+  Line $g $i 12 $i 52 $purple
+  Line $g 12 $i 52 $i $purple
 }
-Line $g 3 12 12 3 $cyan
-Rect $g 12 6 2 4 $panel
-Rect $g 12 7 1 1 $cyan
+Line $g 12 52 52 12 $slate
+Rect $g 50 24 4 16 $panel
+Rect $g 50 28 2 8 $slate
 Save-Icon $b "phase-shift-mask"
 
+# cmp-slurry: silver block with cream top + ink dots
 $b, $g = New-Canvas
-Rect $g 4 4 8 9 $silver
-Rect $g 4 5 8 1 $cream
-Rect $g 4 9 8 1 $cream
-Rect $g 5 2 6 2 $steel
-Rect $g 5 7 6 3 $steel
-Disc $g 6 8 1 $ink
-Disc $g 10 10 1 $ink
+Rect $g 16 18 32 24 $silver
+Rect $g 16 18 32 2 $cream
+Rect $g 16 42 32 2 $cream
+Disc $g 24 28 2 $ink
+Disc $g 40 36 2 $ink
 Save-Icon $b "cmp-slurry"
 
+# low-k-dielectric: silver layers with cream separators + purple core
 $b, $g = New-Canvas
-Rect $g 2 4 12 2 $silver
-Rect $g 2 7 12 2 $cyan
-Rect $g 2 10 12 2 $silver
-Rect $g 2 4 12 1 $cream
-Rect $g 5 7 2 2 $purple
-Rect $g 9 10 3 2 $panel
+Rect $g 10 14 44 12 $silver
+Rect $g 10 14 44 2 $cream
+Rect $g 10 38 44 12 $silver
+Rect $g 10 38 44 2 $cream
+Rect $g 18 22 28 16 $silver
+Rect $g 18 22 28 2 $cream
+Rect $g 22 26 20 8 $panel
+Disc $g 32 30 2 $purple
 Save-Icon $b "low-k-dielectric"
 
+# cooling-unit: panel case with cyan slab + ink core
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $panel
-for ($y = 4; $y -le 11; $y += 2) { Rect $g 4 $y 8 1 $silver }
-Rect $g 2 5 1 6 $cyan
-Rect $g 13 5 1 6 $cyan
-Disc $g 8 8 2 $cyan
-Rect $g 7 7 2 2 $ink
+RoundRect $g 14 14 36 36 4 $panel
+Rect $g 16 16 32 32 $slate
+Rect $g 18 18 28 28 $ink
+Disc $g 32 32 4 $cream
 Save-Icon $b "cooling-unit"
 
+# vlsi-wafer: silver wafer with purple grid lines
 $b, $g = New-Canvas
-Disc $g 8 8 6 $silver
-for ($i = 5; $i -le 11; $i += 2) {
-  Line $g $i 3 $i 13 $purple
-  Line $g 3 $i 13 $i $purple
+ShadedDisc $g 32 32 18 $silver $cream $ink
+Disc $g 32 32 2 $steel
+for ($i = 16; $i -le 48; $i += 8) {
+  Line $g $i 16 $i 48 $purple 1
+  Line $g 16 $i 48 $i $purple 1
 }
-Disc $g 8 8 1 $steel
 Save-Icon $b "vlsi-wafer"
 
+# vlsi-die: panel square with gold border + cyan array + purple center
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $panel
-Rect $g 2 2 12 1 $gold
-Rect $g 2 13 12 1 $gold
-for ($y = 4; $y -le 10; $y += 2) {
-  for ($x = 4; $x -le 10; $x += 2) { Rect $g $x $y 1 1 $cyan }
+Rect $g 12 12 40 40 $panel
+Rect $g 12 12 40 2 $gold
+Rect $g 12 52 40 2 $gold
+Rect $g 12 12 2 40 $gold
+Rect $g 52 12 2 40 $gold
+for ($y = 16; $y -le 48; $y += 16) {
+  for ($x = 16; $x -le 48; $x += 16) { Rect $g $x $y 4 4 $slate }
 }
-Rect $g 4 4 2 2 $purple
+Rect $g 26 26 12 12 $purple
 Save-Icon $b "vlsi-die"
 
+# system-on-chip: ink square, gold pins, cyan/purple blocks
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $ink
-for ($i = 3; $i -le 12; $i += 2) {
-  Rect $g 1 $i 1 1 $gold
-  Rect $g 14 $i 1 1 $gold
+Rect $g 10 10 44 44 $ink
+for ($i = 12; $i -le 52; $i += 4) {
+  Rect $g 10 $i 1 1 $gold
+  Rect $g 53 $i 1 1 $gold
+  Rect $g $i 10 1 1 $gold
+  Rect $g $i 53 1 1 $gold
 }
-Rect $g 4 4 3 3 $cyan
-Rect $g 9 4 3 3 $purple
-Rect $g 4 9 8 2 $panel
-Rect $g 7 7 2 2 $gold
+Rect $g 14 14 8 8 $slate
+Rect $g 42 14 8 8 $purple
+Rect $g 14 42 8 8 $panel
+Rect $g 42 42 8 8 $gold
+Rect $g 26 26 12 12 $gold
 Save-Icon $b "system-on-chip"
 
+# chiplet: ink blocks left/right + gold base + cyan/purple dies
 $b, $g = New-Canvas
-Rect $g 2 4 5 8 $ink
-Rect $g 9 4 5 8 $ink
-Rect $g 3 5 3 2 $cyan
-Rect $g 10 5 3 2 $purple
-Rect $g 2 12 12 1 $gold
-Rect $g 1 13 14 1 $line
+Rect $g 6 12 8 28 $ink
+Rect $g 50 12 8 28 $ink
+Rect $g 14 48 36 2 $gold
+Rect $g 2 49 14 1 $line
+Rect $g 8 10 4 10 $slate
+Rect $g 18 10 4 6 $purple
+Rect $g 30 10 4 10 $slate
+Rect $g 40 10 4 6 $purple
 Save-Icon $b "chiplet"
 
+# hbm-stack: silver dies with cyan spacers + panel base + gold rails
 $b, $g = New-Canvas
-for ($i = 3; $i -le 9; $i += 2) { Rect $g 4 $i 8 1 $silver }
-Rect $g 3 10 10 3 $panel
-Rect $g 4 11 8 1 $cyan
-Line $g 2 3 2 12 $gold
-Line $g 13 3 13 12 $gold
+for ($i = 0; $i -lt 4; $i++) {
+  $y = 10 + $i * 6
+  Rect $g 4 $y 8 4 $silver
+  Rect $g 52 $y 8 4 $silver
+  Rect $g 12 ($y+1) 40 2 $panel
+}
+Rect $g 8 34 48 6 $panel
+Rect $g 2 53 14 1 $gold
+Rect $g 48 53 14 1 $gold
 Save-Icon $b "hbm-stack"
 
+# gpu: ink card, panel frame, red core, cyan edge pins
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $ink
-Rect $g 3 3 10 10 $panel
-Rect $g 5 5 6 6 $red
-Rect $g 6 6 4 4 $gold
-for ($i = 4; $i -le 11; $i += 2) {
-  Rect $g 1 $i 1 1 $cyan
-  Rect $g 14 $i 1 1 $cyan
-}
-Rect $g 4 12 8 1 $silver
+RoundRect $g 10 8 44 48 4 $ink
+RoundRect $g 12 10 40 44 4 $panel
+Rect $g 14 12 36 36 $red
+Rect $g 16 14 32 32 $gold
+Rect $g 20 18 24 24 $panel
+for ($i = 14; $i -le 50; $i += 6) { Rect $g $i 60 2 2 $slate }
 Save-Icon $b "gpu"
 
+# multi-core-cpu: ink chip, cyan corner blocks, gold center, gold edge pins
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $ink
-Rect $g 4 4 3 3 $cyan
-Rect $g 9 4 3 3 $cyan
-Rect $g 4 9 3 3 $cyan
-Rect $g 9 9 3 3 $cyan
-Rect $g 7 7 2 2 $gold
-for ($i = 3; $i -le 12; $i += 2) {
-  Rect $g 1 $i 1 1 $gold
-  Rect $g 14 $i 1 1 $gold
+Rect $g 10 10 44 44 $ink
+Rect $g 14 14 8 8 $slate
+Rect $g 42 14 8 8 $slate
+Rect $g 14 42 8 8 $slate
+Rect $g 42 42 8 8 $slate
+Rect $g 26 26 12 12 $gold
+for ($i = 12; $i -le 52; $i += 4) {
+  Rect $g 10 $i 1 1 $gold
+  Rect $g 53 $i 1 1 $gold
+  Rect $g $i 10 1 1 $gold
+  Rect $g $i 53 1 1 $gold
 }
 Save-Icon $b "multi-core-cpu"
 
+# vlsi-fab: panel building, cyan side, green doors, gold tab
 $b, $g = New-Canvas
-Rect $g 2 3 12 10 $panel
-Rect $g 2 3 12 1 $purple
-Rect $g 4 5 4 4 $cyan
-Disc $g 6 7 2 $silver
-Rect $g 9 4 3 8 $panel
-Rect $g 9 5 1 1 $red
-Rect $g 11 5 1 1 $cyan
-Rect $g 9 8 1 1 $green
-Rect $g 11 8 1 1 $gold
-Rect $g 3 12 10 1 $line
+Rect $g 10 6 44 46 $panel
+Rect $g 10 6 44 2 $line
+Rect $g 14 14 8 8 $cyan
+Rect $g 42 14 8 8 $cyan
+Rect $g 46 12 4 32 $panel
+Rect $g 48 16 2 24 $cyan
+Rect $g 16 24 32 12 $green
+Rect $g 22 36 4 4 $line
+Rect $g 38 36 4 4 $line
+Rect $g 46 52 4 2 $gold
 Save-Icon $b "vlsi-fab"
 
+# cooling-tower: panel tower, silver fan discs, cyan blades
 $b, $g = New-Canvas
-Rect $g 3 2 10 12 $panel
-Rect $g 3 2 10 1 $line
-for ($i = 4; $i -le 10; $i += 3) {
-  Rect $g 4 $i 8 1 $silver
-  Disc $g 6 $i 1 $cyan
-  Disc $g 10 $i 1 $cyan
+Rect $g 14 2 36 40 $panel
+Rect $g 14 2 36 2 $line
+for ($i = 4; $i -le 36; $i += 6) {
+  Rect $g 16 $i 32 2 $silver
+  Disc $g 18 ($i+2) 1 $cyan
+  Disc $g 46 ($i+2) 1 $cyan
 }
-Rect $g 5 12 6 2 $line
-Rect $g 7 3 2 1 $cyan
+Rect $g 20 38 8 4 $line
+Rect $g 36 38 8 4 $line
 Save-Icon $b "cooling-tower"
 
+# datacenter: ink building, panel rows, cyan windows, gold tab
 $b, $g = New-Canvas
-Rect $g 1 2 14 12 $ink
-Rect $g 1 2 14 1 $line
-for ($x = 2; $x -le 11; $x += 3) {
-  Rect $g $x 4 2 8 $panel
-  for ($y = 5; $y -le 10; $y += 2) { Rect $g $x $y 1 1 $cyan }
+Rect $g 4 2 56 44 $ink
+Rect $g 4 2 56 2 $line
+for ($x = 6; $x -le 54; $x += 8) {
+  Rect $g $x 6 4 28 $panel
+  for ($y = 8; $y -le 30; $y += 6) { Rect $g $x $y 2 2 $cyan }
 }
-Rect $g 3 12 10 1 $gold
-Rect $g 3 1 2 1 $red
+Rect $g 6 34 52 2 $gold
+Rect $g 6 2 2 1 $red
 Save-Icon $b "datacenter"
 
-# --- era 7 -------------------------------------------------------------
+Write-Host "era 5-6 icons done."
 
+# =========================================================================
+# 9. ERA 7 (QUANTUM)
+# =========================================================================
+
+# superconductor: gold disk, ink center, cyan core, silver leads
 $b, $g = New-Canvas
-Disc $g 8 8 6 $gold
-Disc $g 8 8 3 $ink
-Disc $g 8 8 2 $cyan
-Line $g 3 8 1 8 $silver
-Line $g 13 8 15 8 $silver
-Rect $g 1 7 1 2 $steel
-Rect $g 14 7 1 2 $steel
+ShadedDisc $g 32 32 18 $gold $cream $ink
+Disc $g 32 32 8 $ink
+Disc $g 32 32 4 $slate
+Line $g 32 32 10 32 $silver 2
+Line $g 32 32 54 32 $silver 2
+Rect $g 8 30 2 4 $steel
+Rect $g 54 30 2 4 $steel
 Save-Icon $b "superconductor"
 
+# qubit: cyan disk, cream center, purple cross, gold end dots
 $b, $g = New-Canvas
-Disc $g 8 8 3 $cyan
-Disc $g 8 8 1 $cream
-Line $g 2 8 14 8 $purple
-Line $g 8 2 8 14 $purple
-Disc $g 3 8 1 $gold
-Disc $g 13 8 1 $gold
+Disc $g 32 32 10 $slate
+Disc $g 32 32 2 $cream
+Line $g 4 32 60 32 $purple
+Line $g 32 4 32 60 $purple
+Disc $g 6 32 2 $gold
+Disc $g 58 32 2 $gold
 Save-Icon $b "qubit"
 
+# error-corrected-qubit: 3x3 grid of cyan dots + gold center
 $b, $g = New-Canvas
-for ($y = 3; $y -le 13; $y += 5) {
-  for ($x = 3; $x -le 13; $x += 5) {
-    Disc $g $x $y 2 $cyan
-    Rect $g ($x - 1) ($y - 1) 1 1 $cream
+for ($y = 10; $y -le 54; $y += 22) {
+  for ($x = 10; $x -le 54; $x += 22) {
+    Disc $g $x $y 4 $slate
+    Rect $g ($x-1) ($y-1) 1 1 $cream
   }
 }
-Rect $g 7 7 2 2 $gold
+Rect $g 28 28 8 8 $gold
 Save-Icon $b "error-corrected-qubit"
 
+# quantum-processor: ink chip, gold pins, purple core, cyan center, cream die
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $ink
-for ($i = 4; $i -le 11; $i += 2) {
-  Rect $g 1 $i 1 1 $gold
-  Rect $g 14 $i 1 1 $gold
-  Rect $g $i 1 1 1 $gold
-  Rect $g $i 14 1 1 $gold
+Rect $g 10 10 44 44 $ink
+for ($i = 12; $i -le 52; $i += 4) {
+  Rect $g 10 $i 1 1 $gold
+  Rect $g 53 $i 1 1 $gold
+  Rect $g $i 10 1 1 $gold
+  Rect $g $i 53 1 1 $gold
 }
-Disc $g 8 8 4 $purple
-Disc $g 8 8 2 $cyan
-Rect $g 7 7 2 2 $cream
+Disc $g 32 32 10 $purple
+Disc $g 32 32 4 $slate
+Rect $g 28 28 8 8 $cream
 Save-Icon $b "quantum-processor"
 
+# qubit-array: panel board, gold border, cyan dots grid + cream squares
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $panel
-Rect $g 2 2 12 1 $gold
-for ($y = 4; $y -le 10; $y += 3) {
-  for ($x = 4; $x -le 10; $x += 3) {
-    Disc $g $x $y 1 $cyan
-    Rect $g ($x - 1) ($y - 1) 1 1 $cream
+RoundRect $g 10 10 44 44 4 $panel
+Rect $g 10 10 44 2 $gold
+Rect $g 10 54 44 2 $gold
+for ($y = 16; $y -le 48; $y += 16) {
+  for ($x = 16; $x -le 48; $x += 16) {
+    Disc $g $x $y 2 $slate
+    Rect $g ($x-1) ($y-1) 1 1 $cream
   }
 }
-Rect $g 2 13 12 1 $gold
+Rect $g 2 54 14 1 $gold
 Save-Icon $b "qubit-array"
 
-# --- custom science packs ----------------------------------------------
+Write-Host "era 7 icons done."
 
+# =========================================================================
+# 10. CUSTOM SCIENCE PACKS
+# =========================================================================
+
+# optical-disc: silver disc, panel ring, ink center, cyan line + cyan rect
 $b, $g = New-Canvas
-Disc $g 8 8 6 $silver
-Disc $g 8 8 4 $panel
-Disc $g 8 8 1 $ink
-Line $g 8 2 8 4 $cyan
-Rect $g 11 10 2 2 $cyan
+ShadedDisc $g 32 32 18 $silver $cream $ink
+Disc $g 32 32 10 $panel
+Disc $g 32 32 2 $ink
+Line $g 32 12 32 20 $slate
+Rect $g 42 38 4 4 $slate
 Save-Icon $b "optical-disc"
 
+# hbm-science: panel card, cyan lines, silver/gold edges, purple top
 $b, $g = New-Canvas
-Rect $g 2 3 12 10 $panel
-for ($y = 4; $y -le 11; $y += 2) {
-  Rect $g 3 $y 10 1 $cyan
-}
-Rect $g 3 4 2 8 $silver
-Rect $g 11 4 2 8 $gold
-Rect $g 2 3 12 1 $purple
+Rect $g 8 12 48 40 $panel
+Rect $g 8 12 48 2 $purple
+for ($y = 16; $y -le 48; $y += 8) { Rect $g 8 $y 48 1 $slate }
+Rect $g 8 16 4 20 $silver
+Rect $g 52 16 4 20 $gold
 Save-Icon $b "hbm-science"
 
+# quantum-fab: panel building, purple top, silver core, cyan dots
 $b, $g = New-Canvas
-Rect $g 2 3 12 10 $panel
-Rect $g 2 3 12 1 $purple
-Rect $g 4 5 4 6 $silver
-Rect $g 4 5 4 1 $cream
-Rect $g 4 9 4 1 $cream
-Disc $g 6 7 1 $cyan
-Rect $g 9 4 3 8 $panel
-Rect $g 9 5 1 1 $cyan
-Rect $g 11 5 1 1 $purple
-Rect $g 9 8 1 1 $red
-Rect $g 11 8 1 1 $gold
-Rect $g 3 12 10 1 $line
+Rect $g 8 6 48 46 $panel
+Rect $g 8 6 48 2 $gold
+Rect $g 16 10 32 10 $silver
+Rect $g 16 10 32 2 $cream
+Disc $g 24 22 2 $slate
+Disc $g 40 34 2 $slate
+Rect $g 32 34 2 8 $panel
+Rect $g 4 12 2 4 $cyan
+Rect $g 58 12 2 4 $cyan
+Rect $g 6 50 12 1 $line
 Save-Icon $b "quantum-fab"
 
+# cryostat: silver cylinder, cream bands, cyans lines, steel top + ink dots
 $b, $g = New-Canvas
-Rect $g 4 2 8 12 $silver
-Rect $g 4 2 8 1 $cream
-Rect $g 4 5 8 1 $cyan
-Rect $g 4 8 8 1 $cyan
-Rect $g 4 11 8 1 $cyan
-Rect $g 5 1 6 1 $steel
-Disc $g 8 13 2 $panel
-Rect $g 5 6 1 1 $ink
-Rect $g 10 7 1 1 $ink
+Rect $g 16 8 32 44 $silver
+Rect $g 16 8 32 2 $cream
+Rect $g 16 16 32 2 $slate
+Rect $g 16 24 32 2 $slate
+Rect $g 16 32 32 2 $slate
+Rect $g 18 2 28 6 $steel
+Disc $g 24 14 1 $ink
+Disc $g 38 22 1 $ink
 Save-Icon $b "cryostat"
 
+# cryogen: purple block, cream bands, steel top, cyan discs
 $b, $g = New-Canvas
-Rect $g 4 4 8 9 $purple
-Rect $g 4 5 8 1 $cream
-Rect $g 4 9 8 1 $cream
-Rect $g 5 2 6 2 $steel
-Disc $g 7 7 1 $cyan
-Disc $g 10 9 1 $cyan
-Rect $g 6 12 4 1 $line
+Rect $g 16 8 32 36 $purple
+Rect $g 16 8 32 2 $cream
+Rect $g 16 36 32 2 $cream
+Rect $g 20 2 24 6 $steel
+Disc $g 28 20 2 $slate
+Disc $g 40 32 2 $slate
+Rect $g 24 46 16 2 $line
 Save-Icon $b "cryogen"
 
-# --- endgame -----------------------------------------------------------
-
+# answer-engine: ink card, gold border, panel screen, "42" in cyan, gold dots
 $b, $g = New-Canvas
-Rect $g 2 1 12 14 $ink
-Rect $g 2 1 12 1 $gold
-Rect $g 2 14 12 1 $gold
-Rect $g 3 3 10 8 $panel
-# "42" on the display
-Rect $g 4 4 1 4 $cyan
-Rect $g 5 4 1 1 $cyan
-Rect $g 6 4 1 4 $cyan
-Rect $g 5 8 2 1 $cyan
-Rect $g 8 4 3 1 $cyan
-Rect $g 10 5 1 1 $cyan
-Rect $g 9 6 1 1 $cyan
-Rect $g 8 7 1 1 $cyan
-Rect $g 8 8 3 1 $cyan
-Rect $g 4 11 1 1 $gold
-Rect $g 7 11 1 1 $gold
-Rect $g 10 11 1 1 $gold
-Rect $g 3 12 10 1 $line
+Rect $g 8 2 48 56 $ink
+Rect $g 8 2 48 2 $gold
+Rect $g 8 58 48 2 $gold
+Rect $g 10 8 44 32 $panel
+Rect $g 14 12 2 12 $slate
+Rect $g 16 12 2 2 $slate
+Rect $g 18 12 2 12 $slate
+Rect $g 16 24 4 2 $slate
+Rect $g 24 12 6 2 $slate
+Rect $g 30 14 2 2 $slate
+Rect $g 28 16 2 2 $slate
+Rect $g 28 18 2 2 $slate
+Rect $g 28 20 6 2 $slate
+Rect $g 10 44 2 2 $gold
+Rect $g 26 44 2 2 $gold
+Rect $g 42 44 2 2 $gold
+Rect $g 6 50 12 1 $line
 Save-Icon $b "answer-engine"
 
-# --- process fluids ----------------------------------------------------
+Write-Host "science pack & endgame icons done."
 
+# =========================================================================
+# 11. PROCESS FLUIDS
+# =========================================================================
+
+# photoresist: orange block, cream bands, steel top
 $b, $g = New-Canvas
-Rect $g 4 4 8 9 $orange
-Rect $g 4 5 8 1 $cream
-Rect $g 4 9 8 1 $cream
-Rect $g 5 2 6 2 $steel
+Rect $g 16 8 32 36 $orange
+Rect $g 16 8 32 2 $cream
+Rect $g 16 36 32 2 $cream
+Rect $g 20 2 24 6 $steel
 Save-Icon $b "photoresist"
 
+# etchant: green block, cream bands, steel top
 $b, $g = New-Canvas
-Rect $g 4 4 8 9 $green
-Rect $g 4 5 8 1 $cream
-Rect $g 4 9 8 1 $cream
-Rect $g 5 2 6 2 $steel
+Rect $g 16 8 32 36 $green
+Rect $g 16 8 32 2 $cream
+Rect $g 16 36 32 2 $cream
+Rect $g 20 2 24 6 $steel
 Save-Icon $b "etchant"
 
+# coolant: cyan block, cream bands, steel top, ink dots
 $b, $g = New-Canvas
-Rect $g 4 4 8 9 $cyan
-Rect $g 4 5 8 1 $cream
-Rect $g 4 9 8 1 $cream
-Rect $g 5 2 6 2 $steel
-Disc $g 7 7 1 $ink
-Disc $g 10 9 1 $ink
+Rect $g 16 8 32 36 $slate
+Rect $g 16 8 32 2 $cream
+Rect $g 16 36 32 2 $cream
+Rect $g 20 2 24 6 $steel
+Disc $g 28 20 2 $ink
+Disc $g 40 32 2 $ink
 Save-Icon $b "coolant"
 
-# --- machines ----------------------------------------------------------
+Write-Host "process fluid icons done."
 
+# =========================================================================
+# 12. MACHINES (item icons)
+# =========================================================================
+
+# wafer-fab: panel building, cyan rect, silver disc, steel pipe + green LEDs
 $b, $g = New-Canvas
-Rect $g 2 3 12 10 $panel
-Rect $g 2 3 12 1 $line
-Rect $g 4 5 5 5 $cyan
-Disc $g 6 7 2 $silver
-Rect $g 10 4 1 8 $steel
-Rect $g 11 4 1 1 $green
-Rect $g 11 6 1 1 $green
-Rect $g 3 11 10 1 $line
+RoundRect $g 8 8 48 40 4 $panel
+Rect $g 8 8 48 2 $line
+Rect $g 20 16 20 20 $slate
+Disc $g 30 26 4 $silver
+Rect $g 44 10 4 20 $steel
+Rect $g 48 12 2 2 $green
+Rect $g 48 16 2 2 $green
+Rect $g 8 44 48 2 $line
 Save-Icon $b "wafer-fab"
 
+# crystal-puller: panel furnace, silver cylinder, cream band, orange dot
 $b, $g = New-Canvas
-Rect $g 3 2 10 12 $panel
-Rect $g 3 2 10 1 $line
-Rect $g 5 8 6 5 $silver
-Rect $g 5 8 6 1 $cream
-Rect $g 7 2 2 7 $silver
-Disc $g 8 4 1 $orange
-Rect $g 3 13 10 1 $line
+RoundRect $g 10 8 44 40 4 $panel
+Rect $g 10 8 44 2 $line
+Rect $g 22 16 20 24 $silver
+Rect $g 22 16 20 2 $cream
+Disc $g 32 12 2 $orange
+Rect $g 8 48 48 2 $line
 Save-Icon $b "crystal-puller"
 
+# server-rack: panel case, ink rows with colored dots, line bottom
 $b, $g = New-Canvas
-Rect $g 3 1 10 14 $panel
-Rect $g 3 1 10 1 $line
-for ($y = 3; $y -le 11; $y += 3) {
-  Rect $g 4 $y 8 2 $ink
-  Rect $g 5 $y 1 1 $cyan
-  Rect $g 7 $y 1 1 $green
-  Rect $g 9 $y 1 1 $gold
+Rect $g 8 4 48 56 $ink
+Rect $g 8 4 48 2 $line
+for ($y = 12; $y -le 48; $y += 12) {
+  Rect $g 10 $y 8 2 $cyan
+  Rect $g 20 $y 8 2 $green
+  Rect $g 30 $y 8 2 $gold
+  Rect $g 40 $y 8 2 $steel
 }
-Rect $g 9 12 3 2 $line
+Rect $g 8 54 48 2 $line
 Save-Icon $b "server-rack"
 
+# assembly-fab: panel case, ink blocks left/right, cyan/gold outputs, steel base
 $b, $g = New-Canvas
-Rect $g 2 1 12 14 $panel
-Rect $g 2 1 12 1 $line
-# bare die going in, packaged chip coming out
-Rect $g 3 3 4 4 $ink
-Rect $g 4 4 2 2 $cyan
-Rect $g 9 3 4 4 $ink
-Rect $g 10 4 2 2 $gold
-Rect $g 3 8 10 1 $line
-Rect $g 5 9 6 4 $steel
-Rect $g 6 10 4 2 $green
-for ($i = 5; $i -le 10; $i += 2) { Rect $g $i 13 1 1 $steel }
+Rect $g 8 4 48 52 $panel
+Rect $g 8 4 48 2 $line
+Rect $g 10 12 4 16 $ink
+Rect $g 50 12 4 16 $ink
+Rect $g 14 22 2 4 $slate
+Rect $g 48 26 2 4 $gold
+Rect $g 10 32 8 4 $line
+Rect $g 46 36 8 4 $steel
+for ($i = 10; $i -le 50; $i += 4) { Rect $g $i 54 1 1 $steel }
 Save-Icon $b "assembly-fab"
 
+# memory-bank: ink left strip, panel right, cyan dots, gold dot
 $b, $g = New-Canvas
-Rect $g 2 3 6 10 $ink
-for ($y = 4; $y -le 11; $y += 2) { Rect $g 3 $y 4 1 $cyan }
-Rect $g 9 3 5 7 $panel
-Rect $g 10 4 3 2 $cyan
-Rect $g 10 7 1 1 $gold
-Rect $g 9 11 5 2 $line
+Rect $g 8 8 24 48 $ink
+for ($y = 12; $y -le 44; $y += 8) { Rect $g 10 $y 4 1 $slate }
+Rect $g 32 8 24 48 $panel
+Rect $g 34 12 4 4 $slate
+Rect $g 44 12 2 2 $gold
+Rect $g 8 52 48 2 $line
 Save-Icon $b "memory-bank"
 
-$b, $g = New-Canvas
-Rect $g 1 5 14 7 $green
-Rect $g 1 5 14 1 $gold
-Rect $g 1 11 14 1 $line
-for ($x = 3; $x -le 11; $x += 4) {
-  Rect $g $x 6 2 4 $ink
-  Rect $g ($x + 1) 7 1 1 $cyan
-}
-for ($x = 2; $x -le 13; $x += 2) { Rect $g $x 13 1 1 $gold }
-Save-Icon $b "sram-module"
+Write-Host "machine icons done."
 
-$b, $g = New-Canvas
-Rect $g 1 3 14 9 $green
-Rect $g 1 3 14 1 $gold
-Rect $g 1 11 14 1 $line
-for ($y = 4; $y -le 8; $y += 2) {
-  for ($x = 3; $x -le 11; $x += 3) {
-    Rect $g $x $y 2 1 $ink
-    Rect $g ($x + 1) $y 1 1 $purple
-  }
-}
-for ($x = 2; $x -le 13; $x += 2) { Rect $g $x 13 1 1 $gold }
-Save-Icon $b "dram-module"
+# =========================================================================
+# 13. MEMORY MODULES
+# =========================================================================
 
-# Memory generations: one package silhouette with a per-generation accent and
-# an increasing chip count, so the ladder reads at a glance in the inventory
-# and in the technology tree.
 $memoryGenerations = @(
-  @{ name = "sdram-module";   accent = $cyan;   rows = 2; pins = 5 }
-  @{ name = "ddr-module";     accent = $green;  rows = 2; pins = 6 }
-  @{ name = "ddr2-module";    accent = $gold;   rows = 2; pins = 6 }
-  @{ name = "ddr3-module";    accent = $orange; rows = 3; pins = 7 }
-  @{ name = "ddr4-module";    accent = $red;    rows = 3; pins = 7 }
-  @{ name = "ddr5-module";    accent = $purple; rows = 3; pins = 8 }
-  @{ name = "hbm-module";     accent = $cyan;   rows = 3; pins = 4 }
-  @{ name = "hbm3-module";    accent = $green;  rows = 4; pins = 4 }
-  @{ name = "3d-nand-module"; accent = $gold;   rows = 4; pins = 3 }
+  @{ name = "sram-module";   accent = $slate;   rows = 1; pins = 5 }
+  @{ name = "dram-module";   accent = $green;   rows = 2; pins = 6 }
+  @{ name = "sdram-module";  accent = $slateL;  rows = 2; pins = 6 }
+  @{ name = "ddr-module";    accent = $gold;    rows = 2; pins = 6 }
+  @{ name = "ddr2-module";   accent = $orange;  rows = 2; pins = 7 }
+  @{ name = "ddr3-module";   accent = $red;     rows = 3; pins = 7 }
+  @{ name = "ddr4-module";   accent = $purple;  rows = 3; pins = 8 }
+  @{ name = "ddr5-module";   accent = $burnt;   rows = 3; pins = 8 }
+  @{ name = "hbm-module";    accent = $slate;   rows = 3; pins = 4 }
+  @{ name = "hbm3-module";   accent = $green;   rows = 4; pins = 4 }
+  @{ name = "3d-nand-module";accent = $gold;    rows = 4; pins = 3 }
 )
 foreach ($gen in $memoryGenerations) {
   $b, $g = New-Canvas
-  # Package body and edge connector.
-  Rect $g 1 2 14 12 $ink
-  Rect $g 2 3 12 9 $panel
-  Rect $g 2 3 12 1 $line
-  Rect $g 2 11 12 1 $gen.accent
-  # Memory dies: more rows for the denser generations.
+  Rect $g 2 4 60 52 $ink
+  Rect $g 4 6 56 40 $panel
+  Rect $g 4 6 56 2 $line
+  Rect $g 4 44 56 2 $gen.accent
+  # Memory dies: more rows for denser generations.
   for ($r = 0; $r -lt $gen.rows; $r++) {
-    $y = 4 + $r * 2
+    $y = 10 + $r * 8
     for ($c = 0; $c -lt 3; $c++) {
-      $x = 3 + $c * 3
-      Rect $g $x $y 2 1 $silver
+      $x = 6 + $c * 14
+      Rect $g $x $y 6 4 $silver
       Rect $g ($x + 1) $y 1 1 $gen.accent
     }
   }
   # Contact pins along the bottom edge.
-  $step = [Math]::Floor(13 / $gen.pins)
-  for ($p = 0; $p -lt $gen.pins; $p++) {
-    Rect $g (2 + $p * $step) 13 1 1 $gold
-  }
+  $step = [Math]::Floor(54 / $gen.pins)
+  for ($p = 0; $p -lt $gen.pins; $p++) { Rect $g (4 + $p * $step) 54 1 2 $gold }
   Save-Icon $b $gen.name
 }
 
+Write-Host "memory module icons done."
+
+# =========================================================================
+# 14. METROLOGY
+# =========================================================================
+
+# qualification-wafer: silver wafer, panel ring, crosshair, cyan center
 $b, $g = New-Canvas
-Rect $g 1 2 14 12 $ink
-Rect $g 1 2 14 1 $line
-Rect $g 2 3 12 6 $panel
-Rect $g 3 4 4 3 $cyan
-Rect $g 8 4 5 3 $gold
-for ($x = 3; $x -le 11; $x += 3) {
-  Rect $g $x 10 2 2 $panel
-  Rect $g $x 11 1 1 $green
-}
-Rect $g 2 13 12 1 $gold
-Save-Icon $b "datacenter-lab"
-
-# --- computers ---------------------------------------------------------
-
-$b, $g = New-Canvas
-Disc $g 6 6 4 $gold
-Disc $g 6 6 1 $ink
-Disc $g 11 11 3 $steel
-Disc $g 11 11 1 $ink
-Rect $g 1 14 14 1 $line
-Rect $g 2 2 1 1 $cream
-Save-Icon $b "analytical-engine"
-
-$b, $g = New-Canvas
-Rect $g 2 2 12 12 $panel
-Rect $g 3 4 3 6 $orange
-Rect $g 8 4 3 6 $orange
-Rect $g 3 3 3 1 $cream
-Rect $g 8 3 3 1 $cream
-Rect $g 3 11 8 2 $ink
-Rect $g 4 12 2 1 $cyan
-Save-Icon $b "tube-mainframe"
-
-$b, $g = New-Canvas
-Rect $g 2 2 12 12 $ink
-Rect $g 2 2 12 1 $line
-for ($y = 4; $y -le 9; $y += 2) {
-  Rect $g 3 $y 10 1 $panel
-  Rect $g 4 $y 1 1 $cyan
-  Rect $g 6 $y 1 1 $green
-}
-Rect $g 3 12 4 1 $gold
-Rect $g 8 12 4 1 $line
-Save-Icon $b "mainframe-cluster"
-
-# --- network -----------------------------------------------------------
-
-$b, $g = New-Canvas
-Rect $g 1 1 14 14 $ink
-Rect $g 2 2 12 12 $panel
-Rect $g 2 2 12 1 $line
-Rect $g 2 7 8 1 $cyan
-Rect $g 9 7 1 6 $cyan
-Rect $g 8 12 3 1 $green
-Rect $g 1 7 1 1 $gold
-Rect $g 14 12 1 1 $gold
-Save-Icon $b "network-cable"
-
-$b, $g = New-Canvas
-Rect $g 1 3 14 10 $panel
-Rect $g 1 3 14 1 $line
-for ($x = 3; $x -le 11; $x += 4) {
-  Rect $g $x 5 2 2 $ink
-  Rect $g ($x + 1) 5 1 1 $cyan
-}
-Rect $g 2 9 12 1 $gold
-Rect $g 2 11 12 1 $line
-Save-Icon $b "network-switch"
-
-$b, $g = New-Canvas
-Rect $g 1 2 14 12 $panel
-Rect $g 1 2 14 1 $line
-Rect $g 2 5 3 1 $cyan
-Rect $g 7 7 1 7 $cyan
-Rect $g 5 6 2 1 $cyan
-Rect $g 8 6 2 1 $cyan
-Rect $g 11 5 3 1 $green
-Rect $g 7 11 1 1 $gold
-Save-Icon $b "network-router"
-
-$b, $g = New-Canvas
-Rect $g 1 1 14 12 $ink
-Rect $g 1 1 14 1 $line
-Rect $g 2 2 12 9 $panel
-Rect $g 3 8 2 1 $cyan
-Rect $g 5 6 2 3 $cyan
-Rect $g 7 7 2 2 $cyan
-Rect $g 9 4 2 5 $green
-Rect $g 6 12 4 2 $steel
-Rect $g 11 12 2 2 $line
-Save-Icon $b "network-monitor"
-
-# --- metrology ---------------------------------------------------------
-
-$b, $g = New-Canvas
-Disc $g 8 8 6 $silver
-Disc $g 8 8 5 $panel
-Rect $g 2 7 12 1 $line
-Rect $g 7 2 1 12 $line
-Rect $g 4 4 2 1 $cyan
-Rect $g 10 10 2 1 $gold
-Disc $g 8 8 1 $cyan
+ShadedDisc $g 32 32 18 $silver $cream $ink
+Disc $g 32 32 10 $panel
+Rect $g 14 32 36 1 $line
+Rect $g 32 14 1 36 $line
+Rect $g 28 12 2 1 $slate
+Rect $g 48 44 2 1 $gold
+Disc $g 32 32 2 $slate
 Save-Icon $b "qualification-wafer"
 
+# metrology-test-structure: ink card, panel grid, cyan cross, gold corner + green dot
 $b, $g = New-Canvas
-Rect $g 1 1 14 14 $ink
-Rect $g 2 2 12 12 $panel
-for ($i = 4; $i -le 11; $i += 3) { Rect $g $i 3 1 10 $line }
-Rect $g 3 3 10 1 $line
-Rect $g 3 12 10 1 $line
-Rect $g 7 3 2 10 $cyan
-Rect $g 3 7 10 2 $gold
-Rect $g 4 4 2 2 $green
+Rect $g 4 4 56 56 $ink
+Rect $g 4 4 56 2 $line
+for ($i = 12; $i -le 52; $i += 8) { Rect $g $i 4 1 44 $line }
+Rect $g 4 4 44 1 $line
+Rect $g 4 52 44 1 $line
+Rect $g 26 4 4 44 $slate
+Rect $g 4 26 44 2 $gold
+Rect $g 16 16 4 4 $green
 Save-Icon $b "metrology-test-structure"
 
+# metrology-lab: ink card, panel screen, cyan block, ink lens + gold/green tabs
 $b, $g = New-Canvas
-Rect $g 1 1 14 14 $ink
-Rect $g 1 1 14 1 $line
-Rect $g 2 2 12 8 $panel
-Rect $g 3 3 10 6 $cyan
-Rect $g 7 2 1 8 $ink
-Rect $g 2 6 12 1 $ink
-Rect $g 2 11 12 2 $steel
-Rect $g 4 12 2 1 $gold
-Rect $g 10 12 2 1 $green
+Rect $g 4 4 56 44 $ink
+Rect $g 4 4 56 2 $line
+Rect $g 8 8 40 24 $panel
+Rect $g 26 4 1 24 $ink
+Rect $g 8 28 44 2 $ink
+Rect $g 8 30 44 10 $steel
+Rect $g 14 34 2 4 $gold
+Rect $g 48 34 2 4 $green
 Save-Icon $b "metrology-lab"
 
-# --- QLN ---------------------------------------------------------------
+Write-Host "metrology icons done."
 
+# =========================================================================
+# 15. QLN NODES & STORAGE
+# =========================================================================
+
+# qln-import-node: panel box, ink screen, cyan flow-in, gold side rail + cyan arrow
 $b, $g = New-Canvas
-Rect $g 1 3 14 10 $panel
-Rect $g 1 3 14 1 $line
-Rect $g 3 5 8 7 $ink
-Rect $g 6 6 2 4 $cyan
-Poly $g @(4,9,9,4,14,9) $cyan
-Rect $g 12 3 1 9 $gold
+Rect $g 4 8 56 40 $panel
+Rect $g 4 8 56 2 $line
+Rect $g 8 16 32 24 $ink
+Rect $g 16 20 12 8 $slate
+Poly $g @(8,32,16,20,26,32) $slate
+Rect $g 52 8 2 40 $gold
 Save-Icon $b "qln-import-node"
 
+# qln-export-node: panel box, ink screen, cyan flow-out, gold side rail + cyan arrow
 $b, $g = New-Canvas
-Rect $g 1 3 14 10 $panel
-Rect $g 1 3 14 1 $line
-Rect $g 3 5 8 7 $ink
-Rect $g 6 8 2 4 $cyan
-Poly $g @(4,7,9,12,14,7) $cyan
-Rect $g 12 3 1 9 $gold
+Rect $g 4 8 56 40 $panel
+Rect $g 4 8 56 2 $line
+Rect $g 24 16 32 24 $ink
+Rect $g 36 20 12 8 $slate
+Poly $g @(8,32,16,20,26,32) $slate
+Rect $g 10 8 2 40 $gold
 Save-Icon $b "qln-export-node"
 
+# qln-provider-node: panel disk, ink core, green dots + green arrow + gold rails
 $b, $g = New-Canvas
-Disc $g 8 8 6 $panel
-Disc $g 8 8 4 $ink
-Rect $g 6 5 1 3 $green
-Rect $g 9 5 1 3 $green
-Poly $g @(5,8,8,4,11,8) $green
-Rect $g 3 8 1 5 $gold
-Rect $g 12 8 1 5 $gold
+ShadedDisc $g 32 32 18 $panel $silver $ink
+Disc $g 32 32 10 $ink
+Rect $g 26 16 2 6 $green
+Rect $g 36 16 2 6 $green
+Poly $g @(28,22,32,14,36,22) $green
+Rect $g 4 32 2 10 $gold
+Rect $g 58 32 2 10 $gold
 Save-Icon $b "qln-provider-node"
 
+# qln-requester-node: panel disk, ink core, cyan dots + cyan arrow + gold rails
 $b, $g = New-Canvas
-Disc $g 8 8 6 $panel
-Disc $g 8 8 4 $ink
-Rect $g 6 5 1 3 $cyan
-Rect $g 9 5 1 3 $cyan
-Poly $g @(5,7,8,11,11,7) $cyan
-Rect $g 3 8 1 5 $gold
-Rect $g 12 8 1 5 $gold
+ShadedDisc $g 32 32 18 $panel $silver $ink
+Disc $g 32 32 10 $ink
+Rect $g 26 16 2 6 $slate
+Rect $g 36 16 2 6 $slate
+Poly $g @(28,26,32,36,36,26) $slate
+Rect $g 4 32 2 10 $gold
+Rect $g 58 32 2 10 $gold
 Save-Icon $b "qln-requester-node"
 
+# qln-terminal: ink card, panel top, cyan line + silver bars + gold tab + line bottom
 $b, $g = New-Canvas
-Rect $g 1 2 14 12 $ink
-Rect $g 2 3 12 9 $panel
-Rect $g 2 2 12 1 $line
-Rect $g 4 5 8 1 $cyan
-Rect $g 4 7 6 1 $silver
-Rect $g 4 9 7 1 $silver
-Rect $g 12 10 1 2 $gold
-Rect $g 2 12 10 1 $line
+Rect $g 4 4 56 50 $ink
+Rect $g 4 4 56 2 $line
+Rect $g 8 8 48 1 $cyan
+Rect $g 8 12 10 1 $silver
+Rect $g 8 16 12 1 $silver
+Rect $g 8 20 14 1 $silver
+Rect $g 48 24 2 8 $gold
+Rect $g 4 52 48 2 $line
 Save-Icon $b "qln-terminal"
 
+# qln-storage-drive: ink card, panel bands with cyan/green/gold dots
 $b, $g = New-Canvas
-Rect $g 2 2 12 3 $panel
-Rect $g 2 6 12 3 $panel
-Rect $g 2 10 12 3 $panel
-Rect $g 2 2 12 1 $line
-Rect $g 2 6 12 1 $line
-Rect $g 2 10 12 1 $line
-for ($x = 4; $x -le 11; $x += 3) {
-  Rect $g $x 3 2 1 $cyan
-  Rect $g $x 7 2 1 $green
-  Rect $g $x 11 2 1 $gold
+Rect $g 8 4 48 8 $panel
+Rect $g 8 4 48 2 $line
+Rect $g 8 12 48 8 $panel
+Rect $g 8 12 48 2 $line
+Rect $g 8 20 48 8 $panel
+Rect $g 8 20 48 2 $line
+for ($x = 10; $x -le 50; $x += 10) {
+  Rect $g $x 6 2 1 $slate
+  Rect $g $x 14 2 1 $green
+  Rect $g $x 22 2 1 $gold
 }
+Rect $g 4 40 14 1 $line
 Save-Icon $b "qln-storage-drive"
 
+# construction-core: panel box, ink screen, orange bars, steel corners
 $b, $g = New-Canvas
-Rect $g 3 3 10 10 $panel
-Rect $g 3 3 10 1 $line
-Rect $g 5 5 6 6 $ink
-Rect $g 6 6 4 1 $orange
-Rect $g 6 8 4 2 $orange
-Rect $g 1 7 2 2 $steel
-Rect $g 13 7 2 2 $steel
-Rect $g 7 1 2 2 $steel
-Rect $g 7 13 2 2 $steel
+Rect $g 8 8 48 48 4 $panel
+Rect $g 8 8 48 2 $line
+Rect $g 20 20 24 24 $ink
+Rect $g 24 24 16 4 $orange
+Rect $g 24 30 16 2 $orange
+Rect $g 10 10 4 4 $steel
+Rect $g 50 10 4 4 $steel
+Rect $g 10 50 4 4 $steel
+Rect $g 50 50 4 4 $steel
 Save-Icon $b "construction-core"
 
+# quantum-entanglement-core: purple + cyan discs, ink cores, gold center, silver rails
 $b, $g = New-Canvas
-Disc $g 6 8 4 $purple
-Disc $g 10 8 4 $cyan
-Disc $g 6 8 3 $ink
-Disc $g 10 8 3 $ink
-Disc $g 8 8 1 $gold
-Rect $g 1 7 2 2 $silver
-Rect $g 13 7 2 2 $silver
+Disc $g 22 32 10 $purple
+Disc $g 42 32 10 $slate
+Disc $g 22 32 4 $ink
+Disc $g 42 32 4 $ink
+Disc $g 32 32 2 $gold
+Rect $g 4 30 2 4 $silver
+Rect $g 58 30 2 4 $silver
 Save-Icon $b "quantum-entanglement-core"
 
+Write-Host "qln icons done."
+
+# =========================================================================
+# 16. FOUP & NETWORK EQUIPMENT
+# =========================================================================
+
+# foup-dock: panel base, silver carrier, cream top, ink screen, steel sides
 $b, $g = New-Canvas
-Rect $g 2 11 12 2 $panel
-Rect $g 2 11 12 1 $line
-Rect $g 5 4 6 7 $silver
-Rect $g 5 4 6 1 $cream
-Rect $g 6 6 4 3 $ink
-Rect $g 7 7 2 1 $cyan
-Rect $g 3 9 1 3 $steel
-Rect $g 12 9 1 3 $steel
+Rect $g 8 40 48 12 $panel
+Rect $g 8 40 48 2 $line
+Rect $g 20 16 24 20 $silver
+Rect $g 20 16 24 2 $cream
+Rect $g 22 18 20 4 $ink
+Rect $g 24 22 16 2 $slate
+Rect $g 6 34 2 6 $steel
+Rect $g 56 34 2 6 $steel
 Save-Icon $b "foup-dock"
 
+# network-repeater: steel sides, panel center, cyan top, ink dot + gold lines
 $b, $g = New-Canvas
-Rect $g 1 7 4 2 $steel
-Rect $g 11 7 4 2 $steel
-Rect $g 5 6 6 4 $panel
-Rect $g 5 6 6 1 $cyan
-Rect $g 7 3 2 3 $gold
-Poly $g @(9,3,12,1,12,4) $gold
-Rect $g 3 9 2 1 $green
-Rect $g 11 9 2 1 $green
+Rect $g 4 40 8 2 $steel
+Rect $g 52 40 8 2 $steel
+Rect $g 12 20 40 4 $panel
+Rect $g 12 20 40 2 $cyan
+Rect $g 22 12 4 8 $gold
+Poly $g @(24,10,28,6,28,10) $gold
+Line $g 4 36 2 30 $gold
+Line $g 12 36 14 30 $gold
+Line $g 52 36 54 30 $gold
+Line $g 60 36 58 30 $gold
 Save-Icon $b "network-repeater"
 
+# wireless-access-point: steel antenna, panel base, cyan disc + gold broadcast lines
 $b, $g = New-Canvas
-Rect $g 7 7 2 6 $steel
-Rect $g 5 13 6 2 $panel
-Disc $g 8 5 2 $cyan
-Disc $g 8 5 1 $ink
-Line $g 3 5 1 3 $gold
-Line $g 13 5 15 3 $gold
-Line $g 4 8 2 10 $gold
-Line $g 12 8 14 10 $gold
+Rect $g 28 34 8 6 $steel
+Rect $g 28 30 8 4 $panel
+Disc $g 32 14 4 $slate
+Disc $g 32 14 2 $ink
+Line $g 4 28 2 20 $gold
+Line $g 12 30 14 22 $gold
+Line $g 52 30 50 22 $gold
+Line $g 60 28 58 20 $gold
 Save-Icon $b "wireless-access-point"
 
+# foup: silver carrier, cream top/bottom, panel bands, ink bottom dots + cyan center
 $b, $g = New-Canvas
-Rect $g 3 2 10 12 $silver
-Rect $g 3 2 10 1 $cream
-Rect $g 3 5 10 1 $panel
-Rect $g 3 9 10 1 $panel
-Rect $g 4 13 2 1 $ink
-Rect $g 10 13 2 1 $ink
-Rect $g 7 4 2 6 $cyan
+Rect $g 22 4 20 24 $silver
+Rect $g 22 4 20 2 $cream
+Rect $g 22 26 20 2 $panel
+Rect $g 26 28 12 2 $panel
+Rect $g 26 30 12 1 $ink
+Rect $g 8 38 2 1 $ink
+Rect $g 54 38 2 1 $ink
+Rect $g 28 10 8 4 $cyan
 Save-Icon $b "foup"
 
+# neural-processor: ink card, gold pins, cyan corner dots, gold center + lines
 $b, $g = New-Canvas
-Rect $g 2 2 12 12 $ink
-for ($i = 4; $i -le 11; $i += 2) {
-  Rect $g 1 $i 1 1 $gold
-  Rect $g 14 $i 1 1 $gold
+Rect $g 10 10 44 44 $ink
+for ($i = 12; $i -le 52; $i += 4) {
+  Rect $g 10 $i 1 1 $gold
+  Rect $g 53 $i 1 1 $gold
+  Rect $g $i 10 1 1 $gold
+  Rect $g $i 53 1 1 $gold
 }
-Disc $g 5 5 1 $cyan
-Disc $g 8 5 1 $cyan
-Disc $g 11 5 1 $cyan
-Disc $g 5 8 1 $cyan
-Disc $g 8 8 1 $gold
-Disc $g 11 8 1 $cyan
-Disc $g 5 11 1 $cyan
-Disc $g 8 11 1 $cyan
-Disc $g 11 11 1 $cyan
-Line $g 5 5 8 5 $line
-Line $g 8 5 11 5 $line
-Line $g 5 11 8 11 $line
-Line $g 8 11 11 11 $line
+Disc $g 14 14 2 $slate
+Disc $g 50 14 2 $slate
+Disc $g 14 50 2 $slate
+Disc $g 50 50 2 $slate
+Disc $g 32 14 2 $gold
+Disc $g 32 50 2 $gold
+Line $g 14 14 32 32 $line
+Line $g 32 32 50 50 $line
 Save-Icon $b "neural-processor"
 
-# --- contact sheet -----------------------------------------------------
+Write-Host "foup & network icons done."
+
+# =========================================================================
+# 17B. NETWORK CABLES
+# =========================================================================
+
+# network-cable: twisted pair, copper/orange pair + black jacket
+$b, $g = New-Canvas
+Rect $g 10 26 44 12 $orange
+Rect $g 10 28 44 8 $burnt
+Rect $g 8 24 4 16 $ink
+Rect $g 52 24 4 16 $ink
+Disc $g 12 32 3 $ink
+Disc $g 52 32 3 $ink
+Line $g 10 32 54 32 $orange 1
+Save-Icon $b "network-cable"
+
+# network-coaxial-cable: thick copper cable, steel shielding, gold center pin
+$b, $g = New-Canvas
+Rect $g 12 22 40 20 $orange
+Rect $g 10 24 44 16 $burnt
+Rect $g 26 26 12 12 $steel
+Disc $g 32 32 4 $ink
+Disc $g 32 32 2 $gold
+Rect $g 8 24 2 16 $ink
+Rect $g 54 24 2 16 $ink
+Save-Icon $b "network-coaxial-cable"
+
+# network-fiber-mm-cable: glass/cyan fiber, panel sheath, ink core
+$b, $g = New-Canvas
+Rect $g 14 24 36 16 $slate
+Rect $g 12 26 40 12 $panel
+Rect $g 28 28 8 8 $ink
+Disc $g 32 32 2 $cream
+Rect $g 8 26 2 12 $ink
+Rect $g 54 26 2 12 $ink
+Save-Icon $b "network-fiber-mm-cable"
+
+# network-fiber-sm-cable: purple glass fiber, ink sheath, silver core
+$b, $g = New-Canvas
+Rect $g 14 24 36 16 $purple
+Rect $g 12 26 40 12 $ink
+Rect $g 28 28 8 8 $silver
+Disc $g 32 32 2 $cream
+Rect $g 8 26 2 12 $ink
+Rect $g 54 26 2 12 $ink
+Save-Icon $b "network-fiber-sm-cable"
+
+Write-Host "network cable icons done."
+
+# =========================================================================
+# 17. CONTACT SHEET
+# =========================================================================
 
 $order = @(
   "punched-card", "punched-tape", "magnetic-tape", "disk-pack",
@@ -1218,16 +1339,16 @@ $order = @(
   "bare-die", "vacuum-tube", "discrete-transistor", "integrated-circuit",
   "microprocessor", "photoresist", "etchant", "wafer-fab",
   "crystal-puller", "server-rack", "assembly-fab", "memory-bank",
-  "sram-module", "dram-module", "analytical-engine", "tube-mainframe",
-  "sdram-module", "ddr-module", "ddr2-module", "ddr3-module", "ddr4-module",
-  "ddr5-module", "hbm-module", "hbm3-module", "3d-nand-module",
+  "sram-module", "dram-module", "sdram-module", "ddr-module",
+  "ddr2-module", "ddr3-module", "ddr4-module", "ddr5-module",
+  "hbm-module", "hbm3-module", "3d-nand-module",
   "mainframe-cluster", "phase-shift-mask", "cmp-slurry", "low-k-dielectric",
   "cooling-unit", "vlsi-wafer", "vlsi-die", "system-on-chip",
   "chiplet", "hbm-stack", "gpu", "multi-core-cpu",
   "vlsi-fab", "cooling-tower", "datacenter", "datacenter-lab",
   "coolant", "superconductor", "qubit", "error-corrected-qubit",
   "quantum-processor", "qubit-array", "quantum-fab", "cryostat",
-  "cryogen", "answer-engine", "network-cable", "network-switch",
+  "cryogen", "answer-engine", "network-cable", "network-coaxial-cable", "network-fiber-mm-cable", "network-fiber-sm-cable", "network-switch",
   "optical-disc", "hbm-science",
   "network-router", "network-monitor",
   "qualification-wafer", "metrology-test-structure", "metrology-lab",
@@ -1246,7 +1367,8 @@ $cols = 8
 $rows = [int][Math]::Ceiling($order.Count / $cols)
 $sheet = New-Object System.Drawing.Bitmap ($cols * 64), ($rows * 64)
 $sg = [System.Drawing.Graphics]::FromImage($sheet)
-$sg.Clear([System.Drawing.ColorTranslator]::FromHtml("#0c1116"))
+$sheetBg = $ink
+$sg.Clear($sheetBg)
 for ($i = 0; $i -lt $order.Count; $i++) {
   $img = [System.Drawing.Image]::FromFile((Join-Path $outDir ($order[$i] + ".png")))
   $x = ($i % $cols) * 64
@@ -1261,7 +1383,9 @@ $sg.Dispose(); $sheet.Dispose()
 Write-Host "Wrote $($order.Count) icons to $outDir"
 Write-Host "Contact sheet: $sheetPath"
 
-# --- technology icons (256x256, nearest-neighbour upscale) --------------
+# =========================================================================
+# 18. TECHNOLOGY ICONS (256x256)
+# =========================================================================
 
 $techDir = Join-Path $root "graphics\technology"
 New-Item -ItemType Directory -Force -Path $techDir | Out-Null
@@ -1334,11 +1458,16 @@ foreach ($tech in $techIcons.Keys) {
   $g.Dispose(); $bmp.Dispose(); $src.Dispose()
 }
 
-# --- mod thumbnail (144x144) -------------------------------------------
+Write-Host "Wrote technology icons to $techDir"
+
+# =========================================================================
+# 19. MOD THUMBNAIL (144x144)
+# =========================================================================
 
 $thumb = New-Object System.Drawing.Bitmap 144, 144
 $tg = [System.Drawing.Graphics]::FromImage($thumb)
-$tg.Clear([System.Drawing.ColorTranslator]::FromHtml("#0c1116"))
+$thumbBg = $ink
+$tg.Clear($thumbBg)
 $tg.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
 $thumbIcons = @("answer-engine", "quantum-processor", "cryostat", "qubit-array")
 for ($i = 0; $i -lt 4; $i++) {
@@ -1351,25 +1480,37 @@ for ($i = 0; $i -lt 4; $i++) {
 $thumb.Save((Join-Path $root "thumbnail.png"), [System.Drawing.Imaging.ImageFormat]::Png)
 $tg.Dispose(); $thumb.Dispose()
 
-# --- victory image (400x600 portrait) ----------------------------------
+Write-Host "Wrote thumbnail to $(Join-Path $root 'thumbnail.png')"
+
+# =========================================================================
+# 20. VICTORY IMAGE (400x600 portrait)
+# =========================================================================
 
 $ending = New-Object System.Drawing.Bitmap 400, 600
 $eg = [System.Drawing.Graphics]::FromImage($ending)
-$eg.Clear((Col "#080c12"))
+$endingBgHex = "#080c12"
+$endingBg = Col $endingBgHex
+$eg.Clear($endingBg)
 $eg.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
 
-$goldPen = New-Object System.Drawing.Pen -ArgumentList (Col "#e0b040"), 4
+$cGold = Col "#e0b040"
+$cTrace = Col "#1d3a46"
+$cGlow = Col "#12222b"
+$cTitle = Col "#e8dcc0"
+$cSmall = Col "#7d8b99"
+
+$goldPen = New-Object System.Drawing.Pen -ArgumentList $cGold, 4
 $eg.DrawRectangle($goldPen, 8, 8, 384, 584)
 $goldPen.Dispose()
 
-$tracePen = New-Object System.Drawing.Pen -ArgumentList (Col "#1d3a46"), 2
+$tracePen = New-Object System.Drawing.Pen -ArgumentList $cTrace, 2
 for ($y = 36; $y -le 564; $y += 48) {
   $eg.DrawLine($tracePen, 20, $y, 120, $y)
   $eg.DrawLine($tracePen, 280, $y, 380, $y)
 }
 $tracePen.Dispose()
 
-$glow = New-Object System.Drawing.SolidBrush -ArgumentList (Col "#12222b")
+$glow = New-Object System.Drawing.SolidBrush -ArgumentList $cGlow
 $eg.FillRectangle($glow, 42, 150, 316, 280)
 $glow.Dispose()
 
@@ -1378,17 +1519,17 @@ $center.Alignment = [System.Drawing.StringAlignment]::Center
 $center.LineAlignment = [System.Drawing.StringAlignment]::Center
 
 $bigFont = New-Object System.Drawing.Font -ArgumentList @("Consolas", [single]200, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
-$bigBrush = New-Object System.Drawing.SolidBrush -ArgumentList (Col "#e0b040")
+$bigBrush = New-Object System.Drawing.SolidBrush -ArgumentList $cGold
 $eg.DrawString("42", $bigFont, $bigBrush, (New-Object System.Drawing.RectangleF(0, 150, 400, 280)), $center)
 $bigBrush.Dispose(); $bigFont.Dispose()
 
 $titleFont = New-Object System.Drawing.Font -ArgumentList @("Consolas", [single]34, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
-$titleBrush = New-Object System.Drawing.SolidBrush -ArgumentList (Col "#e8dcc0")
+$titleBrush = New-Object System.Drawing.SolidBrush -ArgumentList $cTitle
 $eg.DrawString("THE ANSWER", $titleFont, $titleBrush, (New-Object System.Drawing.RectangleF(0, 440, 400, 50)), $center)
 $titleBrush.Dispose(); $titleFont.Dispose()
 
 $smallFont = New-Object System.Drawing.Font -ArgumentList @("Consolas", [single]17, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
-$smallBrush = New-Object System.Drawing.SolidBrush -ArgumentList (Col "#7d8b99")
+$smallBrush = New-Object System.Drawing.SolidBrush -ArgumentList $cSmall
 $eg.DrawString("42 minutes. Nine workloads. One question.", $smallFont, $smallBrush, (New-Object System.Drawing.RectangleF(0, 500, 400, 30)), $center)
 $eg.DrawString("DON'T PANIC", $smallFont, $smallBrush, (New-Object System.Drawing.RectangleF(0, 540, 400, 30)), $center)
 $smallBrush.Dispose(); $smallFont.Dispose()
@@ -1397,6 +1538,6 @@ $center.Dispose()
 $ending.Save((Join-Path $root "graphics\answer-ending.png"), [System.Drawing.Imaging.ImageFormat]::Png)
 $eg.Dispose(); $ending.Dispose()
 
-Write-Host "Wrote technology icons to $techDir"
-Write-Host "Wrote thumbnail to $(Join-Path $root 'thumbnail.png')"
 Write-Host "Wrote victory image to $(Join-Path $root 'graphics/answer-ending.png')"
+Write-Host "All graphics generated."
+

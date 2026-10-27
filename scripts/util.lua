@@ -241,6 +241,64 @@ function M.set_world_picture(entity, donor, tint)
   entity.picture = picture
 end
 
+--- Set a container's world picture to a generated entity sprite in
+--- graphics/entity/<name>.png. The width/height must match the PNG; scale
+--- shrinks the sprite onto the tile footprint.
+function M.set_custom_picture(entity, name, width, height, scale, shift)
+  entity.picture = {
+    filename = "__chiptorio__/graphics/entity/" .. name .. ".png",
+    width = width,
+    height = height,
+    scale = scale or 0.5,
+    shift = shift or { 0, 0 },
+  }
+end
+
+--- Set an assembling-machine / furnace graphics_set animation to a generated
+--- entity sprite, replacing the cloned base sprite entirely.
+function M.set_custom_graphics(entity, name, width, height, scale, shift)
+  local gs = entity.graphics_set or {}
+  gs.animation = {
+    filename = "__chiptorio__/graphics/entity/" .. name .. ".png",
+    width = width,
+    height = height,
+    scale = scale or 0.5,
+    shift = shift or { 0, 0 },
+  }
+  entity.graphics_set = gs
+end
+
+--- Set a lab clone's on_animation and off_animation to a generated entity
+--- sprite, replacing the cloned base animation entirely.
+function M.set_custom_animation(entity, name, width, height, scale, shift)
+  local sprite = {
+    filename = "__chiptorio__/graphics/entity/" .. name .. ".png",
+    width = width,
+    height = height,
+    scale = scale or 0.5,
+    shift = shift or { 0, 0 },
+  }
+  entity.on_animation = sprite
+  entity.off_animation = sprite
+end
+
+--- Set an accumulator clone's chargable_graphics (picture / charge /
+--- discharge) to a generated entity sprite.
+function M.set_custom_accumulator(entity, name, width, height, scale, shift)
+  local sprite = {
+    filename = "__chiptorio__/graphics/entity/" .. name .. ".png",
+    width = width,
+    height = height,
+    scale = scale or 0.5,
+    shift = shift or { 0, 0 },
+  }
+  local cg = entity.chargable_graphics or {}
+  cg.picture = sprite
+  cg.charge_animation = sprite
+  cg.discharge_animation = sprite
+  entity.chargable_graphics = cg
+end
+
 --- Shortcut for a crafting recipe.
 --- 2.1 merged RecipePrototype.category into a `categories` list, so accept
 --- the friendlier single-category form here.

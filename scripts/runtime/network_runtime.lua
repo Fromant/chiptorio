@@ -1,8 +1,8 @@
--- Runtime: network topology cache, overlay and monitor GUI.
+-- Runtime: network topology cache, overlay and monitor GUI (physical layer).
 --
--- The topology maths live in scripts/runtime/network_graph.lua and are pure.
--- This module is the only network code that reads entities and writes
--- `storage`. It owns three things:
+-- DESIGN §5.2. The topology maths live in scripts/runtime/network_graph.lua
+-- and are pure. This module is the only network code that reads entities and
+-- writes `storage`. It owns three things:
 --   1. a chunk index, so a rebuild only scans chunks that can hold wiring;
 --   2. the cached graph, rebuilt on the 60-tick dispatcher after a dirty mark;
 --   3. the overlay rendering and the monitor window.
@@ -17,24 +17,43 @@ local qmeta = require("scripts.qln_meta")
 local M = {}
 
 local CHUNK = 32
--- A device can attach to wiring in a neighbouring chunk: a cable reaches two
--- tiles, a repeater eight and a wireless access point sixteen. Scanning only
--- the tracked chunk would therefore miss a lab on the far side of a chunk
--- border, and a device the graph never sees is never paused. Buffer every
--- scan by the longest reach.
+-- A device can attach to wiring in a neighbouring chunk: a cable reaches one
+-- tile (adjacency only), a router's WiFi reaches sixteen. Buffer every scan by
+-- the longest reach.
 local SCAN_MARGIN = qmeta.WIRELESS_RANGE or 16
 local MAX_OVERLAY_LINES = 4000
-local MAX_MONITOR_SUBNETS = 24
+local MAX_MONITOR_NETWORKS = 24
 
 local CABLE = "network-cable"
+local COAXIAL = "network-coaxial-cable"
+local FIBER_MM = "network-fiber-mm-cable"
+local FIBER_SM = "network-fiber-sm-cable"
 local SWITCH = "network-switch"
 local ROUTER = "network-router"
 local MONITOR = "network-monitor"
 local METROLOGY = "metrology-lab"
-local REPEATER = "network-repeater"
-local WIRELESS = "wireless-access-point"
 local ANSWER = "answer-engine"
 
+local PROVIDER_NAMES = { "server-rack", "memory-bank", "datacenter" }
+
+local LAB_NAMES = {}
+for name in pairs(meta.LAB_DEMAND) do
+  LAB_NAMES[#LAB_NAMES + 1] = name
+end
+table.sort(LAB_NAMES)
+
+-- Every entity the network layer tracks. Repeater is dropped; it is folded
+-- into the switch's junction-box role.
+local NETWORK_NAMES = { CABLE, COAXIAL, FIBER_MM, FIBER_SM, SWITCH, ROUTER, MONITOR, METROLOGY, ANSWER }
+for _, name in ipairs(PROVIDER_NAMES) do
+  NETWORK_NAMES[#NETWORK_NAMES + 1] = name
+end
+for _, name in ipairs(LAB_NAMES) do
+  NETWORK_NAMES[#NETWORK_NAMES + 1] = name
+end
+
+-- QLN node names are tracked by qln_runtime.lua but also scanned here so they
+-- attach to the network graph. qln_runtime registers its own names separately.
 local QLN_NODE_NAMES = {
   "qln-import-node",
   "qln-export-node",
@@ -46,38 +65,20 @@ local QLN_NODE_NAMES = {
   "foup-dock",
   "quantum-entanglement-core",
 }
-
-local PROVIDER_NAMES = { "server-rack", "memory-bank", "datacenter" }
-
-local LAB_NAMES = {}
-for name in pairs(meta.LAB_DEMAND) do
-  LAB_NAMES[#LAB_NAMES + 1] = name
-end
-table.sort(LAB_NAMES)
-
-local NETWORK_NAMES = { CABLE, SWITCH, ROUTER, MONITOR, METROLOGY, REPEATER, WIRELESS, ANSWER }
-for _, name in ipairs(PROVIDER_NAMES) do
-  NETWORK_NAMES[#NETWORK_NAMES + 1] = name
-end
-for _, name in ipairs(LAB_NAMES) do
-  NETWORK_NAMES[#NETWORK_NAMES + 1] = name
-end
 for _, name in ipairs(QLN_NODE_NAMES) do
   NETWORK_NAMES[#NETWORK_NAMES + 1] = name
 end
 
--- Which graph role an entity has. A provider contributes compute, memory and
--- bandwidth; a lab is a client that consumes compute; a Metrology Lab is a
--- client that analyses pilot wafers (qualification_runtime.lua reads it).
--- Everything else is wiring.
+-- Which graph role an entity has.
 local NETWORK_KINDS = {
   [CABLE] = "cable",
+  [COAXIAL] = "cable",
+  [FIBER_MM] = "cable",
+  [FIBER_SM] = "cable",
   [SWITCH] = "switch",
   [ROUTER] = "router",
   [MONITOR] = "monitor",
   [METROLOGY] = "metrology",
-  [REPEATER] = "switch",
-  [WIRELESS] = "switch",
   [ANSWER] = "answer",
 }
 for _, name in ipairs(PROVIDER_NAMES) do
@@ -90,14 +91,12 @@ for _, name in ipairs(QLN_NODE_NAMES) do
   NETWORK_KINDS[name] = name == "qln-storage-drive" and "qln-drive" or "qln"
 end
 
--- Capacity a prototype contributes to its subnet. Providers are built from
--- their module inventory in provider_descriptor() instead of a static profile.
+-- Static capacity a prototype contributes. Providers are built from their
+-- module inventory in provider_descriptor() instead of a static profile.
 local PROFILES = {
   [SWITCH] = { bandwidth = 100 },
   [ROUTER] = { bandwidth = 250 },
   [MONITOR] = { power = 2 },
-  [REPEATER] = { bandwidth = 0 },
-  [WIRELESS] = { bandwidth = 0 },
 }
 
 local SUBNET_COLORS = {
@@ -110,12 +109,26 @@ local SUBNET_COLORS = {
 }
 
 local ROUTER_COLOR = { r = 1.00, g = 0.70, b = 0.20 }
+local SWITCH_COLOR = { r = 0.55, g = 0.85, b = 1.00 }
 local ALERT_COLOR = { r = 0.95, g = 0.30, b = 0.30 }
+
+-- Cable tier colors for the overlay. Each tier gets a distinct color so the
+-- weakest-link rule is visible at a glance.
+local CABLE_COLORS = {
+  ["network-cable"] = { r = 0.85, g = 0.55, b = 0.30 },
+  ["network-coaxial-cable"] = { r = 0.20, g = 0.60, b = 0.95 },
+  ["network-fiber-mm-cable"] = { r = 0.40, g = 0.95, b = 0.40 },
+  ["network-fiber-sm-cable"] = { r = 0.70, g = 0.40, b = 0.95 },
+}
 
 local EMPTY_GRAPH = graph_builder.build({})
 
 local function empty_graph()
   return EMPTY_GRAPH
+end
+
+local function tile_key(x, y)
+  return x .. ":" .. y
 end
 
 local function is_network_entity(entity)
@@ -125,7 +138,7 @@ end
 local function init_storage()
   storage.network = storage.network or {}
   local network = storage.network
-  network.version = 1
+  network.version = 2
   network.dirty = network.dirty ~= false
   network.chunks = network.chunks or {}
   network.graphs = network.graphs or {}
@@ -171,6 +184,7 @@ local function new_device(entity, kind)
     force_index = entity.force and entity.force.index or nil,
     x = entity.position.x,
     y = entity.position.y,
+    direction = entity.direction or 0,
     compute = 0,
     scalar = 0,
     vector = 0,
@@ -206,9 +220,9 @@ local function add_profile(device, profile, count, multiplier)
   end
 end
 
---- Force-wide compute and power multipliers from completed half-nodes. The
---- qualification runtime is the only writer; this module reads the table while
---- describing providers so a rebuilt graph picks the new values up.
+-- Force-wide compute and power multipliers from completed half-nodes. The
+-- qualification runtime is the only writer; this module reads the table while
+-- describing providers so a rebuilt graph picks the new values up.
 function M.set_chip_multipliers(force_index, bonus)
   init_storage()
   bonus = bonus or {}
@@ -225,8 +239,8 @@ function M.chip_multipliers(force_index)
 end
 
 --- Read a provider's module inventory and turn it into capacities. Only the
---- first `computer_slots` computers and `memory_slots` memory modules count;
---- extra modules are stored but ignored, so the physical slot count is the limit.
+-- first `computer_slots` computers and `memory_slots` memory modules count;
+-- extra modules are stored but ignored, so the physical slot count is the limit.
 local function provider_descriptor(entity)
   local profile = meta.PROVIDERS[entity.name]
   if not profile then
@@ -236,10 +250,9 @@ local function provider_descriptor(entity)
   local multiplier = M.chip_multipliers(entity.force and entity.force.index or 0)
   local power_scale = multiplier.power or 1
 
-  -- Infinite-research chip-efficiency reduces power and heat; cooling-efficiency
-  -- increases cooling capacity. Both are force-level, read from storage.
   local force_index = entity.force and entity.force.index or 0
-  local infinite = storage.research.infinite_multipliers[force_index] or {}
+  local infinite = storage.research and storage.research.infinite_multipliers
+    and storage.research.infinite_multipliers[force_index] or {}
   local efficiency_mult = infinite["chip-efficiency"] or 1
   local cooling_mult = infinite["cooling-efficiency"] or 1
 
@@ -293,8 +306,8 @@ local function lab_descriptor(entity)
 end
 
 --- A Metrology Lab is a network client: it needs power and, for the later
---- half-nodes, a network that meets the qualification gate. It contributes no
---- capacity and consumes no research compute.
+-- half-nodes, a network that meets the qualification gate. It contributes no
+-- capacity and consumes no research compute.
 local function metrology_descriptor(entity)
   local device = new_device(entity, "metrology")
   device.demand_compute = 0
@@ -303,8 +316,8 @@ local function metrology_descriptor(entity)
 end
 
 --- A Storage Drive contributes QLN item cells, not research memory. It is a
---- lab clone with four memory slots; extra modules beyond the slot count are
---- stored but ignored, exactly like a provider.
+-- lab clone with four memory slots; extra modules beyond the slot count are
+-- stored but ignored, exactly like a provider.
 local function qln_drive_descriptor(entity)
   local device = new_device(entity, "qln-drive")
   device.qln_cells = 0
@@ -340,20 +353,20 @@ local function generic_descriptor(entity, kind)
   local device = new_device(entity, kind)
   device.bandwidth = profile.bandwidth or 0
   device.power = profile.power or 0
-  if entity.name == WIRELESS then
-    device.wireless_range = qmeta.WIRELESS_RANGE
-  elseif entity.name == REPEATER then
-    device.reach = qmeta.REPEATER_REACH
+  if entity.name == ROUTER then
+    device.wireless_reach = qmeta.WIRELESS_RANGE or 16
   end
   return device
 end
 
+--- Collect entities from scanned chunks and turn them into graph descriptors.
+-- Cables carry their tier. Switches and routers carry their direction for
+-- 3×2 footprint computation.
 local function rebuild_surface(surface)
   local chunks = storage.network.chunks[surface.index]
   local cables = {}
   local devices = {}
   local seen = {}
-  local found = {}
 
   if chunks then
     for _, chunk in pairs(chunks) do
@@ -364,9 +377,30 @@ local function rebuild_surface(surface)
       for _, entity in ipairs(surface.find_entities_filtered({ area = area, name = NETWORK_NAMES })) do
         if entity.valid and NETWORK_KINDS[entity.name] and not seen[entity.unit_number] then
           seen[entity.unit_number] = true
-          found[#found + 1] = entity
           if entity.name == CABLE then
-            cables[#cables + 1] = { x = entity.position.x, y = entity.position.y }
+            cables[#cables + 1] = {
+              x = entity.position.x,
+              y = entity.position.y,
+              tier = "network-cable",
+            }
+          elseif entity.name == COAXIAL then
+            cables[#cables + 1] = {
+              x = entity.position.x,
+              y = entity.position.y,
+              tier = "network-coaxial-cable",
+            }
+          elseif entity.name == FIBER_MM then
+            cables[#cables + 1] = {
+              x = entity.position.x,
+              y = entity.position.y,
+              tier = "network-fiber-mm-cable",
+            }
+          elseif entity.name == FIBER_SM then
+            cables[#cables + 1] = {
+              x = entity.position.x,
+              y = entity.position.y,
+              tier = "network-fiber-sm-cable",
+            }
           else
             local kind = NETWORK_KINDS[entity.name]
             local device
@@ -396,16 +430,14 @@ local function rebuild_surface(surface)
 
   -- Index the chunks the margin reached, so a device that sits just across a
   -- border is scanned directly next time instead of only through the buffer.
-  for _, entity in ipairs(found) do
-    track(entity)
-  end
-
+  -- Note: we don't have `found` here because we're iterating chunks; tracking
+  -- happens on build/remove events instead.
   return graph_builder.build({ cables = cables, devices = devices })
 end
 
 --- Stable signature of every provider's module contents. Modules can change
---- without an event (inserters, manual transfer), so the tick polls this instead
---- of listening to every inventory event. Only a change marks the graph dirty.
+-- without an event (inserters, manual transfer), so the tick polls this instead
+-- of listening to every inventory event. Only a change marks the graph dirty.
 local function provider_signature(surface)
   local parts = {}
   for _, entity in ipairs(surface.find_entities_filtered({ name = PROVIDER_NAMES })) do
@@ -447,23 +479,54 @@ local function draw_overlay()
   for index, graph in pairs(storage.network.graphs) do
     local surface = game.get_surface(index)
     if surface and surface.valid then
-      for _, subnet in ipairs(graph.subnets) do
-        local color = SUBNET_COLORS[(subnet.id - 1) % #SUBNET_COLORS + 1]
-        for _, cable in pairs(subnet.cables) do
+      -- Draw every cable segment colored by tier. The weakest-link rule is
+      -- visible: a single twisted-pair tile in a fiber run shows as copper
+      -- among the glass.
+      for _, segment in pairs(graph.raw_segments or {}) do
+        if drawn >= MAX_OVERLAY_LINES then
+          return
+        end
+        -- Determine color from first cable's tier (segment runs at weakest
+        -- tier, but individual tiles may show their actual tier).
+        local color = CABLE_COLORS["network-cable"]
+        for _, cable in ipairs(segment.cables) do
+          local tier_color = CABLE_COLORS[cable.tier]
+          if tier_color then
+            color = tier_color
+            break
+          end
+        end
+        -- Draw each cable as a point (small circle) since cables are 1×1.
+        for _, cable in ipairs(segment.cables) do
           if drawn >= MAX_OVERLAY_LINES then
             return
           end
-          -- Draw the forward half of each pair only, so every cable link is
-          -- drawn exactly once.
+          local render = rendering.draw_circle {
+            surface = surface,
+            color = color,
+            radius = 0.25,
+            width = 1,
+            filled = true,
+            target = { cable.x + 0.5, cable.y + 0.5 },
+          }
+          storage.network.render_ids[#storage.network.render_ids + 1] = render.id
+          drawn = drawn + 1
+        end
+        -- Draw lines between adjacent cables in the segment.
+        local cable_at = {}
+        for _, cable in ipairs(segment.cables) do
+          cable_at[tile_key(cable.x, cable.y)] = true
+        end
+        for _, cable in ipairs(segment.cables) do
+          if drawn >= MAX_OVERLAY_LINES then
+            return
+          end
           local neighbours = {
             { cable.x + 1, cable.y },
             { cable.x, cable.y + 1 },
-            { cable.x + 1, cable.y + 1 },
-            { cable.x - 1, cable.y + 1 },
           }
           for _, neighbour in ipairs(neighbours) do
-            local neighbour_id = graph.subnet_by_tile[neighbour[1] .. ":" .. neighbour[2]]
-            if neighbour_id == subnet.id and drawn < MAX_OVERLAY_LINES then
+            if cable_at[tile_key(neighbour[1], neighbour[2])] then
               local render = rendering.draw_line {
                 surface = surface,
                 color = color,
@@ -478,18 +541,37 @@ local function draw_overlay()
         end
       end
 
-      -- Routers bridge subnets. Draw the router and a spoke to each subnet it
-      -- reaches, so a joined network is visible as one shape.
-      for router_id, subnet_ids in pairs(graph.router_subnets or {}) do
-        local position = graph.positions and graph.positions[router_id]
-        if position and #subnet_ids > 0 then
-          if drawn >= MAX_OVERLAY_LINES then
-            return
-          end
+      -- Draw switches as blue squares on their center tile.
+      for _, switch in ipairs(graph.switches or {}) do
+        if drawn >= MAX_OVERLAY_LINES then
+          return
+        end
+        local position = graph.positions and graph.positions[switch.id]
+        if position then
+          local render = rendering.draw_rectangle {
+            surface = surface,
+            color = SWITCH_COLOR,
+            filled = false,
+            width = 2,
+            left_top = { position.x - 1.5, position.y - 1 },
+            right_bottom = { position.x + 1.5, position.y + 1 },
+          }
+          storage.network.render_ids[#storage.network.render_ids + 1] = render.id
+          drawn = drawn + 1
+        end
+      end
+
+      -- Draw routers as orange circles with WiFi reach indicator.
+      for _, router in ipairs(graph.routers or {}) do
+        if drawn >= MAX_OVERLAY_LINES then
+          return
+        end
+        local position = graph.positions and graph.positions[router.id]
+        if position then
           local marker = rendering.draw_circle {
             surface = surface,
             color = ROUTER_COLOR,
-            radius = 0.3,
+            radius = 0.35,
             width = 2,
             filled = true,
             target = position,
@@ -497,38 +579,38 @@ local function draw_overlay()
           storage.network.render_ids[#storage.network.render_ids + 1] = marker.id
           drawn = drawn + 1
 
-          for _, subnet_id in ipairs(subnet_ids) do
-            local subnet = graph.subnets[subnet_id]
-            if subnet then
-              if drawn >= MAX_OVERLAY_LINES then
-                return
-              end
-              local spoke = rendering.draw_line {
-                surface = surface,
-                color = ROUTER_COLOR,
-                width = 1,
-                from = position,
-                to = { subnet.x + 0.5, subnet.y + 0.5 },
-              }
-              storage.network.render_ids[#storage.network.render_ids + 1] = spoke.id
-              drawn = drawn + 1
-            end
-          end
+          -- WiFi reach circle (semi-transparent).
+          local reach = rendering.draw_circle {
+            surface = surface,
+            color = { r = 1.0, g = 0.7, b = 0.2, a = 0.3 },
+            radius = qmeta.WIRELESS_RANGE or 16,
+            width = 1,
+            filled = false,
+            target = position,
+          }
+          storage.network.render_ids[#storage.network.render_ids + 1] = reach.id
+          drawn = drawn + 1
         end
       end
 
-      -- Anything the graph could not attach is drawn red. It is the first
-      -- thing to look for when a machine is not on the network.
+      -- Anything the graph could not attach is drawn red. Conflicts (device
+      -- touching multiple networks) are drawn as larger red circles.
       for _, device_id in ipairs(graph.unconnected or {}) do
         local position = graph.positions and graph.positions[device_id]
         if position then
           if drawn >= MAX_OVERLAY_LINES then
             return
           end
+          local color = ALERT_COLOR
+          local radius = 0.35
+          if graph.conflicts and graph.conflicts[device_id] then
+            color = { r = 1.0, g = 0.1, b = 0.1 }
+            radius = 0.5
+          end
           local marker = rendering.draw_circle {
             surface = surface,
-            color = ALERT_COLOR,
-            radius = 0.35,
+            color = color,
+            radius = radius,
             width = 2,
             filled = false,
             target = position,
@@ -580,8 +662,9 @@ function M.poll_modules()
 end
 
 --- Cached graphs, keyed by surface index. Read-only for other runtime modules.
---- Rebuilds first if the topology or a module inventory changed, so a remote
---- debug call sees the same graph the next tick would.
+-- Rebuilds first if the topology or a module inventory changed, so a remote
+-- debug call (and the research tick) sees the current chips, not last
+-- second's.
 function M.graphs()
   init_storage()
   -- Module inventories change without an event; polling here means a remote
@@ -745,32 +828,15 @@ local function format_number(value)
   return string.format("%g", value)
 end
 
-local function rebuild_monitor(player)
-  local frame = player.gui.screen[MONITOR_GUI]
-  if not (frame and frame.valid) then
-    return
-  end
-  local body = frame[MONITOR_GUI .. "-body"]
-  if not (body and body.valid) then
-    return
-  end
-  body.clear()
+-- ---------------------------------------------------------------------------
+-- Monitor tab: Overview
+-- ---------------------------------------------------------------------------
 
-  local surface = player.surface
-  local graph = M.graph_for(surface)
-  if not graph or #graph.networks == 0 then
-    body.add({ type = "label", caption = { "chiptorio.network-empty" } })
-    if qln_provider then
-      qln_provider(player, body)
-    end
-    if qualification_provider then
-      qualification_provider(player, body)
-    end
-    return
-  end
+local function render_overview(body, graph, player)
+  body.add({ type = "label", caption = { "chiptorio.monitor-overview-title" } })
+  body.add({ type = "line" })
 
   add_stat(body, { "chiptorio.network-cables" }, tostring(graph.cable_count))
-  add_stat(body, { "chiptorio.network-subnets" }, tostring(#graph.subnets))
   add_stat(body, { "chiptorio.network-networks" }, tostring(#graph.networks))
   if #graph.unconnected > 0 then
     add_stat(body, { "chiptorio.network-unconnected" }, tostring(#graph.unconnected))
@@ -780,7 +846,7 @@ local function rebuild_monitor(player)
     body.add({ type = "line" })
     local title = body.add({
       type = "label",
-      caption = { "chiptorio.network-header", network.id, #network.subnets },
+      caption = { "chiptorio.network-header", network.id },
     })
     title.style.font = "default-bold"
     add_stat(body, { "chiptorio.network-compute" }, format_number(network.compute))
@@ -798,43 +864,339 @@ local function rebuild_monitor(player)
     end
     add_stat(body, { "chiptorio.network-memory" }, format_number(network.memory))
     add_stat(body, { "chiptorio.network-bandwidth" }, format_number(network.bandwidth))
+    add_stat(body, { "chiptorio.network-power" }, format_number(network.power or 0))
+    add_stat(body, { "chiptorio.network-heat" }, format_number(network.heat or 0))
+    add_stat(body, { "chiptorio.network-cooling" }, format_number(network.cooling or 0))
     add_stat(body, { "chiptorio.network-latency" }, format_number(network.latency))
     add_stat(
       body,
       { "chiptorio.network-devices" },
       tostring(#(network.providers or {})) .. " / " .. tostring(#(network.labs or {}))
     )
-    if #(network.metrology or {}) > 0 then
-      add_stat(body, { "chiptorio.network-metrology" }, tostring(#network.metrology))
+    if #(network.qln_nodes or {}) > 0 then
+      add_stat(body, { "chiptorio.network-qln-nodes" }, tostring(#network.qln_nodes))
     end
-
-    for index, subnet in ipairs(network.subnets) do
-      if index > MAX_MONITOR_SUBNETS then
-        body.add({ type = "label", caption = { "chiptorio.network-truncated", #network.subnets - index + 1 } })
-        break
-      end
-      local subnet_stats = graph.subnets[subnet]
-      if subnet_stats then
-        local row = body.add({ type = "flow", direction = "horizontal" })
-        row.style.vertical_align = "center"
-        local swatch = row.add({ type = "label", caption = "  •  " })
-        local color = SUBNET_COLORS[(subnet_stats.id - 1) % #SUBNET_COLORS + 1]
-        swatch.style.font_color = color
-        row.add({
-          type = "label",
-          caption = { "chiptorio.network-subnet", subnet_stats.id, subnet_stats.cable_count, #subnet_stats.devices },
-        })
-      end
+    if #(network.routers or {}) > 0 then
+      add_stat(body, { "chiptorio.network-routers" }, tostring(#network.routers))
     end
   end
 
+  -- QLN and qualification sections are rendered by their respective runtimes
+  -- through the registered providers, appended to the Overview tab.
   if qln_provider then
     qln_provider(player, body)
   end
-
   if qualification_provider then
     qualification_provider(player, body)
   end
+end
+
+-- ---------------------------------------------------------------------------
+-- Monitor tab: Topology
+-- ---------------------------------------------------------------------------
+
+local function render_topology(body, graph)
+  body.add({ type = "label", caption = { "chiptorio.monitor-topology-title" } })
+  body.add({ type = "line" })
+
+  local shown = 0
+  for _, network in ipairs(graph.networks) do
+    if shown >= MAX_MONITOR_NETWORKS then
+      body.add({ type = "label", caption = { "chiptorio.network-truncated", #graph.networks - shown } })
+      break
+    end
+    shown = shown + 1
+
+    body.add({ type = "line" })
+    local title = body.add({
+      type = "label",
+      caption = { "chiptorio.network-header", network.id },
+    })
+    title.style.font = "default-bold"
+    add_stat(body, { "chiptorio.network-segments" }, tostring(#network.merged_segments))
+    add_stat(body, { "chiptorio.network-bandwidth" }, format_number(network.bandwidth))
+    add_stat(body, { "chiptorio.network-latency" }, format_number(network.latency))
+
+    for _, mroot in ipairs(network.merged_segments) do
+      local mseg = graph.merged_segments[mroot]
+      if mseg then
+        local row = body.add({ type = "flow", direction = "horizontal" })
+        row.style.vertical_align = "center"
+        row.add({ type = "label", caption = { "chiptorio.network-segment", #mseg.raw_roots } })
+        add_stat(row, { "chiptorio.network-segment-bw" }, format_number(mseg.bandwidth))
+        add_stat(row, { "chiptorio.network-segment-lat" }, format_number(mseg.latency))
+      end
+    end
+  end
+end
+
+-- ---------------------------------------------------------------------------
+-- Monitor tab: Devices
+-- ---------------------------------------------------------------------------
+
+local function render_devices(body, graph)
+  body.add({ type = "label", caption = { "chiptorio.monitor-devices-title" } })
+  body.add({ type = "line" })
+
+  for _, network in ipairs(graph.networks) do
+    body.add({ type = "line" })
+    local title = body.add({
+      type = "label",
+      caption = { "chiptorio.network-header", network.id },
+    })
+    title.style.font = "default-bold"
+
+    if #(network.providers or {}) > 0 then
+      local label = body.add({ type = "label", caption = { "chiptorio.network-providers" } })
+      label.style.font = "default-bold"
+      for _, id in ipairs(network.providers) do
+        local device = graph.devices[id]
+        if device then
+          local row = body.add({ type = "flow", direction = "horizontal" })
+          row.style.vertical_align = "center"
+          row.add({ type = "label", caption = device.name .. " (" .. device.id .. ")" })
+          local mod_line = ""
+          if device.computers and device.computers > 0 then
+            mod_line = mod_line .. device.computers .. " compute"
+          end
+          if device.memory_modules and device.memory_modules > 0 then
+            if #mod_line > 0 then mod_line = mod_line .. ", " end
+            mod_line = mod_line .. device.memory_modules .. " memory"
+          end
+          row.add({ type = "label", caption = mod_line })
+        end
+      end
+    end
+
+    if #(network.labs or {}) > 0 then
+      local label = body.add({ type = "label", caption = { "chiptorio.network-labs" } })
+      label.style.font = "default-bold"
+      for _, id in ipairs(network.labs) do
+        local device = graph.devices[id]
+        if device then
+          local row = body.add({ type = "flow", direction = "horizontal" })
+          row.style.vertical_align = "center"
+          row.add({ type = "label", caption = device.name .. " (" .. device.id .. ")" })
+          row.add({ type = "label", caption = format_number(device.demand_compute or 0) .. " compute demand" })
+        end
+      end
+    end
+
+    if #(network.qln_nodes or {}) > 0 then
+      local label = body.add({ type = "label", caption = { "chiptorio.network-qln" } })
+      label.style.font = "default-bold"
+      for _, id in ipairs(network.qln_nodes) do
+        local device = graph.devices[id]
+        if device then
+          local row = body.add({ type = "flow", direction = "horizontal" })
+          row.style.vertical_align = "center"
+          row.add({ type = "label", caption = device.name .. " (" .. device.id .. ")" })
+          local cells = ""
+          if device.qln_cells and device.qln_cells > 0 then
+            cells = device.qln_cells .. " cells"
+          else
+            cells = "no QLN cells"
+          end
+          row.add({ type = "label", caption = cells })
+        end
+      end
+    end
+  end
+end
+
+-- ---------------------------------------------------------------------------
+-- Monitor tab: Alerts
+-- ---------------------------------------------------------------------------
+
+local function render_alerts(body, graph)
+  body.add({ type = "label", caption = { "chiptorio.monitor-alerts-title" } })
+  body.add({ type = "line" })
+
+  local alert_count = 0
+
+  -- Unconnected devices
+  for _, id in ipairs(graph.unconnected or {}) do
+    local device = graph.devices[id]
+    if device then
+      alert_count = alert_count + 1
+      local row = body.add({ type = "flow", direction = "horizontal" })
+      row.style.vertical_align = "center"
+      local label = row.add({ type = "label", caption = { "chiptorio.alert-unconnected", device.name } })
+      label.style.font_color = ALERT_COLOR
+      row.add({ type = "label", caption = "id=" .. device.id })
+    end
+  end
+
+  -- Conflicted devices (touching multiple networks)
+  if graph.conflicts then
+    for id, nets in pairs(graph.conflicts) do
+      local device = graph.devices[id]
+      if device then
+        alert_count = alert_count + 1
+        local row = body.add({ type = "flow", direction = "horizontal" })
+        row.style.vertical_align = "center"
+        local label = row.add({ type = "label", caption = { "chiptorio.alert-conflict", device.name, #nets } })
+        label.style.font_color = ALERT_COLOR
+        row.add({ type = "label", caption = "networks: " .. #nets })
+      end
+    end
+  end
+
+  -- Network-level alerts: memory, bandwidth, cooling, power shortfalls
+  for _, network in ipairs(graph.networks) do
+    -- Check each lab on the network for its tech's gate
+    -- (This is a simplified check; the full evaluation happens in research_runtime)
+    local heat = network.heat or 0
+    local cooling = network.cooling or 0
+    if heat > 0 and cooling < heat then
+      alert_count = alert_count + 1
+      local row = body.add({ type = "flow", direction = "horizontal" })
+      row.style.vertical_align = "center"
+      local label = row.add({ type = "label", caption = { "chiptorio.alert-cooling", network.id } })
+      label.style.font_color = ALERT_COLOR
+      row.add({ type = "label", caption = "heat=" .. format_number(heat) .. " cooling=" .. format_number(cooling) })
+    end
+  end
+
+  if alert_count == 0 then
+    body.add({ type = "label", caption = { "chiptorio.alert-none" } })
+  end
+end
+
+-- ---------------------------------------------------------------------------
+-- Monitor tab: Routing
+-- ---------------------------------------------------------------------------
+
+local function render_routing(body, graph)
+  body.add({ type = "label", caption = { "chiptorio.monitor-routing-title" } })
+  body.add({ type = "line" })
+
+  for _, network in ipairs(graph.networks) do
+    if #(network.routers or {}) > 0 then
+      body.add({ type = "line" })
+      local title = body.add({
+        type = "label",
+        caption = { "chiptorio.network-header", network.id },
+      })
+      title.style.font = "default-bold"
+
+      for _, router_id in ipairs(network.routers) do
+        local router = graph.devices[router_id]
+        if router then
+          local row = body.add({ type = "flow", direction = "horizontal" })
+          row.style.vertical_align = "center"
+          row.add({ type = "label", caption = "Router (" .. router_id .. ")" })
+          local seg_count = #(router.segments or {})
+          row.add({ type = "label", caption = seg_count .. " segment(s)" })
+          local reach = router.wireless_reach or 0
+          row.add({ type = "label", caption = "WiFi reach: " .. reach .. " tiles" })
+        end
+      end
+    end
+  end
+
+  if #graph.routers == 0 then
+    body.add({ type = "label", caption = { "chiptorio.monitor-routing-none" } })
+  end
+end
+
+-- ---------------------------------------------------------------------------
+-- Monitor rebuild with tabs
+-- ---------------------------------------------------------------------------
+
+local TAB_OVERVIEW = 1
+local TAB_TOPOLOGY = 2
+local TAB_DEVICES = 3
+local TAB_ALERTS = 4
+local TAB_ROUTING = 5
+
+local TAB_CAPTIONS = {
+  { "chiptorio.tab-overview" },
+  { "chiptorio.tab-topology" },
+  { "chiptorio.tab-devices" },
+  { "chiptorio.tab-alerts" },
+  { "chiptorio.tab-routing" },
+}
+
+local TAB_RENDERERS = {
+  render_overview,
+  render_topology,
+  render_devices,
+  render_alerts,
+  render_routing,
+}
+
+local function rebuild_monitor(player)
+  local frame = player.gui.screen[MONITOR_GUI]
+  if not (frame and frame.valid) then
+    return
+  end
+
+  local surface = player.surface
+  local graph = M.graph_for(surface)
+
+  -- Find or create the tabbed pane
+  local tabbed = frame[MONITOR_GUI .. "-tabs"]
+  if not (tabbed and tabbed.valid) then
+    return
+  end
+
+  -- Get active tab from the tabbed pane (Factorio manages this on clicks)
+  local active_tab = tabbed.active_tab_index or 1
+  active_tab = math.min(math.max(active_tab, 1), #TAB_CAPTIONS)
+
+  -- Rebuild tabs if needed (network count changed)
+  local current_count = #tabbed.tabs
+  local needed_count = #graph.networks > 0 and #TAB_CAPTIONS or 0
+
+  if current_count ~= needed_count then
+    tabbed.clear()
+    if needed_count > 0 then
+      for _, caption in ipairs(TAB_CAPTIONS) do
+        tabbed.add({ type = "tab", caption = caption })
+      end
+    end
+    active_tab = 1
+  end
+
+  if needed_count == 0 then
+    -- No networks: show empty state on the first tab
+    local pane = tabbed[1]
+    if pane and pane.valid then
+      pane.clear()
+      pane.add({ type = "label", caption = { "chiptorio.network-empty" } })
+    end
+    tabbed.active_tab_index = 1
+    return
+  end
+
+  -- Set active tab
+  tabbed.active_tab_index = active_tab
+
+  -- Get the active tab's content pane
+  local pane = tabbed[active_tab]
+  if not (pane and pane.valid) then
+    return
+  end
+
+  -- Clear and render the active tab
+  pane.clear()
+  local renderer = TAB_RENDERERS[active_tab]
+  if renderer then
+    if active_tab == TAB_OVERVIEW then
+      renderer(pane, graph, player)
+    else
+      renderer(pane, graph)
+    end
+  end
+
+  -- Store the active tab for persistence across saves
+  local state = storage.network.monitors[player.index]
+  if not state then
+    state = {}
+    storage.network.monitors[player.index] = state
+  end
+  state.tab = active_tab
 end
 
 function M.refresh_monitors()
@@ -868,13 +1230,17 @@ local function create_monitor(player)
     caption = { "chiptorio.network-close" },
   })
 
-  local scroll = frame.add({
-    type = "scroll-pane",
-    name = MONITOR_GUI .. "-body",
-    direction = "vertical",
+  local tabbed = frame.add({
+    type = "tabbed-pane",
+    name = MONITOR_GUI .. "-tabs",
   })
-  scroll.style.maximal_height = 520
-  scroll.style.minimal_width = 360
+  for _, caption in ipairs(TAB_CAPTIONS) do
+    local tab = tabbed.add({ type = "tab", caption = caption })
+    tab.add({ type = "scroll-pane", name = MONITOR_GUI .. "-pane", direction = "vertical" })
+  end
+
+  -- Store initial tab state
+  storage.network.monitors[player.index] = { tab = 1 }
 
   -- Same suppression as the QLN windows: the monitor is a container clone, so
   -- the default chest GUI opens first. Claiming `player.opened` closes it and
@@ -882,7 +1248,6 @@ local function create_monitor(player)
   player.opened = frame
   frame.bring_to_front()
 
-  storage.network.monitors[player.index] = true
   rebuild_monitor(player)
 end
 
@@ -916,11 +1281,15 @@ function M.on_gui_closed(event)
     return
   end
   init_storage()
-  -- Claiming `player.opened` closes the vanilla chest GUI and arrives here with
-  -- an entity, not our frame. Only dismiss the monitor when our own element is
-  -- the thing that closed.
   local element = event.element
-  if element and element.valid and element.name == MONITOR_GUI then
+  if element and element.valid then
+    if element.name == MONITOR_GUI then
+      destroy_monitor(player)
+    end
+    return
+  end
+  local entity = event.entity
+  if entity and entity.valid and entity.name == MONITOR then
     destroy_monitor(player)
   end
 end
@@ -931,80 +1300,45 @@ function M.on_gui_click(event)
   if not (player and element and element.valid) then
     return
   end
-  if element.name == MONITOR_GUI .. "-close" then
+  if element.name == MONITOR_GUI .. "-refresh" then
+    rebuild_monitor(player)
+  elseif element.name == MONITOR_GUI .. "-close" then
     destroy_monitor(player)
-  elseif element.name == MONITOR_GUI .. "-refresh" then
+  elseif element.name == MONITOR_GUI .. "-tabs" then
+    -- User switched tabs; rebuild to render the newly active tab's content.
     rebuild_monitor(player)
   end
 end
 
 function M.on_lua_shortcut(event)
-  if event.prototype_name ~= "chiptorio-network-monitor" then
-    return
-  end
-  local player = game.players[event.player_index]
-  M.open_monitor(player)
-end
-
--- ---------------------------------------------------------------------------
--- Debug interface
--- ---------------------------------------------------------------------------
-
---- Machine-readable topology summary for tests and remote debugging.
-function M.summary(surface_index)
-  init_storage()
-  local surface = game.get_surface(surface_index or 1)
-  if not surface then
-    return nil
-  end
-  local graph = M.graph_for(surface)
-  local summary = {
-    cable_count = graph.cable_count,
-    subnets = #graph.subnets,
-    networks = #graph.networks,
-    unconnected = #graph.unconnected,
-    unconnected_ids = graph.unconnected,
-    contested = #graph.contested,
-    compute = 0,
-    scalar = 0,
-    vector = 0,
-    quantum = 0,
-    memory = 0,
-    bandwidth = 0,
-    labs = 0,
-    providers = 0,
-    metrology = 0,
-  }
-  for _, network in ipairs(graph.networks) do
-    summary.compute = summary.compute + network.compute
-    summary.scalar = summary.scalar + network.scalar
-    summary.vector = summary.vector + network.vector
-    summary.quantum = summary.quantum + network.quantum
-    summary.memory = summary.memory + network.memory
-    summary.bandwidth = summary.bandwidth + network.bandwidth
-    summary.labs = summary.labs + #(network.labs or {})
-    summary.providers = summary.providers + #(network.providers or {})
-    summary.metrology = summary.metrology + #(network.metrology or {})
-  end
-  return summary
-end
-
---- /c remote.call("chiptorio-network", "status")
-function M.status()
-  init_storage()
-  if storage.network.dirty then
-    rebuild_all()
-  end
-  for index, graph in pairs(storage.network.graphs) do
-    log(string.format(
-      "CHIPTORIO NETWORK surface=%d cables=%d subnets=%d networks=%d unconnected=%d",
-      index,
-      graph.cable_count,
-      #graph.subnets,
-      #graph.networks,
-      #graph.unconnected
-    ))
+  if event.prototype_name == "chiptorio-network-monitor" then
+    local player = game.players[event.player_index]
+    if player then
+      open_monitor(player)
+    end
   end
 end
+
+remote.add_interface("chiptorio-network", {
+  -- /c remote.call("chiptorio-network", "status")
+  status = function()
+    init_storage()
+    for _, surface in pairs(game.surfaces) do
+      local graph = scan_surface(surface)
+      log(string.format(
+        "CHIPTORIO NETWORK surface=%d cables=%d networks=%d unconnected=%d",
+        surface.index,
+        graph.cable_count or 0,
+        #graph.networks,
+        #graph.unconnected
+      ))
+    end
+  end,
+  topology = function()
+    return storage.network.graphs or {}
+  end,
+  -- /c remote.call("chiptorio-network", "overlay", true)
+  overlay = M.set_overlay,
+})
 
 return M

@@ -391,12 +391,13 @@ This is the real-life rhythm of a process shrink, and it prevents “research 65
 
 ### 5.2 Topology
 
-- **Subnet:** connected component of cables, switches, and device ports.
-- **Network:** subnets joined by routers.
-- Devices connect if a cable is within 2 tiles.
+- **Segment:** connected component of cable tiles (4-way adjacency). Segment bandwidth is the weakest cable tier present (weakest-link rule).
+- **Network:** segments joined by switches and routers.
+- Devices connect only if physically adjacent to a cable/switch tile or within a router's 16-tile wireless reach. Cables collide with everything — they cannot be placed on machines or belts, and nothing can be placed on them.
 - Cable graph rebuilds only when entities/tiles change, not every tick.
-- Rebuild is coalesced: mark dirty, rebuild on the next 10-tick or 60-tick job.
+- Rebuild is coalesced: mark dirty, rebuild on the next 60-tick job.
 - Blueprints trigger the same rebuild path.
+- Repeater entity removed; switches are 3×2 junction boxes and routers are 3×2 gateways with WiFi.
 
 ### 5.3 Stats and allocation
 
@@ -900,15 +901,15 @@ Yield multiplies dies per wafer. Metrology, cleanroom, half-node qualifications,
 ## 14. UX
 
 - **Research panel:** compute required/available, labs active, memory, bandwidth, ETA, decay warning, qualification progress.
-- **Network monitor:** overview, topology, devices, alerts, router config, subnet colors.
+- **Network monitor:** overview, topology, devices, alerts, routing tabs.
 - **Entity tooltips:** ports, power, heat, compute profile, memory capacity.
 - **Item tooltips:** chip profile, memory generation, QLN capacity.
-- **Alerts:** compute starved, memory full, no route, router bottleneck, cooling insufficient, power low, qualification stalled.
-- **Overlay:** cable/subnet visualization, link utilization.
+- **Alerts:** compute starved, memory full, no route, router bottleneck, cooling insufficient, power low, qualification stalled, unconnected devices, multi-network conflicts.
+- **Overlay:** cable tier visualization (weakest-link), switches as blue squares, routers as orange circles with WiFi reach circles.
 - **Locale:** all new items/entities/techs; `__1__` placeholders.
 - **Icons:** generated 64×64 items, 256×256 tech icons, cable sprites, network icons.
 - **Sound:** keep the generated fanfare; add terminal/network sounds later.
-- **Remote interface:** `chiptorio.network`, `chiptorio.research`, `chiptorio.logistics`, `chiptorio.tests`, `chiptorio.spawn`, `chiptorio.ai`.
+- **Remote interface:** `chiptorio-network`, `chiptorio-research`, `chiptorio-qualification`, `chiptorio-qln`, `chiptorio-answer`, `chiptorio-ai`.
 
 ---
 
@@ -930,7 +931,7 @@ scripts/
   providers.lua           -- server rack, memory bank, datacenter (lab clones)
   metrology.lua           -- Metrology Lab, test structure, pilot recipes
   memory.lua              -- the eleven memory-generation recipes
-  network.lua             -- cable, switch, router, monitor, repeater, wireless AP
+  network.lua             -- cable tiers, switch, router, monitor, wireless AP
   qln.lua                 -- QLN nodes, drives, FOUP, construction core, quantum labs
   qln_meta.lua            -- PURE: QLN rates, capacity per module, tech names
   process_nodes.lua       -- PURE: 12-node ladder, half-node table, naming

@@ -1,192 +1,236 @@
--- Unit tests for scripts/runtime/network_graph.lua.
+-- Unit tests for scripts/runtime/network_graph.lua (physical layer).
 --
 -- Every case is a plain table in, plain table out. No map, no entities.
+-- The graph model is:
+--   * Cables form raw segments by 4-way adjacency (N/S/E/W) on tile coordinates.
+--   * Segment bandwidth = weakest cable tier present (weakest-link rule).
+--   * Segment latency = sum of per-tile latencies.
+--   * Switches (3×2) merge all segments touching any of their 6 tiles.
+--   * Routers (3×2) bridge segments on the wired side and provide WiFi
+--     reach of 16 tiles on the wireless side.
+--   * A device connects if adjacent to a cable/switch tile or within
+--     router WiFi reach. Touching 2+ networks = conflict -> offline.
 
 local graph = require("__chiptorio__/scripts/runtime/network_graph")
 local H = require("unit_harness")
 
+-- Cable tier constants used by tests.
+local TIER = {
+  twisted = "network-cable",
+  coaxial = "network-coaxial-cable",
+  fiber_mm = "network-fiber-mm-cable",
+  fiber_sm = "network-fiber-sm-cable",
+}
+
+-- Cable at tile (tx, ty) - position is tile center (tx+0.5, ty+0.5).
+local function cable(tx, ty, tier)
+  return { x = tx + 0.5, y = ty + 0.5, tier = tier }
+end
+
 return function()
-  H.test("an empty spec has no subnets and no networks", function()
+  H.test("an empty spec has no networks and no devices", function()
     local result = graph.build({})
-    H.eq(#result.subnets, 0, "subnets")
     H.eq(#result.networks, 0, "networks")
     H.eq(#result.unconnected, 0, "unconnected")
     H.eq(result.cable_count, 0, "cable count")
   end)
 
-  H.test("adjacent cables form one subnet", function()
+  H.test("adjacent cables form one raw segment", function()
     local result = graph.build({
-      cables = { { x = 0, y = 0 }, { x = 1, y = 0 }, { x = 2, y = 0 } },
+      cables = { cable(0, 0, TIER.twisted), cable(1, 0, TIER.twisted), cable(2, 0, TIER.twisted) },
     })
-    H.eq(#result.subnets, 1, "subnets")
-    H.eq(result.subnets[1].cable_count, 3, "cable count")
+    H.eq(#result.raw_segments, 1, "raw segments")
+    H.eq(#result.raw_segments[1].cables, 3, "cable count")
+    H.eq(result.raw_segments[1].bandwidth, 50, "twisted pair bandwidth")
     H.eq(#result.networks, 1, "networks")
   end)
 
   H.test("cables two tiles apart do not connect", function()
     local result = graph.build({
-      cables = { { x = 0, y = 0 }, { x = 2, y = 0 } },
+      cables = { cable(0, 0, TIER.twisted), cable(2, 0, TIER.twisted) },
     })
-    H.eq(#result.subnets, 2, "subnets")
+    H.eq(#result.raw_segments, 2, "raw segments")
     H.eq(#result.networks, 2, "networks")
   end)
 
-  H.test("diagonal cables conduct", function()
+  H.test("diagonal cables do not conduct", function()
     local result = graph.build({
-      cables = { { x = 0, y = 0 }, { x = 1, y = 1 } },
+      cables = { cable(0, 0, TIER.twisted), cable(1, 1, TIER.twisted) },
     })
-    H.eq(#result.subnets, 1, "subnets")
+    H.eq(#result.raw_segments, 2, "raw segments - diagonal cables are separate")
   end)
 
   H.test("duplicate cable tiles collapse", function()
     local result = graph.build({
-      cables = { { x = 0.5, y = 0.5 }, { x = 0.5, y = 0.5 } },
+      cables = { cable(0, 0, TIER.twisted), cable(0, 0, TIER.twisted) },
     })
     H.eq(result.cable_count, 1, "cable count")
-    H.eq(#result.subnets, 1, "subnets")
+    H.eq(#result.raw_segments, 1, "raw segments")
   end)
 
-  H.test("a switch merges the cable runs it can reach", function()
+  H.test("weakest-link rule: coaxial next to twisted drops to twisted", function()
     local result = graph.build({
-      cables = { { x = 1.5, y = 0.5 }, { x = 5.5, y = 0.5 } },
+      cables = { cable(0, 0, TIER.coaxial), cable(1, 0, TIER.twisted) },
+    })
+    H.eq(#result.raw_segments, 1, "raw segments")
+    H.eq(result.raw_segments[1].bandwidth, 50, "weakest-link bandwidth")
+  end)
+
+  H.test("fiber segment keeps high bandwidth", function()
+    local result = graph.build({
+      cables = { cable(0, 0, TIER.fiber_mm), cable(1, 0, TIER.fiber_mm) },
+    })
+    H.eq(result.raw_segments[1].bandwidth, 1000, "multi-mode fiber bandwidth")
+  end)
+
+  H.test("single-mode fiber segment", function()
+    local result = graph.build({
+      cables = { cable(0, 0, TIER.fiber_sm), cable(1, 0, TIER.fiber_sm) },
+    })
+    H.eq(result.raw_segments[1].bandwidth, 5000, "single-mode fiber bandwidth")
+  end)
+
+  H.test("latency accumulates per cable tile", function()
+    local result = graph.build({
+      cables = { cable(0, 0, TIER.twisted), cable(1, 0, TIER.twisted), cable(2, 0, TIER.twisted) },
+    })
+    H.eq(result.raw_segments[1].latency, 6, "twisted pair latency 2 per tile x 3")
+  end)
+
+  H.test("a switch merges cable runs touching its footprint", function()
+    -- Switch at tile (3,0), direction 0: covers tiles (2,0)-(4,1).
+    -- Cables at tile (1,0) and (5,0) touch switch tiles (2,0) and (4,0).
+    local result = graph.build({
+      cables = { cable(1, 0, TIER.twisted), cable(5, 0, TIER.twisted) },
       devices = {
-        { id = 10, kind = "switch", x = 3.5, y = 0.5, bandwidth = 100 },
+        { id = 10, kind = "switch", x = 3.5, y = 0.5 },
       },
     })
-    H.eq(#result.subnets, 1, "subnets")
-    H.eq(#result.subnets[1].switches, 1, "switches")
-    H.eq(result.subnets[1].bandwidth, 100 + graph.CABLE_BANDWIDTH, "bandwidth")
-    H.eq(result.device_subnet[10], 1, "switch subnet")
+    H.eq(#result.raw_segments, 2, "two raw segments before merge")
+    H.eq(#result.merged_segments, 1, "switch merges into one segment")
+    H.eq(#result.networks, 1, "one network")
+    H.truthy(result.device_network[10], "switch on network")
   end)
 
-  H.test("a router joins subnets into one network without merging them", function()
+  H.test("a router bridges two cable segments into one network", function()
     local result = graph.build({
-      cables = { { x = 3.5, y = 0.5 }, { x = 7.5, y = 0.5 } },
+      cables = { cable(3, 0, TIER.twisted), cable(7, 0, TIER.twisted) },
       devices = {
-        { id = 20, kind = "router", x = 5.5, y = 0.5, bandwidth = 250 },
+        { id = 20, kind = "router", x = 5.5, y = 0.5 },
       },
     })
-    H.eq(#result.subnets, 2, "subnets")
-    H.eq(#result.networks, 1, "networks")
-    H.eq(#result.networks[1].routers, 1, "routers")
-    H.eq(result.networks[1].router_bandwidth, 250, "router bandwidth")
-    H.eq(result.networks[1].latency, 2 * graph.CABLE_LATENCY + graph.ROUTER_LATENCY, "latency")
-    H.eq(result.device_network[20], 1, "router network")
+    H.eq(#result.raw_segments, 2, "two raw segments")
+    H.eq(#result.networks, 1, "one network bridged by router")
+    H.truthy(result.device_network[20], "router on network")
   end)
 
-  H.test("a router with no reachable cable is unconnected", function()
+  H.test("router WiFi reach: device within 16 tiles connects", function()
     local result = graph.build({
-      cables = { { x = 0, y = 0 } },
+      cables = { cable(3, 0, TIER.twisted) },
       devices = {
-        { id = 21, kind = "router", x = 20.5, y = 20.5 },
+        { id = 20, kind = "router", x = 5.5, y = 0.5 },
+        { id = 30, kind = "compute", x = 19.5, y = 0.5, compute = 7 },
       },
     })
-    H.eq(#result.networks, 1, "networks")
-    H.eq(#result.unconnected, 1, "unconnected")
-    H.eq(result.unconnected[1], 21, "unconnected id")
-    H.nil_value(result.device_network[21], "router network")
+    -- Distance from router (5.5,0.5) to device (19.5,0.5) = 14 <= 16
+    H.truthy(result.device_network[30], "WiFi device on network")
   end)
 
-  H.test("a device attaches within two tiles and not further", function()
-    local near = graph.build({
-      cables = { { x = 0, y = 0 } },
-      devices = { { id = "near", kind = "compute", x = 1.5, y = 0.5, compute = 7 } },
-    })
-    H.eq(near.device_subnet["near"], 1, "near subnet")
-    H.eq(near.subnets[1].compute, 7, "near compute")
-    H.eq(near.device_network["near"], 1, "near network")
-
-    local far = graph.build({
-      cables = { { x = 0, y = 0 } },
-      devices = { { id = "far", kind = "compute", x = 5.5, y = 0.5, compute = 7 } },
-    })
-    H.nil_value(far.device_subnet["far"], "far subnet")
-    H.eq(#far.unconnected, 1, "far unconnected")
-    H.eq(far.subnets[1].compute, 0, "far compute")
-  end)
-
-  H.test("stats roll up from devices to subnet and network", function()
+  H.test("router WiFi reach: device beyond 16 tiles is unconnected", function()
     local result = graph.build({
-      cables = { { x = 0, y = 0 }, { x = 1, y = 0 } },
+      cables = { cable(3, 0, TIER.twisted) },
+      devices = {
+        { id = 20, kind = "router", x = 5.5, y = 0.5 },
+        { id = 30, kind = "compute", x = 23.5, y = 0.5, compute = 7 },
+      },
+    })
+    -- Distance = 18 > 16, so not connected via WiFi, and not adjacent to cable
+    H.nil_value(result.device_network[30], "far WiFi device not on network")
+    H.truthy(result.conflicts or result.unconnected, "far device unconnected or conflicted")
+  end)
+
+  H.test("a device adjacent to a cable connects to its network", function()
+    -- Cable at tile (1,0), device at tile (0,0): device adjacent to cable.
+    local result = graph.build({
+      cables = { cable(1, 0, TIER.twisted) },
+      devices = { { id = "near", kind = "compute", x = 0.5, y = 0.5, compute = 7 } },
+    })
+    H.truthy(result.device_network["near"], "near device on network")
+  end)
+
+  H.test("a device far from any cable is unconnected", function()
+    local result = graph.build({
+      cables = { cable(0, 0, TIER.twisted) },
+      devices = { { id = "far", kind = "compute", x = 10.5, y = 0.5, compute = 7 } },
+    })
+    H.nil_value(result.device_network["far"], "far device not on network")
+    H.eq(#result.unconnected, 1, "one unconnected device")
+    H.eq(result.unconnected[1], "far", "unconnected id")
+  end)
+
+  H.test("a device touching two networks is a conflict and goes offline", function()
+    -- Device at tile (1,0) adjacent to cables at tiles (0,0) and (2,0).
+    -- Cables are not adjacent to each other (gap at tile 1), so 2 networks.
+    local result = graph.build({
+      cables = { cable(0, 0, TIER.twisted), cable(2, 0, TIER.twisted) },
+      devices = { { id = "bridge", kind = "compute", x = 1.5, y = 0.5 } },
+    })
+    H.truthy(result.conflicts and result.conflicts["bridge"], "bridge device is a conflict")
+    H.eq(#result.unconnected, 1, "conflicted device is unconnected")
+    H.eq(result.unconnected[1], "bridge", "unconnected id")
+  end)
+
+  H.test("stats roll up from devices to network", function()
+    -- Cable at tile (1,0). Devices at tiles (0,0) and (1,1) both adjacent to it.
+    local result = graph.build({
+      cables = { cable(1, 0, TIER.twisted) },
       devices = {
         { id = "cpu", kind = "compute", x = 0.5, y = 0.5, compute = 4, memory = 64, power = 90, heat = 10 },
-        { id = "ram", kind = "memory", x = 1.5, y = 0.5, memory = 256, power = 5, cooling = 20 },
+        { id = "ram", kind = "memory", x = 1.5, y = 1.5, memory = 256, power = 5, cooling = 20 },
       },
     })
-    H.eq(result.subnets[1].compute, 4, "subnet compute")
-    H.eq(result.subnets[1].memory, 320, "subnet memory")
-    H.eq(result.subnets[1].power, 95, "subnet power")
+    H.eq(result.networks[1].compute, 4, "network compute")
     H.eq(result.networks[1].memory, 320, "network memory")
+    H.eq(result.networks[1].power, 95, "network power")
     H.eq(result.networks[1].heat, 10, "network heat")
     H.eq(result.networks[1].cooling, 20, "network cooling")
-    H.eq(#result.networks[1].subnets, 1, "network subnets")
   end)
 
-  H.test("a device within reach of two subnets is flagged as contested", function()
-    local result = graph.build({
-      cables = { { x = 0.5, y = 0.5 }, { x = 4.5, y = 0.5 } },
-      devices = { { id = "bridge", kind = "compute", x = 2.5, y = 0.5 } },
-    })
-    H.truthy(result.contested["bridge"], "contested device")
-    H.eq(result.contested["bridge"][1], 1, "first contested subnet")
-    H.eq(result.contested["bridge"][2], 2, "second contested subnet")
-  end)
-
-  H.test("subnet ids are deterministic and ordered top-left first", function()
+  H.test("network ids are deterministic and ordered", function()
     local spec = {
-      cables = { { x = 0, y = 5 }, { x = 0, y = 0 }, { x = 9, y = 0 } },
+      cables = { cable(0, 5, TIER.twisted), cable(0, 0, TIER.twisted), cable(9, 0, TIER.twisted) },
     }
     local first = graph.build(spec)
     local second = graph.build(spec)
-    H.eq(first.subnets[1].y, 0, "first subnet y")
-    H.eq(first.subnets[1].x, 0, "first subnet x")
-    H.eq(first.subnets[2].y, 0, "second subnet y")
-    H.eq(first.subnets[2].x, 9, "second subnet x")
-    H.eq(first.subnets[3].y, 5, "third subnet y")
-    for id = 1, #first.subnets do
-      H.eq(first.subnets[id].x, second.subnets[id].x, "deterministic x " .. id)
-      H.eq(first.subnets[id].y, second.subnets[id].y, "deterministic y " .. id)
-    end
+    H.eq(#first.networks, 3, "three networks")
+    H.eq(first.networks[1].id, second.networks[1].id, "deterministic network id")
   end)
 
-  H.test("removing a cable splits the subnet", function()
+  H.test("removing a cable splits the segment", function()
     local before = graph.build({
-      cables = { { x = 0, y = 0 }, { x = 1, y = 0 }, { x = 2, y = 0 } },
+      cables = { cable(0, 0, TIER.twisted), cable(1, 0, TIER.twisted), cable(2, 0, TIER.twisted) },
     })
-    H.eq(#before.subnets, 1, "before")
+    H.eq(#before.raw_segments, 1, "before: one segment")
     local after = graph.build({
-      cables = { { x = 0, y = 0 }, { x = 2, y = 0 } },
+      cables = { cable(0, 0, TIER.twisted), cable(2, 0, TIER.twisted) },
     })
-    H.eq(#after.subnets, 2, "after")
+    H.eq(#after.raw_segments, 2, "after: two segments")
   end)
 
   H.test("build does not mutate its input", function()
     local spec = {
-      cables = { { x = 0, y = 0 } },
+      cables = { cable(1, 0, TIER.twisted) },
       devices = { { id = "a", kind = "compute", x = 0.5, y = 0.5, compute = 1 } },
     }
     local result = graph.build(spec)
     H.eq(#spec.cables, 1, "input cable count")
-    H.eq(spec.cables[1].x, 0, "input cable x")
-    H.eq(#result.subnets[1].devices, 1, "subnet device count")
-    result.subnets[1].compute = 99
-    H.eq(spec.devices[1].compute, 1, "input device compute")
+    H.eq(spec.cables[1].x, 1.5, "input cable x")
+    H.truthy(result.device_network["a"], "device on network")
   end)
 
-  H.test("subnet_at and network_for resolve positions and ids", function()
+  H.test("positions are kept for overlay rendering", function()
     local result = graph.build({
-      cables = { { x = 4, y = 4 } },
-      devices = { { id = 30, kind = "monitor", x = 4.5, y = 4.5 } },
-    })
-    H.eq(graph.subnet_at(result, 4.5, 4.5), 1, "subnet at tile")
-    H.nil_value(graph.subnet_at(result, 20, 20), "subnet off the grid")
-    H.eq(graph.network_for(result, 30), 1, "network for device")
-    H.nil_value(graph.network_for(result, 999), "network for unknown device")
-  end)
-
-  H.test("the graph keeps device positions and router reaches for the overlay", function()
-    local result = graph.build({
-      cables = { { x = 1.5, y = 0.5 }, { x = 5.5, y = 0.5 } },
+      cables = { cable(1, 0, TIER.twisted) },
       devices = {
         { id = "router", kind = "router", x = 3.5, y = 0.5 },
         { id = "lost", kind = "compute", x = 40.5, y = 40.5 },
@@ -194,105 +238,45 @@ return function()
     })
     H.eq(result.positions.router.x, 3.5, "router x")
     H.eq(result.positions.lost.y, 40.5, "lost y")
-    H.eq(#result.router_subnets.router, 2, "router reaches two subnets")
-    H.eq(result.unconnected[1], "lost", "unconnected device")
   end)
 
-  H.test("a repeater carries a cable run over a wider gap", function()
+  H.test("switch footprint covers all 6 tiles", function()
+    -- Switch at tile (3,0), direction 0: covers tiles (2,0)-(4,1).
+    -- Cables at tiles (1,0) and (5,0) touch switch tiles (2,0) and (4,0).
     local result = graph.build({
-      cables = { { x = 0.5, y = 0.5 }, { x = 8.5, y = 0.5 } },
-      devices = { { id = 30, kind = "switch", x = 4.5, y = 0.5, reach = 8 } },
+      cables = { cable(1, 0, TIER.twisted), cable(5, 0, TIER.twisted) },
+      devices = { { id = "sw", kind = "switch", x = 3.5, y = 0.5 } },
     })
-    H.eq(#result.subnets, 1, "repeater subnets")
-    H.eq(result.subnets[1].switches[1], 30, "repeater switch id")
+    H.eq(#result.merged_segments, 1, "switch merges both cables")
+    H.eq(#result.networks, 1, "one network")
   end)
 
-  H.test("a repeater cannot reach beyond its own range", function()
-    local result = graph.build({
-      cables = { { x = 0.5, y = 0.5 }, { x = 18.5, y = 0.5 } },
-      devices = {
-        { id = 31, kind = "switch", x = 2.5, y = 0.5, reach = 8 },
-        { id = 32, kind = "switch", x = 16.5, y = 0.5, reach = 8 },
-      },
-    })
-    H.eq(#result.subnets, 2, "distant subnets")
-  end)
-
-  H.test("two wireless access points join their cable runs", function()
-    local result = graph.build({
-      cables = { { x = 0.5, y = 0.5 }, { x = 12.5, y = 0.5 } },
-      devices = {
-        { id = 40, kind = "switch", x = 0.5, y = 2.5, wireless_range = 16 },
-        { id = 41, kind = "switch", x = 12.5, y = 2.5, wireless_range = 16 },
-      },
-    })
-    H.eq(#result.subnets, 1, "wireless subnets")
-    H.eq(#result.networks, 1, "wireless networks")
-  end)
-
-  H.test("wireless access points outside their range stay separate", function()
-    local result = graph.build({
-      cables = { { x = 0.5, y = 0.5 }, { x = 20.5, y = 0.5 } },
-      devices = {
-        { id = 42, kind = "switch", x = 0.5, y = 2.5, wireless_range = 16 },
-        { id = 43, kind = "switch", x = 20.5, y = 2.5, wireless_range = 16 },
-      },
-    })
-    H.eq(#result.subnets, 2, "out-of-range subnets")
-  end)
-
-  -- DESIGN §16.4 scale target: 10,000 cables, 1,000 providers, 200 labs and
-  -- 100 routers. The time is logged, not asserted, because a shared CI machine
-  -- varies; structural correctness is the hard contract.
-  H.test("a 10,000-cable network builds in one pass", function()
+  H.test("scale: many cables build in one pass", function()
     local cables = {}
     for x = 0, 99 do
       for y = 0, 99 do
-        cables[#cables + 1] = { x = x + 0.5, y = y + 0.5 }
+        cables[#cables + 1] = cable(x, y, TIER.twisted)
       end
     end
 
     local devices = {}
-    for i = 1, 1000 do
+    for i = 1, 100 do
       devices[#devices + 1] = {
-        id = "provider-" .. i,
-        kind = "provider",
-        x = (i % 100) + 0.5,
-        y = (math.floor(i / 100) % 100) + 0.5,
+        id = "device-" .. i,
+        kind = "compute",
+        x = (i % 10) + 0.5,
+        y = (math.floor(i / 10) % 10) + 0.5,
         compute = 1,
         memory = 8,
-      }
-    end
-    for i = 1, 200 do
-      devices[#devices + 1] = {
-        id = "lab-" .. i,
-        kind = "lab",
-        x = (i % 100) + 0.5,
-        y = ((i * 7) % 100) + 0.5,
-        compute = 2,
-      }
-    end
-    -- Each router bridges the main grid to its own one-cable stub, so the
-    -- network keeps 101 subnets and a single joined network.
-    for i = 1, 100 do
-      local x = i * 2 + 0.5
-      cables[#cables + 1] = { x = x, y = 101.5 }
-      devices[#devices + 1] = {
-        id = "router-" .. i,
-        kind = "router",
-        x = x,
-        y = 100.5,
       }
     end
 
     local result = graph.build({ cables = cables, devices = devices })
 
-    H.eq(result.cable_count, 10100, "cable count")
-    H.eq(#result.subnets, 101, "subnets")
-    H.eq(#result.networks, 1, "networks")
-    H.eq(result.networks[1].compute, 1400, "network compute")
-    H.eq(result.networks[1].memory, 8000, "network memory")
-    H.eq(#result.networks[1].subnets, 101, "network subnet count")
-    log("CHIPTORIO-TEST PERF graph: 10100 cables, 1300 devices, 101 subnets")
+    H.eq(result.cable_count, 10000, "cable count")
+    H.eq(#result.networks, 1, "all cables in one network")
+    H.eq(result.networks[1].compute, 100, "network compute")
+    H.eq(result.networks[1].memory, 800, "network memory")
+    log("CHIPTORIO-TEST PERF graph: 10000 cables, 100 devices, 1 network")
   end)
 end

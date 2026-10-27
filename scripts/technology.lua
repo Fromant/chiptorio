@@ -395,7 +395,6 @@ local techs = {
       "quantum-entanglement-core",
       "foup-dock",
       "foup",
-      "network-repeater",
       "wireless-access-point",
     },
   },
@@ -583,7 +582,7 @@ local NODE_TECHS = {
     count = 300,
     time = 35,
     prerequisites = { "process-1um", "vlsi-process" },
-    extra_effects = { "chiptorio-optical-science-pack", "ddr-module" },
+    extra_effects = { "chiptorio-optical-science-pack", "ddr-module", "network-coaxial-cable" },
   },
   ["180nm"] = {
     order = "a[chiptorio]-i1",
@@ -597,7 +596,7 @@ local NODE_TECHS = {
     count = 450,
     time = 40,
     prerequisites = { "process-180nm", "advanced-packaging" },
-    extra_effects = { "chiptorio-hbm-science-pack", "ddr3-module" },
+    extra_effects = { "chiptorio-hbm-science-pack", "ddr3-module", "network-fiber-mm-cable" },
   },
   ["45nm"] = {
     order = "a[chiptorio]-j2",
@@ -625,7 +624,7 @@ local NODE_TECHS = {
     count = 1000,
     time = 55,
     prerequisites = { "process-14nm", "quantum-computing" },
-    extra_effects = { "hbm3-module", "3d-nand-module" },
+    extra_effects = { "hbm3-module", "3d-nand-module", "network-fiber-sm-cable" },
   },
   ["3nm"] = {
     order = "a[chiptorio]-m1",

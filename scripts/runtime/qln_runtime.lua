@@ -358,7 +358,7 @@ local function collect_force(force, graphs)
               surface_index = surface_index,
               network_id = network_id,
               force_index = force.index,
-              network = graph.networks[network_id],
+              network = graph.network_by_id[network_id],
               nodes = {},
               drives = {},
             }

@@ -45,7 +45,9 @@ local function make_machine(spec)
   entity.energy_usage = spec.power
   entity.module_slots = spec.modules
   M.set_entity_icon(entity, spec.name)
-  if spec.tint then
+  if spec.custom_graphics then
+    M.set_custom_graphics(entity, spec.custom_graphics or spec.name, spec.size_w or 160, spec.size_h or 160, spec.scale or 0.5, spec.shift)
+  elseif spec.tint then
     M.tint_entity(entity, spec.tint)
   end
   data:extend({ entity })
@@ -83,7 +85,10 @@ make_machine({
   modules = 3,
   craft_time = 10,
   order = "a[wafer-fab]",
-  tint = { r = 0.55, g = 0.85, b = 1.0 },
+  custom_graphics = "wafer-fab",
+  size_w = 320,
+  size_h = 320,
+  scale = 0.5,
   ingredients = {
     M.item("steel-plate", 20),
     M.item("glass", 10),
@@ -103,7 +108,10 @@ make_machine({
   modules = 2,
   craft_time = 8,
   order = "b[crystal-puller]",
-  tint = { r = 1.0, g = 0.82, b = 0.45 },
+  custom_graphics = "crystal-puller",
+  size_w = 240,
+  size_h = 240,
+  scale = 0.5,
   ingredients = {
     M.item("steel-plate", 20),
     M.item("stone-brick", 10),
@@ -122,7 +130,10 @@ make_machine({
   modules = 4,
   craft_time = 12,
   order = "c[assembly-fab]",
-  tint = { r = 0.55, g = 0.70, b = 0.95 },
+  custom_graphics = "assembly-fab",
+  size_w = 240,
+  size_h = 240,
+  scale = 0.5,
   ingredients = {
     M.item("steel-plate", 30),
     M.item("advanced-circuit", 20),
@@ -141,7 +152,10 @@ make_machine({
   modules = 4,
   craft_time = 20,
   order = "d[vlsi-fab]",
-  tint = { r = 0.70, g = 0.55, b = 1.0 },
+  custom_graphics = "vlsi-fab",
+  size_w = 320,
+  size_h = 320,
+  scale = 0.5,
   ingredients = {
     M.item("wafer-fab", 2),
     M.item("steel-plate", 20),
@@ -162,7 +176,10 @@ make_machine({
   modules = 2,
   craft_time = 10,
   order = "e[cooling-tower]",
-  tint = { r = 0.45, g = 0.80, b = 1.0 },
+  custom_graphics = "cooling-tower",
+  size_w = 240,
+  size_h = 240,
+  scale = 0.5,
   ingredients = {
     M.item("steel-plate", 10),
     M.item("pipe", 20),
@@ -181,7 +198,10 @@ make_machine({
   modules = 4,
   craft_time = 30,
   order = "f[quantum-fab]",
-  tint = { r = 0.45, g = 0.35, b = 0.95 },
+  custom_graphics = "quantum-fab",
+  size_w = 320,
+  size_h = 320,
+  scale = 0.5,
   ingredients = {
     M.item("vlsi-fab", 1),
     M.item("steel-plate", 30),

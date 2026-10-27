@@ -26,24 +26,44 @@ do
   local group = M.copy(base_group)
   group.name = "chiptorio"
   group.localised_name = { "item-group-name.chiptorio" }
-  group.order = "zzz[chiptorio]"
+  group.order = "e[chiptorio]"
   group.icon = "__chiptorio__/graphics/icons/quantum-processor.png"
   group.icon_size = 64
   data:extend({ group })
+
+  -- Chiptorio: Network tab — cables, switches, routers, monitor.
+  local net_group = M.copy(base_group)
+  net_group.name = "chiptorio-network"
+  net_group.localised_name = { "item-group-name.chiptorio-network" }
+  net_group.order = "c[chiptorio-network]"
+  net_group.icon = "__chiptorio__/graphics/icons/network-switch.png"
+  net_group.icon_size = 64
+  data:extend({ net_group })
+
+  -- Chiptorio: QLN tab — storage nodes, drives, FOUP dock, quantum core.
+  local qln_group = M.copy(base_group)
+  qln_group.name = "chiptorio-qln"
+  qln_group.localised_name = { "item-group-name.chiptorio-qln" }
+  qln_group.order = "d[chiptorio-qln]"
+  qln_group.icon = "__chiptorio__/graphics/icons/qln-storage-drive.png"
+  qln_group.icon_size = 64
+  data:extend({ qln_group })
 end
 
 data:extend({
+  -- Materials live in the vanilla Intermediate Products tab.
   {
     type = "item-subgroup",
     name = "chiptorio-materials",
-    group = "chiptorio",
-    order = "a[materials]",
+    group = "intermediate-products",
+    order = "zzz[chiptorio-materials]",
   },
+  -- Chips live in the vanilla Production tab.
   {
     type = "item-subgroup",
     name = "chiptorio-chips",
-    group = "chiptorio",
-    order = "b[chips]",
+    group = "production",
+    order = "zzz[chiptorio-chips]",
   },
   {
     type = "item-subgroup",
@@ -72,8 +92,14 @@ data:extend({
   {
     type = "item-subgroup",
     name = "chiptorio-qln",
-    group = "chiptorio",
-    order = "g[qln]",
+    group = "chiptorio-qln",
+    order = "a[qln]",
+  },
+  {
+    type = "item-subgroup",
+    name = "chiptorio-network",
+    group = "chiptorio-network",
+    order = "a[network]",
   },
 })
 

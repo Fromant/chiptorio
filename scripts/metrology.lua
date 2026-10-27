@@ -70,8 +70,7 @@ for _, half in ipairs(nodes.HALF_NODES) do
   entity.inputs[#entity.inputs + 1] = nodes.qualification_item(half.key)
 end
 M.set_entity_icon(entity, "metrology-lab")
-M.tint_animation(entity.on_animation, { r = 0.45, g = 0.85, b = 0.95 })
-M.tint_animation(entity.off_animation, { r = 0.45, g = 0.85, b = 0.95 })
+M.set_custom_animation(entity, "metrology-lab", 160, 160, 0.5)
 data:extend({ entity })
 
 local item = M.copy(data.raw.item[BASE_LAB])

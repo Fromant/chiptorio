@@ -215,7 +215,10 @@ M.ASSEMBLER = {
   modules = 2,
   craft_time = 10,
   order = "a[circuit-assembler]",
-  tint = { r = 0.60, g = 0.50, b = 0.40 },
+  custom_graphics = "circuit-assembler",
+  size_w = 160,
+  size_h = 160,
+  scale = 0.5,
   ingredients = {
     { type = "item", name = "iron-plate", amount = 10 },
     { type = "item", name = "copper-plate", amount = 10 },

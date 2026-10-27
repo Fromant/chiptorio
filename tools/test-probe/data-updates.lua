@@ -382,14 +382,21 @@ for _, name in ipairs(LABS) do
   end
 end
 
--- Network wiring. Cable, switch, router and monitor are buildable containers;
--- the cable must sit on its own collision layer so cables stack-proof while
--- still passing under machines and belts.
+-- Network wiring. Cable, switch, router and monitor are buildable containers.
+-- Cables collide with everything (object layer) so they route around machines;
+-- they cannot pass under belts or assemblers. Switches and routers are 3×2
+-- rotatable junction boxes and gateways.
 local NETWORK_ENTITIES = {
-  ["network-cable"] = { layer = "chiptorio-cable" },
+  ["network-cable"] = { layer = "object", collides_with_everything = true },
   ["network-switch"] = { layer = nil },
   ["network-router"] = { layer = nil },
   ["network-monitor"] = { layer = nil },
+}
+-- Newer cable tiers are unlocked by later process nodes.
+local CABLE_TIER_TECHS = {
+  ["network-coaxial-cable"] = "process-350nm",
+  ["network-fiber-mm-cable"] = "process-90nm",
+  ["network-fiber-sm-cable"] = "process-7nm",
 }
 for name, spec in pairs(NETWORK_ENTITIES) do
   local item = item(name)
@@ -414,10 +421,15 @@ for name, spec in pairs(NETWORK_ENTITIES) do
       local layers = proto.collision_layer and proto.collision_layer.layers or {}
       check(masks[spec.layer], "network entity " .. name .. " is not on collision layer " .. spec.layer)
       check(layers[spec.layer], "network entity " .. name .. " does not collide on layer " .. spec.layer)
-      check(
-        not masks["object"] and not masks["player"] and not layers["object"],
-        "network entity " .. name .. " should pass under machines and players"
-      )
+      if spec.collides_with_everything then
+        check(masks["object"], "network entity " .. name .. " should collide with objects")
+        check(layers["object"], "network entity " .. name .. " should be on object layer")
+      else
+        check(
+          not masks["object"] and not masks["player"] and not layers["object"],
+          "network entity " .. name .. " should pass under machines and players"
+        )
+      end
     end
   end
 
@@ -426,6 +438,31 @@ for name, spec in pairs(NETWORK_ENTITIES) do
   if recipe then
     check(not recipe.hidden, "network recipe is hidden: " .. name)
     check(recipe.enabled == false, "network recipe should start locked: " .. name)
+  end
+end
+
+-- Newer cable tiers must exist as entities and recipes, unlocked by their node techs.
+for name, tech_name in pairs(CABLE_TIER_TECHS) do
+  local item = item(name)
+  check(item, "missing cable tier item " .. name)
+  local proto = entity(name)
+  check(proto, "missing cable tier entity " .. name)
+  check(proto.collision_mask and proto.collision_mask.layers and proto.collision_mask.layers["object"],
+    "cable tier " .. name .. " should collide with objects")
+  check(proto.collision_layer and proto.collision_layer.layers and proto.collision_layer.layers["object"],
+    "cable tier " .. name .. " should be on object layer")
+  local recipe = data.raw.recipe[name]
+  check(recipe, "missing cable tier recipe " .. name)
+  local tech = data.raw.technology[tech_name]
+  check(tech, "missing tier unlock technology " .. tech_name)
+  if tech then
+    local unlocked = {}
+    for _, effect in ipairs(tech.effects or {}) do
+      if effect.type == "unlock-recipe" then
+        unlocked[effect.recipe] = true
+      end
+    end
+    check(unlocked[name], tech_name .. " does not unlock " .. name)
   end
 end
 
@@ -794,7 +831,6 @@ local QLN_NODES = {
   "construction-core",
   "quantum-entanglement-core",
   "foup-dock",
-  "network-repeater",
   "wireless-access-point",
 }
 for _, name in ipairs(QLN_NODES) do
@@ -902,7 +938,7 @@ if quantum_tech then
   local unlocked = unlocked_recipes(qmeta.TECH_QUANTUM)
   for _, name in ipairs({
     "quantum-entanglement-core", "foup-dock", "foup",
-    "network-repeater", "wireless-access-point",
+    "wireless-access-point",
   }) do
     check(unlocked[name], qmeta.TECH_QUANTUM .. " does not unlock " .. name)
   end
@@ -935,6 +971,209 @@ local monitor_shortcut = data.raw.shortcut["chiptorio-network-monitor"]
 check(monitor_shortcut, "missing chiptorio-network-monitor shortcut")
 if monitor_shortcut then
   check(monitor_shortcut.technology_to_unlock == "internet", "monitor shortcut is not gated on internet")
+end
+
+if #failures > 0 then
+  error("CHIPTORIO-TEST FAIL data: " .. table.concat(failures, "; "))
+end
+
+-- ---------------------------------------------------------------------------
+-- P1.1 Global data contracts: recipe/technology graph integrity
+-- ---------------------------------------------------------------------------
+
+-- Build the set of every technology that is reachable from a start technology.
+-- Uses transitive closure: start with techs that have no prerequisites, then
+-- iteratively add any tech whose prerequisites are all reachable.
+local function reachable_techs()
+  local reachable = {}
+  -- Start: techs with no prerequisites
+  for _, tech in pairs(data.raw.technology) do
+    if not tech.prerequisites or #tech.prerequisites == 0 then
+      reachable[tech.name] = true
+    end
+  end
+  -- Iterate until no change
+  local changed = true
+  while changed do
+    changed = false
+    for _, tech in pairs(data.raw.technology) do
+      if not reachable[tech.name] and tech.prerequisites then
+        local all_reachable = true
+        for _, prereq in ipairs(tech.prerequisites) do
+          if not reachable[prereq] then
+            all_reachable = false
+            break
+          end
+        end
+        if all_reachable then
+          reachable[tech.name] = true
+          changed = true
+        end
+      end
+    end
+  end
+  return reachable
+end
+
+local reachable = reachable_techs()
+
+-- Check every enabled/disabled recipe has a technology that unlocks it.
+local orphaned_recipes = {}
+for _, recipe in pairs(data.raw.recipe) do
+  if recipe.name:find("^chiptorio") or recipe.name:find("^node-") or recipe.name:find("^refine-") or recipe.name:find("^foup-") or recipe.name:find("^qln-") or recipe.name:find("^network-") then
+    local unlocked = false
+    for _, tech in pairs(data.raw.technology) do
+      for _, effect in ipairs(tech.effects or {}) do
+        if effect.type == "unlock-recipe" and effect.recipe == recipe.name then
+          unlocked = true
+          break
+        end
+      end
+      if unlocked then break end
+    end
+    if not unlocked and not recipe.hidden then
+      orphaned_recipes[#orphaned_recipes + 1] = recipe.name
+    end
+  end
+end
+if #orphaned_recipes > 0 then
+  table.insert(failures, "orphaned recipes (no technology unlocks them): " .. table.concat(orphaned_recipes, ", "))
+end
+
+-- Every visible Chiptorio item, entity, fluid and technology should have a
+-- locale name and an icon that resolves to a Chiptorio-generated path.
+local chiptorio_prefixes = {
+  "chiptorio-", "network-", "qln-", "foup-", "node-", "refine-",
+}
+
+local function is_chiptorio_created(name)
+  -- Chiptorio-created prototypes use these prefixes.
+  for _, prefix in ipairs(chiptorio_prefixes) do
+    if name:sub(1, #prefix) == prefix then
+      return true
+    end
+  end
+  -- Also cover vanilla-internal names that Chiptorio re-themes and explicitly
+  -- sets locale/icons on (circuits.lua, labs.lua, etc.).
+  if name == "electronic-circuit" or name == "advanced-circuit" or name == "processing-unit"
+     or name == "analytical-engine" then
+    return true
+  end
+  return false
+end
+
+-- Check every Chiptorio technology has a path from a start tech (no unreachable islands).
+-- Vanilla technologies are excluded: Chiptorio adds prerequisites but doesn't remove them,
+-- so vanilla techs remain reachable through their vanilla prerequisites.
+local unreachable_techs = {}
+for _, tech in pairs(data.raw.technology) do
+  if is_chiptorio_created(tech.name) and not tech.hidden and not reachable[tech.name] then
+    -- Exempt intentional islands: pilot recipes, The Answer Engine, trigger-unlocked starters.
+    if not tech.name:find("^refine-") and tech.name ~= "the-question" and tech.name ~= "analytical-engine" then
+      unreachable_techs[#unreachable_techs + 1] = tech.name
+    end
+  end
+end
+if #unreachable_techs > 0 then
+  table.insert(failures, "unreachable technologies: " .. table.concat(unreachable_techs, ", "))
+end
+
+-- Check for prerequisite cycles using DFS.
+local function find_cycles()
+  local cycles = {}
+  local color = {} -- 0=white, 1=gray, 2=black
+  local path = {}
+
+  local function dfs(name)
+    color[name] = 1
+    path[#path + 1] = name
+    local tech = data.raw.technology[name]
+    if tech then
+      for _, prereq in ipairs(tech.prerequisites or {}) do
+        if color[prereq] == 1 then
+          -- Found a cycle: extract it from path.
+          local cycle_start = nil
+          for i = #path, 1, -1 do
+            if path[i] == prereq then
+              cycle_start = i
+              break
+            end
+          end
+          if cycle_start then
+            local cycle = {}
+            for i = cycle_start, #path do
+              cycle[#cycle + 1] = path[i]
+            end
+            cycles[#cycles + 1] = table.concat(cycle, " -> ")
+          end
+        elseif color[prereq] == 0 then
+          dfs(prereq)
+        end
+      end
+    end
+    path[#path] = nil
+    color[name] = 2
+  end
+
+  for _, tech in pairs(data.raw.technology) do
+    if not color[tech.name] then
+      dfs(tech.name)
+    end
+  end
+  return cycles
+end
+
+local cycles = find_cycles()
+if #cycles > 0 then
+  table.insert(failures, "technology prerequisite cycles: " .. table.concat(cycles, "; "))
+end
+
+-- ---------------------------------------------------------------------------
+-- P1.9 Locale and icon completeness for every prototype
+-- ---------------------------------------------------------------------------
+
+-- Icons are critical: Factorio won't auto-resolve missing icons.
+-- Locale keys are auto-resolved (item-name.<name>, technology-name.<name>),
+-- so only check icons here.
+local missing_icon = {}
+
+-- Items
+for name, proto in pairs(data.raw.item) do
+  if is_chiptorio_created(name) and not proto.hidden then
+    if not proto.icon and not proto.icons then
+      missing_icon[#missing_icon + 1] = "item " .. name
+    end
+  end
+end
+
+-- Entities (all types)
+for _, type_name in ipairs({
+  "container", "lab", "accumulator", "assembling-machine", "furnace",
+  "display-panel", "constant-combinator", "pipe",
+}) do
+  local prototypes = data.raw[type_name]
+  if prototypes then
+    for name, proto in pairs(prototypes) do
+      if is_chiptorio_created(name) and not proto.hidden then
+        if not proto.icon and not proto.icons then
+          missing_icon[#missing_icon + 1] = type_name .. "/" .. name
+        end
+      end
+    end
+  end
+end
+
+-- Technologies
+for name, proto in pairs(data.raw.technology) do
+  if is_chiptorio_created(name) and not proto.hidden then
+    if not proto.icon and not proto.icons then
+      missing_icon[#missing_icon + 1] = "technology " .. name
+    end
+  end
+end
+
+if #missing_icon > 0 then
+  table.insert(failures, "missing icons: " .. table.concat(missing_icon, ", "))
 end
 
 if #failures > 0 then

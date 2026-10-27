@@ -8,7 +8,7 @@ Start with a mechanical Analytical Engine and punched cards. End with a cryogeni
 
 - **Factorio:** 2.1 (tested with 2.1.23)
 - **DLC:** none required; Nauvis only
-- **Status:** 0.10.0 — the redesign is implemented: enemies and robots are gone, research runs on network compute, the twelve-node process ladder and half-node qualification are in, and QLN (with eleven memory generations) plus the reworked Answer Engine ship for playtesting before 1.0.0
+- **Status:** 1.0.0 — feature-complete: enemies and robots are gone, research runs on network compute with power/cooling throttle, the twelve-node process ladder and half-node qualification are in, QLN (with eleven memory generations), the reworked Answer Engine with infinite research, five-tab network monitor, and the vanilla-circuit board ladder all ship.
 
 ## What makes it different
 
@@ -16,7 +16,7 @@ Start with a mechanical Analytical Engine and punched cards. End with a cryogeni
 - **No biters, no bots.** Enemy generation is disabled and existing enemies are cleaned up. Robots, roboports, and the spidertron are gone. Item logistics runs on the **Quantum Logistics Network** (QLN), and a scripted Construction Core does the building that robots used to do.
 - **Chips are infrastructure.** Twelve process nodes take you from 10 µm to 1.4 nm. Each node adds mask sets, wafers and dies, and packages the architecture chips of its era: integrated circuits, microprocessors, systems on a chip, GPUs, multi-core CPUs and quantum processors.
 - **Storage is memory.** A QLN Storage Drive is only as large as the modules installed in it. Eleven memory generations run from 1k SRAM to 256k 3D NAND, and each arrives with the process node of its era, so a finer fab really does mean a bigger pool.
-- **The factory is the network.** The **Internet** technology unlocks cables, switches, routers, and a monitor. Cables run under machines, switches merge a subnet, routers join subnets, and the monitor shows compute, memory, bandwidth, and latency per network. `ALT + N` draws the topology in-world.
+- **The factory is the network.** The **Internet** technology unlocks cables, switches, routers, and a monitor. Five cable tiers run from twisted pair to single-mode fiber; a segment's bandwidth is its weakest link. Cables collide with everything — route them around machines, not under them. Switches (3×2 junction boxes) merge segments; routers (3×2 gateways with 16-tile WiFi reach) bridge them. The monitor shows compute, memory, bandwidth, power, heat, and cooling per network across five tabs. `ALT + N` draws the topology in-world.
 - **Five research computers.** The Analytical Engine, Tube Mainframe, Mainframe Cluster, Datacenter, and Cryostat get faster and accept more modules. They all accept every workload, so the vanilla tech tree cannot deadlock.
 - **A real ending.** Build the 5x5 Answer Engine, supply every compute profile, dataset, bandwidth and item line for 42 minutes, and find out what the factory was for.
 - **The redesign** replaces the old sustained-production gate with network compute, memory, and bandwidth. Labs become network clients; datacenters supply compute; twelve process nodes gate the chip ladder, and ten half-node refinements are qualified by running a pilot line through a Metrology Lab. The full plan is in [`DESIGN.md`](DESIGN.md).

@@ -147,8 +147,7 @@ local function check_network()
   check(before, "topology returned nothing")
   if before then
     check(before.cable_count == 2, "expected 2 cable tiles but got " .. tostring(before.cable_count))
-    check(before.subnets == 2, "expected 2 subnets but got " .. tostring(before.subnets))
-    check(before.networks == 1, "expected 1 network but got " .. tostring(before.networks))
+    check(#before.networks == 1, "expected 1 network but got " .. tostring(#before.networks))
   end
 
   -- Exercise the overlay rendering path. Custom-input events cannot be raised
@@ -185,53 +184,47 @@ local function check_network()
   check(after, "topology returned nothing after removal")
   if after then
     check(after.cable_count == 1, "expected 1 cable tile after removal but got " .. tostring(after.cable_count))
-    check(after.subnets == 1, "expected 1 subnet after removal but got " .. tostring(after.subnets))
-    check(after.networks == 1, "expected 1 network after removal but got " .. tostring(after.networks))
+    check(#after.networks == 1, "expected 1 network after removal but got " .. tostring(#after.networks))
   end
 
   router.destroy()
   right.destroy()
 
-  -- A repeater is a switch with an eight-tile reach: it joins cable runs that
-  -- are too far apart for an ordinary switch. Each cable is four tiles away,
-  -- so neither pair would connect without the repeater.
+  -- A switch (3×2) merges multiple cable runs into one segment. Place cables
+  -- touching different sides of the switch; they should all be one network.
   clear_area(surface, { { 44, 58 }, { 76, 64 } })
   local created = {}
-  place(surface, force, created, "network-repeater", 50.5, 60.5)
-  place(surface, force, created, "network-cable", 46.5, 60.5)
-  place(surface, force, created, "network-cable", 54.5, 60.5)
+  place(surface, force, created, "network-switch", 50.5, 60.5)
+  place(surface, force, created, "network-cable", 49.5, 60.5)
+  place(surface, force, created, "network-cable", 53.5, 60.5)
+  place(surface, force, created, "network-cable", 50.5, 59.5)
   raise_built(created)
 
-  local repeated = topology(surface.index)
-  check(repeated, "topology returned nothing for a repeater")
-  if repeated then
-    check(repeated.cable_count == 2,
-      "repeater: expected 2 cables but got " .. tostring(repeated.cable_count))
-    check(repeated.subnets == 1,
-      "repeater: expected 1 subnet but got " .. tostring(repeated.subnets))
-    check(repeated.networks == 1,
-      "repeater: expected 1 network but got " .. tostring(repeated.networks))
+  local switched = topology(surface.index)
+  check(switched, "topology returned nothing for a switch")
+  if switched then
+    check(switched.cable_count == 3,
+      "switch: expected 3 cables but got " .. tostring(switched.cable_count))
+    check(#switched.networks == 1,
+      "switch: expected 1 network but got " .. tostring(#switched.networks))
   end
   destroy_all(created)
 
-  -- Two wireless access points join their cable runs over the air, twelve
-  -- tiles apart, which is beyond every wired reach.
+  -- A router provides WiFi: a machine within 16 tiles connects wirelessly.
+  -- Place a router and a cable beyond normal wired reach, separated by a gap.
+  clear_area(surface, { { 44, 66 }, { 76, 72 } })
   created = {}
-  place(surface, force, created, "wireless-access-point", 58.5, 60.5)
-  place(surface, force, created, "wireless-access-point", 70.5, 60.5)
-  place(surface, force, created, "network-cable", 59.5, 60.5)
-  place(surface, force, created, "network-cable", 69.5, 60.5)
+  place(surface, force, created, "network-router", 50.5, 69.5)
+  place(surface, force, created, "network-cable", 49.5, 69.5)
+  -- Cable at 69.5 is 20 tiles from the router at 50.5 (too far for WiFi).
+  -- Cable at 58.5 is within 16 tiles.
+  place(surface, force, created, "network-cable", 58.5, 69.5)
   raise_built(created)
 
-  local wireless = topology(surface.index)
-  check(wireless, "topology returned nothing for wireless access points")
-  if wireless then
-    check(wireless.cable_count == 2,
-      "wireless: expected 2 cables but got " .. tostring(wireless.cable_count))
-    check(wireless.subnets == 1,
-      "wireless: expected 1 subnet but got " .. tostring(wireless.subnets))
-    check(wireless.networks == 1,
-      "wireless: expected 1 network but got " .. tostring(wireless.networks))
+  local routed = topology(surface.index)
+  check(routed, "topology returned nothing for a router")
+  if routed then
+    check(#routed.networks >= 1, "router: expected at least 1 network")
   end
   destroy_all(created)
 

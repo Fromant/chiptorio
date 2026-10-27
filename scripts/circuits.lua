@@ -146,7 +146,9 @@ local function make_circuit_assembler(spec)
   entity.energy_usage = spec.power
   entity.module_slots = spec.modules
   M.set_entity_icon(entity, spec.name)
-  if spec.tint then
+  if spec.custom_graphics then
+    M.set_custom_graphics(entity, spec.custom_graphics or spec.name, spec.size_w or 160, spec.size_h or 160, spec.scale or 0.5, spec.shift)
+  elseif spec.tint then
     M.tint_entity(entity, spec.tint)
   end
   data:extend({ entity })

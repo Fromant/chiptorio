@@ -87,8 +87,7 @@ entity.icons_positioning = nil
 
 scale_animation(entity.on_animation)
 scale_animation(entity.off_animation)
-M.tint_animation(entity.on_animation, { r = 1.0, g = 0.78, b = 0.35 })
-M.tint_animation(entity.off_animation, { r = 0.78, g = 0.55, b = 0.25 })
+M.set_custom_animation(entity, "answer-engine", 240, 240, 0.5)
 M.set_entity_icon(entity, "answer-engine")
 data:extend({ entity })
 

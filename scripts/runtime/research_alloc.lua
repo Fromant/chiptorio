@@ -69,6 +69,13 @@ local function network_reason(network, spec, profile_compute)
   if (network.bandwidth or 0) < spec.bandwidth then
     return "bandwidth"
   end
+  -- Cooling shortfall is a hard stop: without enough cooling, the network
+  -- overheats and research stops entirely.
+  local heat = network.heat or 0
+  local cooling = network.cooling or 0
+  if cooling < heat then
+    return "cooling"
+  end
   return "ok"
 end
 
@@ -102,7 +109,7 @@ end
 ---   supported      true when at least one network meets every gate
 ---   decay          fraction of the research bar lost per minute, 0..MAX
 ---   reason         "ok" | "no-network" | "no-labs" | "compute" |
----                  "memory" | "bandwidth"
+---                  "memory" | "bandwidth" | "cooling" | "power"
 ---   active_labs    total number of labs that should run
 ---   networks       per-network result keyed by network id
 function M.evaluate(spec, networks)
@@ -119,10 +126,12 @@ function M.evaluate(spec, networks)
   end
 
   local total_active = 0
-  -- Best network that at least has enough memory and bandwidth; only its
-  -- compute can be the limiting factor. -1 means no such network exists.
-  local best_hard_compute = -1
-  -- First hard stop (memory or bandwidth) among the networks that failed one.
+  -- Best network that at least has enough memory, bandwidth and cooling; only
+  -- its compute and power can be limiting factors. -1 means no such network.
+  local best_compute = -1
+  local best_power = -1
+  -- First hard stop (memory, bandwidth or cooling) among the networks that
+  -- failed one.
   local blocked_reason = nil
 
   for _, network in ipairs(networks) do
@@ -138,13 +147,20 @@ function M.evaluate(spec, networks)
     if qualified then
       active, active_count, used, capacity = enable_labs(network, spec, profiles)
     else
-      -- Track the least-bad network so decay can be proportional to how close
-      -- the player is to the compute floor.
+      -- Track the least-bad networks so decay can be proportional to how close
+      -- the player is to the compute or power floor.
       local memory_ok = (network.memory or 0) >= spec.memory
       local bandwidth_ok = (network.bandwidth or 0) >= spec.bandwidth
-      if memory_ok and bandwidth_ok then
-        if profile_compute > best_hard_compute then
-          best_hard_compute = profile_compute
+      local cooling_ok = (network.cooling or 0) >= (network.heat or 0)
+      if memory_ok and bandwidth_ok and cooling_ok then
+        if profile_compute > best_compute then
+          best_compute = profile_compute
+        end
+        local power_supply = network.power or 0
+        local power_demand = network.heat or 0
+        local power_ratio = power_demand <= 0 and 1 or power_supply / power_demand
+        if power_ratio > best_power then
+          best_power = power_ratio
         end
       elseif not blocked_reason then
         blocked_reason = reason
@@ -172,8 +188,30 @@ function M.evaluate(spec, networks)
 
   if result.supported then
     if total_active > 0 then
-      result.decay = 0
-      result.reason = "ok"
+      -- Even a qualified network can have power shortfall: power below heat
+      -- causes proportional decay, matching the compute-shortfall rule.
+      local best_power_ratio = 1
+      for _, network in ipairs(networks) do
+        local net_result = result.networks[network.id]
+        if net_result.supported then
+          local power_supply = network.power or 0
+          local power_demand = network.heat or 0
+          if power_demand > 0 then
+            local ratio = power_supply / power_demand
+            if ratio < best_power_ratio then
+              best_power_ratio = ratio
+            end
+          end
+        end
+      end
+      local missing_power = math.max(0, 1 - best_power_ratio)
+      if missing_power > 0 then
+        result.decay = meta.MAX_DECAY_PER_MINUTE * missing_power
+        result.reason = "power"
+      else
+        result.decay = 0
+        result.reason = "ok"
+      end
     else
       -- Capacity exists, but no lab is connected: research cannot advance.
       result.decay = meta.MAX_DECAY_PER_MINUTE
@@ -182,23 +220,28 @@ function M.evaluate(spec, networks)
     return result
   end
 
-  -- No network passed every gate. Memory and bandwidth failures are hard
-  -- stops; a pure compute shortfall decays in proportion to the gap.
-  if best_hard_compute < 0 then
+  -- No network passed every gate. Memory, bandwidth and cooling failures are
+  -- hard stops. Compute and power shortfalls decay proportionally.
+  if best_compute < 0 then
     result.decay = meta.MAX_DECAY_PER_MINUTE
     result.reason = blocked_reason or "no-network"
     return result
   end
 
-  local compute = best_hard_compute
+  -- Combine compute and power shortfalls: the worse of the two sets the decay.
+  local compute = best_compute
+  local floor = spec.floor or 0
+  local missing_compute = floor <= 0 and 0 or math.max(0, 1 - compute / floor)
+  local missing_power = math.max(0, 1 - best_power)
+  local missing = math.max(missing_compute, missing_power)
+
   result.reason = "compute"
-  if (spec.floor or 0) <= 0 or compute <= 0 then
+  if missing_power > missing_compute then
+    result.reason = "power"
+  end
+  if floor <= 0 or compute <= 0 then
     result.decay = meta.MAX_DECAY_PER_MINUTE
   else
-    local missing = 1 - compute / spec.floor
-    if missing < 0 then
-      missing = 0
-    end
     result.decay = meta.MAX_DECAY_PER_MINUTE * missing
   end
   return result
