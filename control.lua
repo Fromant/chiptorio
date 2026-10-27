@@ -152,39 +152,63 @@ if not remote.interfaces["chiptorio-network"] then
     -- /c remote.call("chiptorio-network", "status")
     status = network.status,
     topology = function(surface_index)
-      local graphs = network.graphs()
+      network.graphs()
       if surface_index then
-        local graph = graphs and graphs[surface_index]
-        if graph then
-          local res = {
-            cable_count = graph.cable_count or 0,
-            networks = graph.networks or {},
-            unconnected = graph.unconnected or {},
-            conflicts = graph.conflicts or {},
-            labs = graph.lab_count or 0,
-            providers = graph.provider_count or 0,
-            metrology = graph.metrology_count or 0,
-            nodes = graph.node_count or 0,
-            scalar = graph.scalar or 0,
-            vector = graph.vector or 0,
-            tensor = graph.tensor or 0,
-            quantum = graph.quantum or 0,
-            memory = graph.memory or 0,
-            bandwidth = graph.bandwidth or 0,
-            power = graph.power or 0,
-            heat = graph.heat or 0,
-            cooling = graph.cooling or 0,
-          }
-          if (res.labs == 0 or res.labs == nil) and graph.networks then
-            local c = 0
-            for _, n in ipairs(graph.networks) do c = c + #(n.labs or {}) end
-            res.labs = c
+        local surface = game.surfaces[surface_index]
+        if surface and surface.valid then
+          -- Force rebuild if graph is empty but entities exist
+          local graphs = (storage.network and storage.network.graphs) or {}
+          local graph = graphs[surface_index]
+          if not graph or ((graph.cable_count or 0) == 0 and #(graph.networks or {}) == 0) then
+            -- Try to find any network entities and rebuild
+            local has_entities = false
+            for _, name in ipairs({"network-cable","network-coaxial-cable","network-fiber-mm-cable","network-fiber-sm-cable","network-switch","network-router","network-monitor","server-rack","memory-bank","datacenter","analytical-engine","tube-mainframe","mainframe-cluster","datacenter-lab","cryostat","metrology-lab","qln-import-node","qln-export-node","qln-provider-node","qln-requester-node","qln-terminal","qln-storage-drive","construction-core","foup-dock","quantum-entanglement-core","answer-engine"}) do
+              local entities = surface.find_entities_filtered({name = name})
+              if #entities > 0 then
+                has_entities = true
+                break
+              end
+            end
+            if has_entities then
+              if storage.network then
+                storage.network.dirty = true
+                network.tick()
+                graphs = (storage.network and storage.network.graphs) or {}
+                graph = graphs[surface_index]
+              end
+            end
           end
-          return res
+          if graph then
+            local res = {
+              cable_count = graph.cable_count or 0,
+              networks = graph.networks or {},
+              unconnected = graph.unconnected or {},
+              conflicts = graph.conflicts or {},
+              labs = graph.lab_count or 0,
+              providers = graph.provider_count or 0,
+              metrology = graph.metrology_count or 0,
+              nodes = graph.node_count or 0,
+              scalar = graph.scalar or 0,
+              vector = graph.vector or 0,
+              tensor = graph.tensor or 0,
+              quantum = graph.quantum or 0,
+              memory = graph.memory or 0,
+              bandwidth = graph.bandwidth or 0,
+              power = graph.power or 0,
+              heat = graph.heat or 0,
+              cooling = graph.cooling or 0,
+            }
+            if (res.labs == 0 or res.labs == nil) and graph.networks then
+              local c = 0
+              for _, n in ipairs(graph.networks) do c = c + #(n.labs or {}) end
+              res.labs = c
+            end
+            return res
+          end
         end
         return { cable_count = 0, networks = {}, unconnected = {}, conflicts = {} }
       end
-      return graphs or {}
+      return (storage.network and storage.network.graphs) or {}
     end,
     -- /c remote.call("chiptorio-network", "overlay", true)
     -- Custom-input events cannot be raised from script, so the overlay tests and
