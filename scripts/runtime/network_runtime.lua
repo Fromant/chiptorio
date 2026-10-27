@@ -697,6 +697,36 @@ function M.graphs()
     rebuild_all()
     draw_overlay()
   end
+  -- Also force rebuild if graphs are all empty but entities might exist
+  local needs_rebuild = false
+  for _, surface in pairs(game.surfaces) do
+    local graph = storage.network.graphs[surface.index]
+    if not graph or ((graph.cable_count or 0) == 0 and #(graph.networks or {}) == 0 and #(graph.unconnected or {}) == 0) then
+      -- check if any entities exist
+      for _, name in ipairs(NETWORK_NAMES) do
+        local entities = surface.find_entities_filtered({name = name})
+        if #entities > 0 then
+          needs_rebuild = true
+          break
+        end
+      end
+      if needs_rebuild then break end
+    end
+  end
+  if needs_rebuild then
+    -- reseed all
+    storage.network.chunks = {}
+    for _, surface in pairs(game.surfaces) do
+      for _, entity in ipairs(surface.find_entities_filtered({ name = NETWORK_NAMES })) do
+        if entity.valid then
+          track(entity)
+        end
+      end
+    end
+    storage.network.dirty = true
+    rebuild_all()
+    draw_overlay()
+  end
   return storage.network.graphs
 end
 
