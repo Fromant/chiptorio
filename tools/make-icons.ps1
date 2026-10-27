@@ -457,6 +457,26 @@ for ($y = 4; $y -le 10; $y += 3) {
 Rect $g 2 13 12 1 $gold
 Save-Icon $b "qubit-array"
 
+# --- custom science packs ----------------------------------------------
+
+$b, $g = New-Canvas
+Disc $g 8 8 6 $silver
+Disc $g 8 8 4 $panel
+Disc $g 8 8 1 $ink
+Line $g 8 2 8 4 $cyan
+Rect $g 11 10 2 2 $cyan
+Save-Icon $b "optical-disc"
+
+$b, $g = New-Canvas
+Rect $g 2 3 12 10 $panel
+for ($y = 4; $y -le 11; $y += 2) {
+  Rect $g 3 $y 10 1 $cyan
+}
+Rect $g 3 4 2 8 $silver
+Rect $g 11 4 2 8 $gold
+Rect $g 2 3 12 1 $purple
+Save-Icon $b "hbm-science"
+
 $b, $g = New-Canvas
 Rect $g 2 3 12 10 $panel
 Rect $g 2 3 12 1 $purple
@@ -735,6 +755,7 @@ $order = @(
   "coolant", "superconductor", "qubit", "error-corrected-qubit",
   "quantum-processor", "qubit-array", "quantum-fab", "cryostat",
   "cryogen", "answer-engine", "network-cable", "network-switch",
+  "optical-disc", "hbm-science",
   "network-router", "network-monitor"
 )
 
@@ -771,6 +792,18 @@ $techIcons = @{
   "photolithography"      = "litho-mask"
   "planar-process"        = "integrated-circuit"
   "microarchitecture"     = "microprocessor"
+  "process-10um"          = "litho-mask"
+  "process-3um"           = "silicon-wafer"
+  "process-1um"           = "exposed-wafer"
+  "process-350nm"         = "phase-shift-mask"
+  "process-180nm"         = "system-on-chip"
+  "process-90nm"          = "gpu"
+  "process-45nm"          = "hbm-stack"
+  "process-22nm"          = "multi-core-cpu"
+  "process-14nm"          = "multi-core-cpu"
+  "process-7nm"           = "chiplet"
+  "process-3nm"           = "quantum-processor"
+  "process-1-4nm"         = "qubit-array"
   "internet"              = "network-monitor"
   "vlsi-process"          = "vlsi-die"
   "datacenter"            = "datacenter"
@@ -849,7 +882,7 @@ $titleBrush.Dispose(); $titleFont.Dispose()
 
 $smallFont = New-Object System.Drawing.Font -ArgumentList @("Consolas", [single]17, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
 $smallBrush = New-Object System.Drawing.SolidBrush -ArgumentList (Col "#7d8b99")
-$eg.DrawString("42 minutes. Seven workloads. One question.", $smallFont, $smallBrush, (New-Object System.Drawing.RectangleF(0, 500, 400, 30)), $center)
+$eg.DrawString("42 minutes. Nine workloads. One question.", $smallFont, $smallBrush, (New-Object System.Drawing.RectangleF(0, 500, 400, 30)), $center)
 $eg.DrawString("DON'T PANIC", $smallFont, $smallBrush, (New-Object System.Drawing.RectangleF(0, 540, 400, 30)), $center)
 $smallBrush.Dispose(); $smallFont.Dispose()
 $center.Dispose()

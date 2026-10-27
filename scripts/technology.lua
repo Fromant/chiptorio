@@ -1,11 +1,21 @@
 -- New technologies. Costs are expressed in the re-flavoured workloads:
---   automation-science-pack = punched cards
---   logistic-science-pack   = punched tape
---   military-science-pack   = magnetic tape
---   chemical-science-pack   = disk packs
---   quantum-science-pack    = qubit arrays
+--   automation-science-pack        = punched cards
+--   logistic-science-pack          = punched tape
+--   military-science-pack          = magnetic tape
+--   chemical-science-pack          = disk packs
+--   production-science-pack        = solid-state drives
+--   utility-science-pack           = mainframe modules
+--   chiptorio-optical-science-pack = optical discs
+--   chiptorio-hbm-science-pack     = HBM stacks
+--   chiptorio-quantum-science-pack = qubit arrays
+--
+-- The twelve process-node technologies are generated from
+-- scripts/process_nodes.lua at the bottom of this file: the node table owns the
+-- manufacturing content and the science cost, this file owns the tech-tree
+-- position.
 
 local M = require("scripts.util")
+local nodes = require("scripts.process_nodes")
 
 local function ingredients(list)
   local out = {}
@@ -109,7 +119,6 @@ local techs = {
     },
     prerequisites = { "photolithography" },
     effects = {
-      "integrated-circuit",
       "mainframe-cluster",
     },
   },
@@ -122,10 +131,8 @@ local techs = {
       ["chemical-science-pack"] = 1,
       ["production-science-pack"] = 1,
     },
-    prerequisites = { "planar-process" },
-    effects = {
-      "microprocessor",
-    },
+    prerequisites = { "process-3um" },
+    effects = {},
   },
   {
     -- The internet is the first network technology. It costs no compute: it is
@@ -163,7 +170,7 @@ local techs = {
       ["utility-science-pack"] = 1,
     },
     -- The first compute-gated technology, so the network must exist first.
-    prerequisites = { "microarchitecture", "internet" },
+    prerequisites = { "internet", "process-1um" },
     effects = {
       "vlsi-fab",
       "cooling-tower",
@@ -172,9 +179,6 @@ local techs = {
       "phase-shift-mask",
       "cmp-slurry",
       "low-k-dielectric",
-      "vlsi-wafer",
-      "vlsi-die",
-      "system-on-chip",
     },
   },
   {
@@ -186,7 +190,7 @@ local techs = {
       ["production-science-pack"] = 1,
       ["utility-science-pack"] = 1,
     },
-    prerequisites = { "vlsi-process" },
+    prerequisites = { "vlsi-process", "process-350nm" },
     effects = {
       "datacenter",
       "datacenter-lab",
@@ -206,7 +210,6 @@ local techs = {
     effects = {
       "chiplet",
       "hbm-stack",
-      "gpu",
     },
   },
   {
@@ -219,9 +222,7 @@ local techs = {
       ["utility-science-pack"] = 1,
     },
     prerequisites = { "advanced-packaging" },
-    effects = {
-      "multi-core-cpu",
-    },
+    effects = {},
   },
   {
     name = "quantum-computing",
@@ -239,7 +240,7 @@ local techs = {
       "cryogen",
       "superconductor",
       "qubit",
-      "quantum-science-pack",
+      "chiptorio-quantum-science-pack",
     },
   },
   {
@@ -248,7 +249,7 @@ local techs = {
     count = 400,
     time = 60,
     cost = {
-      ["quantum-science-pack"] = 1,
+      ["chiptorio-quantum-science-pack"] = 1,
       ["utility-science-pack"] = 1,
     },
     prerequisites = { "quantum-computing" },
@@ -262,13 +263,13 @@ local techs = {
     count = 500,
     time = 60,
     cost = {
-      ["quantum-science-pack"] = 2,
+      ["chiptorio-quantum-science-pack"] = 2,
       ["utility-science-pack"] = 1,
     },
     prerequisites = { "quantum-error-correction" },
-    effects = {
-      "quantum-processor",
-    },
+    -- A pure gate: the quantum processor itself is packaged by the 7 nm,
+    -- 3 nm and 1.4 nm node recipes.
+    effects = {},
   },
   {
     -- The final technology is infinite: level 1 unlocks the Answer Engine,
@@ -284,7 +285,9 @@ local techs = {
       ["chemical-science-pack"] = 1,
       ["production-science-pack"] = 1,
       ["utility-science-pack"] = 1,
-      ["quantum-science-pack"] = 1,
+      ["chiptorio-optical-science-pack"] = 1,
+      ["chiptorio-hbm-science-pack"] = 1,
+      ["chiptorio-quantum-science-pack"] = 1,
       ["microprocessor"] = 1,
     },
     prerequisites = {
@@ -303,6 +306,7 @@ local techs = {
       "quantum-computing",
       "quantum-error-correction",
       "quantum-advantage",
+      "process-1-4nm",
     },
     effects = {
       "answer-engine",
@@ -310,6 +314,114 @@ local techs = {
     infinite = true,
   },
 }
+
+-- Tech-tree position of each major process node. The manufacturing content
+-- (mask/wafer/die recipes and chip packaging) is generated from the pure node
+-- table in scripts/process_nodes.lua; this table only says when it unlocks.
+-- The two custom science packs ride on the node that introduces their
+-- feedstock: optical discs at 350 nm, HBM stacks at 90 nm.
+local NODE_TECHS = {
+  ["10um"] = {
+    order = "a[chiptorio]-f1",
+    count = 150,
+    time = 30,
+    prerequisites = { "photolithography" },
+  },
+  ["3um"] = {
+    order = "a[chiptorio]-g1",
+    count = 200,
+    time = 30,
+    prerequisites = { "process-10um" },
+  },
+  ["1um"] = {
+    order = "a[chiptorio]-g3",
+    count = 250,
+    time = 30,
+    prerequisites = { "process-3um", "microarchitecture" },
+  },
+  ["350nm"] = {
+    order = "a[chiptorio]-h1",
+    count = 300,
+    time = 35,
+    prerequisites = { "process-1um", "vlsi-process" },
+    extra_effects = { "chiptorio-optical-science-pack" },
+  },
+  ["180nm"] = {
+    order = "a[chiptorio]-i1",
+    count = 350,
+    time = 35,
+    prerequisites = { "process-350nm" },
+  },
+  ["90nm"] = {
+    order = "a[chiptorio]-j1",
+    count = 450,
+    time = 40,
+    prerequisites = { "process-180nm", "advanced-packaging" },
+    extra_effects = { "chiptorio-hbm-science-pack" },
+  },
+  ["45nm"] = {
+    order = "a[chiptorio]-j2",
+    count = 550,
+    time = 45,
+    prerequisites = { "process-90nm" },
+  },
+  ["22nm"] = {
+    order = "a[chiptorio]-k1",
+    count = 650,
+    time = 45,
+    prerequisites = { "process-45nm", "heterogeneous-compute" },
+  },
+  ["14nm"] = {
+    order = "a[chiptorio]-k2",
+    count = 800,
+    time = 50,
+    prerequisites = { "process-22nm" },
+  },
+  ["7nm"] = {
+    order = "a[chiptorio]-l1",
+    count = 1000,
+    time = 55,
+    prerequisites = { "process-14nm", "quantum-computing" },
+  },
+  ["3nm"] = {
+    order = "a[chiptorio]-m1",
+    count = 1200,
+    time = 60,
+    prerequisites = { "process-7nm", "quantum-error-correction" },
+  },
+  ["1-4nm"] = {
+    order = "a[chiptorio]-n1",
+    count = 1500,
+    time = 60,
+    prerequisites = { "process-3nm" },
+  },
+}
+
+for _, node in ipairs(nodes.NODES) do
+  local position = NODE_TECHS[node.key]
+  if not position then
+    error("chiptorio: process node '" .. node.key .. "' has no technology position")
+  end
+
+  local names = nodes.items(node.key)
+  local effects = { names.mask, names.wafer, names.die }
+  for _, chip in ipairs(node.chips) do
+    effects[#effects + 1] = chip .. "-from-" .. node.key
+  end
+  for _, extra in ipairs(position.extra_effects or {}) do
+    effects[#effects + 1] = extra
+  end
+
+  techs[#techs + 1] = {
+    name = nodes.tech_name(node.key),
+    order = position.order,
+    count = position.count,
+    time = position.time,
+    cost = node.science,
+    prerequisites = position.prerequisites,
+    effects = effects,
+  }
+end
 
 for _, spec in ipairs(techs) do
   local effects = {}

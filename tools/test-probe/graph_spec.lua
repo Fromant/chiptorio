@@ -197,6 +197,4 @@ return function()
     H.eq(#result.router_subnets.router, 2, "router reaches two subnets")
     H.eq(result.unconnected[1], "lost", "unconnected device")
   end)
-
-  H.finish("unit")
 end

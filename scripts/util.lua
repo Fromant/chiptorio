@@ -98,6 +98,20 @@ function M.set_icon(proto, icon_name, size)
   }
 end
 
+--- The same icon with a colour tint. Used to give a dozen process nodes a
+--- distinct look without a dozen hand-drawn PNGs.
+function M.set_tinted_icon(proto, icon_name, tint, size)
+  proto.icon = nil
+  proto.icon_size = nil
+  proto.icons = {
+    {
+      icon = "__chiptorio__/graphics/icons/" .. icon_name .. ".png",
+      icon_size = size or 64,
+      tint = tint,
+    },
+  }
+end
+
 --- Entities and fluids use the single `icon` field, not `icons`.
 function M.set_entity_icon(proto, icon_name)
   proto.icons = nil

@@ -7,6 +7,8 @@
 
 local failures = {}
 
+local nodes = require("__chiptorio__/scripts/process_nodes")
+
 local function check(condition, message)
   if not condition then
     failures[#failures + 1] = message
@@ -286,7 +288,9 @@ local WORKLOADS = {
   "chemical-science-pack",
   "production-science-pack",
   "utility-science-pack",
-  "quantum-science-pack",
+  "chiptorio-optical-science-pack",
+  "chiptorio-hbm-science-pack",
+  "chiptorio-quantum-science-pack",
   "microprocessor",
 }
 for _, name in ipairs(LABS) do
@@ -460,6 +464,78 @@ if vlsi then
   end
   check(prerequisites["internet"], "vlsi-process must require the internet")
 end
+
+-- Process-node ladder. Every node must be a complete manufacturing family:
+-- three item prototypes, three locked recipes and one technology that unlocks
+-- all three plus one packaging recipe per supported architecture. A node whose
+-- technology forgets a recipe is unreachable content.
+local ARCHITECTURES = {
+  ["integrated-circuit"] = true,
+  ["microprocessor"] = true,
+  ["system-on-chip"] = true,
+  ["gpu"] = true,
+  ["multi-core-cpu"] = true,
+  ["quantum-processor"] = true,
+}
+local function unlocked_recipes(tech_name)
+  local unlocked = {}
+  local tech = data.raw.technology[tech_name]
+  if not tech then
+    return unlocked
+  end
+  for _, effect in ipairs(tech.effects or {}) do
+    if effect.type == "unlock-recipe" then
+      unlocked[effect.recipe] = true
+    end
+  end
+  return unlocked
+end
+
+for _, node in ipairs(nodes.NODES) do
+  local names = nodes.items(node.key)
+  for _, name in ipairs({ names.mask, names.wafer, names.die }) do
+    local proto = item(name)
+    check(proto, "missing process-node item " .. name)
+    check(proto and not proto.hidden, "process-node item is hidden: " .. name)
+    local recipe = data.raw.recipe[name]
+    check(recipe, "missing process-node recipe " .. name)
+    check(recipe and recipe.enabled == false, "process-node recipe should start locked: " .. name)
+  end
+
+  local tech_name = nodes.tech_name(node.key)
+  local tech = data.raw.technology[tech_name]
+  check(tech, "missing process-node technology " .. tech_name)
+  local unlocked = unlocked_recipes(tech_name)
+  for _, name in ipairs({ names.mask, names.wafer, names.die }) do
+    check(unlocked[name], tech_name .. " does not unlock " .. name)
+  end
+  check(#node.chips > 0, "process node " .. node.key .. " packages no architecture")
+  for _, chip in ipairs(node.chips) do
+    check(ARCHITECTURES[chip], "process node " .. node.key .. " packages unknown architecture " .. chip)
+    local packaging = chip .. "-from-" .. node.key
+    check(data.raw.recipe[packaging], "missing packaging recipe " .. packaging)
+    check(unlocked[packaging], tech_name .. " does not unlock " .. packaging)
+  end
+end
+
+-- The three custom workloads are item prototypes with their own recipes. The
+-- two that are not node-specific are unlocked by the node that introduces
+-- their feedstock; the Qubit Array comes from the Quantum Fab.
+local CUSTOM_WORKLOADS = {
+  ["chiptorio-optical-science-pack"] = "process-350nm",
+  ["chiptorio-hbm-science-pack"] = "process-90nm",
+  ["chiptorio-quantum-science-pack"] = "quantum-computing",
+}
+for name, tech_name in pairs(CUSTOM_WORKLOADS) do
+  local proto = item(name)
+  check(proto, "missing custom science pack " .. name)
+  check(proto and not proto.hidden, "custom science pack is hidden: " .. name)
+  local recipe = data.raw.recipe[name]
+  check(recipe, "missing custom science pack recipe " .. name)
+  check(recipe and recipe.enabled == false, "custom science pack recipe should start locked: " .. name)
+  check(unlocked_recipes(tech_name)[name], tech_name .. " does not unlock " .. name)
+end
+check(not item("quantum-science-pack"), "unprefixed quantum-science-pack still exists")
 
 local overlay_input = data.raw["custom-input"]["chiptorio-network-overlay"]
 check(overlay_input, "missing chiptorio-network-overlay custom input")

@@ -52,7 +52,7 @@ M.recipe({
   energy_required = 20,
   ingredients = {
     M.item("superconductor", 2),
-    M.item("vlsi-die", 2),
+    M.item("node-350nm-die", 2),
     M.fluid("cryogen", 10),
   },
   results = { M.item("qubit", 1) },
@@ -72,25 +72,14 @@ M.recipe({
   results = { M.item("error-corrected-qubit", 1) },
 })
 
--- Several logical qubits plus their control electronics in one package.
-M.recipe({
-  name = "quantum-processor",
-  enabled = false,
-  category = "chiptorio-quantum",
-  energy_required = 40,
-  ingredients = {
-    M.item("error-corrected-qubit", 4),
-    M.item("superconductor", 4),
-    M.item("low-k-dielectric", 2),
-    M.fluid("cryogen", 20),
-  },
-  results = { M.item("quantum-processor", 1) },
-})
+-- Several logical qubits plus their control electronics in one package are
+-- assembled by the process-node recipes (scripts/node_recipes.lua), which pair
+-- a node die with physical or logical qubits.
 
--- The seventh workload. Four physical qubits become four research units;
+-- The third custom workload. Four physical qubits become four research units;
 -- the Cryostat consumes them while it works.
 M.recipe({
-  name = "quantum-science-pack",
+  name = "chiptorio-quantum-science-pack",
   enabled = false,
   category = "chiptorio-quantum",
   energy_required = 16,
@@ -98,5 +87,9 @@ M.recipe({
     M.item("qubit", 4),
     M.fluid("cryogen", 10),
   },
-  results = { M.item("quantum-science-pack", 4) },
+  results = { M.item("chiptorio-quantum-science-pack", 4) },
+  icons = {
+    { icon = "__chiptorio__/graphics/icons/qubit-array.png", icon_size = 64 },
+  },
+  localised_name = { "item-name.qubit-array" },
 })

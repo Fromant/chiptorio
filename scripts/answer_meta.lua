@@ -8,7 +8,9 @@ local answer = {
   runtime_seconds = 42 * 60,
 
   -- The final exam: every workload tier, plus the chip that started the whole
-  -- industry. These are production rates, not stockpiles.
+  -- industry. These are production rates, not stockpiles. The three custom
+  -- packs are also the three rarest tiers: optical discs, HBM stacks and qubit
+  -- arrays.
   requirements = {
     { item = "automation-science-pack", rate = 10 }, -- punched cards
     { item = "logistic-science-pack", rate = 10 }, -- punched tape
@@ -16,7 +18,9 @@ local answer = {
     { item = "chemical-science-pack", rate = 6 }, -- disk packs
     { item = "production-science-pack", rate = 4 }, -- solid-state drives
     { item = "utility-science-pack", rate = 2 }, -- mainframe modules
-    { item = "quantum-science-pack", rate = 0.5 }, -- qubit arrays
+    { item = "chiptorio-optical-science-pack", rate = 1 }, -- optical discs
+    { item = "chiptorio-hbm-science-pack", rate = 0.75 }, -- HBM stacks
+    { item = "chiptorio-quantum-science-pack", rate = 0.5 }, -- qubit arrays
     { item = "microprocessor", rate = 1 },
   },
 

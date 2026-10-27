@@ -114,8 +114,6 @@ make_material("bare-die", "k[die]")
 make_material("phase-shift-mask", "l[phase-mask]")
 make_material("low-k-dielectric", "m[low-k]")
 make_material("cooling-unit", "n[cooling-unit]")
-make_material("vlsi-wafer", "o[vlsi-wafer]")
-make_material("vlsi-die", "p[vlsi-die]")
 
 -- Era 7 feedstock --------------------------------------------------------
 
@@ -147,17 +145,38 @@ make_chip_module("quantum-processor", "processing-unit", "l[quantum-cpu]", 6)
 make_memory_module("sram-module", "processing-unit", "a[sram]", 1)
 make_memory_module("dram-module", "processing-unit", "b[dram]", 2)
 
--- The seventh workload. It is a tool item because labs consume it exactly
--- like a science pack; only the name and recipe are ours.
-do
-  local proto = M.item_from(
-    "utility-science-pack",
-    "quantum-science-pack",
-    "science-pack",
-    "g[quantum-science-pack]"
-  )
-  M.set_icon(proto, "qubit-array")
-  proto.localised_name = { "item-name.qubit-array" }
-  proto.localised_description = { "item-description.qubit-array" }
-  proto.color_hint = { text = "Q" }
+-- The three custom workloads. They are item prototypes cloned from a science
+-- pack because labs consume them exactly like one; only the names, icons and
+-- recipes are ours.
+-- Internal names are prefixed so they cannot collide with a future vanilla
+-- pack (DESIGN §4.3).
+local function make_science_pack(name, label, icon, order, hint)
+  local proto = M.item_from("utility-science-pack", name, "science-pack", order)
+  M.set_icon(proto, icon)
+  proto.localised_name = { "item-name." .. label }
+  proto.localised_description = { "item-description." .. label }
+  proto.color_hint = { text = hint }
+  return proto
 end
+
+make_science_pack(
+  "chiptorio-optical-science-pack",
+  "optical-disc",
+  "optical-disc",
+  "g[optical-science-pack]",
+  "O"
+)
+make_science_pack(
+  "chiptorio-hbm-science-pack",
+  "hbm-science",
+  "hbm-science",
+  "h[optical-science-pack]",
+  "H"
+)
+make_science_pack(
+  "chiptorio-quantum-science-pack",
+  "qubit-array",
+  "qubit-array",
+  "i[quantum-science-pack]",
+  "Q"
+)

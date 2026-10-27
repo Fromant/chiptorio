@@ -1,6 +1,6 @@
 # chiptorio — Design Specification
 
-Status: authoritative design; Phases 0-2 complete, Phase 3 next  
+Status: authoritative design; Phases 0-3 complete, Phase 4 next  
 Date: 2026-10-26  
 Mod ID: `chiptorio`  
 Target: Factorio 2.1, no Space Age, Nauvis only  
@@ -173,15 +173,45 @@ Twelve major nodes create full item families and new production chains.
 
 Each major node adds:
 
+- node mask set / process kit
 - node wafer item
 - node die item
-- node CPU item
-- node GPU item (where appropriate)
-- node process kit or mask set
-- node fab machine or fab upgrade
-- node recipes and technologies
+- packaging recipes for the architecture chips that node supports
+- node recipes and a technology
 - node science-pack costs
-- node chip profile
+- higher die yield and a bigger wafer (the node's chip family)
+
+### 4.4.1 Implementation: nodes feed architecture chips
+
+Phase 3 implements the ladder as **manufacturing generations feeding the six
+architecture modules** (integrated circuit, microprocessor, system-on-chip, GPU,
+multi-core CPU, quantum processor). A node does not invent a seventh chip name
+and the compute profiles in `scripts/research_meta.lua` never change; what
+changes is the cost and availability of the existing chips:
+
+- `node-<key>-mask` is the process kit. It consumes `litho-mask` for 10 µm to
+  1 µm and `phase-shift-mask` from 350 nm onward.
+- `node-<key>-wafer` exposes and metallises plain `silicon-wafer`.
+- `node-<key>-die` dices the wafer. Die yield rises from 40 to 400 per ten
+  wafers across the ladder.
+- `<chip>-from-<key>` packages a node die into an architecture module. The
+  technology unlocks every recipe it needs, which is asserted at the data
+  stage.
+
+The first three nodes run in the Wafer Fab. From 350 nm the wafer and die
+recipes move to the VLSI Fab and consume coolant. Optical Discs are unlocked by
+350 nm, HBM Stacks by 90 nm, and the Qubit Array by Quantum Computing.
+
+Internal keys must be prototype-safe, so the last node's key is `1-4nm` while
+its display label is "1.4 nm".
+
+The node table lives in the pure module `scripts/process_nodes.lua`. It is the
+single source of truth for item names, technology names, die counts, half-node
+links and the half-node bonus. `scripts/node_items.lua` and
+`scripts/node_recipes.lua` generate prototypes from it, and
+`scripts/technology.lua` generates the twelve `process-*` technologies. The
+table deliberately carries no `data` or `game` access so the probe can unit
+test it across mods.
 
 ### 4.5 Half-node refinements and qualification
 
@@ -607,11 +637,21 @@ Ten methods, each a technology and a machine/module unlock:
 
 Each method has a mask/resist/etch recipe chain. The machine tier determines which nodes it can process.
 
+Phase 3 folds the method into the node: `process_nodes.NODES` records the
+lithography method and the mask family (`litho-mask` or `phase-shift-mask`)
+for each node, and the node technology unlocks the matching process kit.
+Standalone lithography technologies are Phase 4 content if the qualification
+loop needs to unlock methods separately.
+
 ### 10.2 Transistor architectures
 
 PMOS → NMOS → CMOS → HMOS → FinFET → GAA nanosheet → CFET.
 
 Each is a technology that unlocks the next node family and improves density/efficiency.
+
+Phase 3 records the transistor architecture on its node and expresses it through
+the node's die recipe and yield. A separate transistor technology per
+architecture is deferred with the half-node qualification work.
 
 ### 10.3 Packaging and assembly
 
@@ -623,6 +663,11 @@ Packaging affects:
 - memory bandwidth (HBM needs 2.5D)
 - heat
 - QLN/FOUP requirements
+
+Phase 3 models packaging as the node's packaging field plus the chip-packaging
+recipes it unlocks: wire-bond ICs at 10 µm, microprocessors at 3 µm, systems on
+a chip at 350 nm, GPUs at 90 nm (HBM stack required), multi-core CPUs at 22 nm
+(chiplet required), and quantum processors at 7 nm and below (qubits required).
 
 ### 10.4 Interconnect, wafer size, metrology
 
@@ -820,6 +865,9 @@ scripts/
   providers.lua           -- server rack, memory bank, datacenter (lab clones)
   memory.lua              -- SRAM/DRAM recipes
   network.lua             -- cable, switch, router, monitor
+  process_nodes.lua       -- PURE: 12-node ladder, half-node table, naming
+  node_items.lua          -- tinted node mask/wafer/die items
+  node_recipes.lua        -- node mask/wafer/die and chip-packaging recipes
   chips.lua, silicon.lua, era5.lua, era7.lua, workloads.lua, endgame.lua
   research_meta.lua       -- PURE: labs, chips, memory, providers, tech gates
   answer_meta.lua, rates.lua
@@ -840,12 +888,13 @@ tools/
 
 Rules:
 
-- `data.lua` order: items/fluids → machines/labs/providers/memory → network/memory/chips → recipes → technologies.
+- `data.lua` order: items/fluids → machines/labs/providers/memory → network/memory/chips → node recipes → technologies.
 - `data-updates.lua` only touches vanilla after all mods load.
 - `control.lua` owns one `on_nth_tick(60)` dispatcher.
 - Runtime state lives in `storage`, versioned and initialized in `on_init` and `on_configuration_changed`.
-- Pure modules (`research_meta`, `network_graph`, `research_alloc`) never touch `data`, `game` or `storage`.
-- Prototypes are cloned from base entities; icons are generated.
+- Pure modules (`research_meta`, `network_graph`, `research_alloc`, `process_nodes`) never touch `data`, `game` or `storage`.
+- Prototypes are cloned from base entities; icons are generated. Node items share the wafer/die/mask art with a per-node tint.
+- `scripts/technology.lua` generates the twelve `process-*` technologies from `process_nodes.NODES`; the technology table only supplies tech-tree position and cost.
 - Test code lives in `tools/test-probe/`, never in the mod.
 
 ### 15.1 Factorio 2.1 API traps
@@ -855,6 +904,8 @@ These have all caused load-stage or runtime errors in this project:
 - Recipe `category` is a string; `categories` is the list form. A recipe with fluid ingredients must not use the `crafting` category.
 - Technology ingredients are the positional `{"item-name", amount}` form, not the typed recipe-ingredient table.
 - Prototypes take `icon` or `icons`, not both, and `icon_size` must match the file.
+- Prototype names may only contain `A-Z a-z 0-9 _-`. A dotted process key such as `1.4nm` fails at load ("Invalid prototype name"); use `1-4nm` internally and keep "1.4 nm" in the locale label.
+- In 2.1 science packs are `item` prototypes, not `tool` prototypes (`data.raw.tool` only holds durability tools). Any item lookup that serves recipes, labs or technologies must not assume `data.raw.item` and `data.raw.tool` are the only homes; `M.item_exists` also checks `data.raw.module`.
 - Locale placeholders are `__1__`, `__2__`, not `%s`.
 - `defines.events.on_player_fast_replace` does not exist in 2.1. Referencing it yields `First argument must be a table or LuaEventType`.
 - Custom-input events cannot be raised through `script.raise_event`. Test an input path through an exported function, e.g. `remote.call("chiptorio-network", "overlay", true)`.
@@ -868,6 +919,7 @@ These have all caused load-stage or runtime errors in this project:
 - A lab clone with `inputs = {}` is a valid compute provider: it keeps module slots and `get_module_inventory()` without being usable for research. Setting `researching_speed = 0.001` keeps the animation honest.
 - Provider module contents change without an inventory event (inserters, manual transfer). The runtime compares a signature derived from `get_module_inventory().get_contents()` once per second instead of listening to inventory events.
 - `LuaForce.research_progress` is readable and writable; `current_research` is read-only and `force.add_research` queues a technology.
+- At runtime `LuaTechnology.prerequisites` is a dictionary keyed by technology name, not an array. Use `pairs`, and `research_recursive()` to force-unlock a chain in tests; the data-stage prototype uses an array of names.
 - `game.get_entity_by_unit_number` only works with the `get-by-unit-number` flag. Store entity references in graph device descriptors instead.
 
 ---
@@ -883,6 +935,12 @@ modules through a cross-mod `require("__chiptorio__/scripts/...")`:
   bridging, device reach, contested/unconnected devices, bandwidth and latency.
 - `research_spec.lua`: profile shares, compute floor, memory and bandwidth hard stops,
   proportional decay, greedy lab enablement, bandwidth cap, `decay_amount`, lab demand.
+- `node_spec.lua`: twelve major nodes in roadmap order, unique and prototype-safe
+  naming, monotonic die yield, first-three/VLSI split, ten half-nodes between adjacent
+  majors, monotonic and accumulating half-node bonuses, unknown-node lookups.
+
+All three specs run before a single `PASS unit` marker; calling `H.finish` inside one
+spec would hide the failures of the specs that run after it.
 
 Still to add: memory generations for QLN, infinite multipliers, qualification tables,
 property tests.
@@ -894,9 +952,13 @@ effect and the right category, providers are labs with no inputs and both module
 categories, provider recipes start locked, `assembly-fab` exists, `internet` unlocks the
 network and the first providers, `datacenter` unlocks the lab/provider/DRAM, `vlsi-process`
 requires the internet, lab inputs include every workload, no military/bot/enemy remnants,
-no throughput-gate references.
+no throughput-gate references. The process-node contract checks every node's three items,
+three locked recipes and technology, and that the technology unlocks each mask/wafer/die
+plus one packaging recipe per supported architecture. It also asserts the nine-pack lab
+inputs, that each custom pack is unlocked by its introducing technology, and that the
+unprefixed `quantum-science-pack` no longer exists.
 
-Still to add: process-node ladder, qualification tables, QLN.
+Still to add: qualification tables, QLN.
 
 ### 16.3 Runtime integration tests
 
@@ -946,8 +1008,8 @@ qualification, Answer Engine victory/score, infinite scaling.
 | 7 | Answer Engine rework, infinite research, victory | 42-minute endgame |
 | 8 | Balance, GUI polish, icons/sound, locale, performance, docs, release | full suite green |
 
-Rough effort: 5–7 weeks focused work. Phases 0–2 are complete. Phase 3 is next; the
-highest remaining risk is the process-node ladder's size, not the network runtime.
+Rough effort: 5–7 weeks focused work. Phases 0–3 are complete. Phase 4 is next; the
+highest remaining risk is the half-node qualification loop, not the network runtime.
 
 ---
 

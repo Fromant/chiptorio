@@ -41,13 +41,20 @@ return function()
     local result = alloc.evaluate(
       { floor = 8, per_lab = 2, memory = 16, bandwidth = 8, profiles = { scalar = 1 } },
       {
-        { id = 1, scalar = 8, memory = 16, bandwidth = 8, labs = { lab(3), lab(1), lab(2) } },
+        {
+          id = 1,
+          scalar = 8,
+          memory = 16,
+          bandwidth = 8,
+          labs = { lab(5), lab(3), lab(1), lab(4), lab(2) },
+        },
       }
     )
-    H.eq(result.active_labs, 2, "active labs")
+    H.eq(result.active_labs, 4, "four labs fit into eight compute at two each")
     H.truthy(result.networks[1].active_labs[1], "lab 1 active")
     H.truthy(result.networks[1].active_labs[2], "lab 2 active")
-    H.nil_value(result.networks[1].active_labs[3], "lab 3 paused")
+    H.truthy(result.networks[1].active_labs[4], "lab 4 active")
+    H.nil_value(result.networks[1].active_labs[5], "lab 5 paused")
   end)
 
   H.test("a lab whose demand does not fit is paused, not partially fed", function()

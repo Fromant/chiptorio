@@ -1,4 +1,29 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.8.0
+Date: 2026-10-27
+  Features:
+    - Added the twelve-node process ladder from 10 µm to 1.4 nm. Each node is a manufacturing family: a lithography mask set, exposed wafers, diced dies, a technology and a set of packaging recipes for the architecture chips that node supports.
+    - Nodes feed the existing six architecture modules instead of inventing new chip names. A node makes the integrated circuit, microprocessor, system on a chip, GPU, multi-core CPU and quantum processor available at that node's die cost; the compute profiles never change.
+    - Die yield rises from 40 to 400 per ten wafers across the ladder, and each node unlocks the packaging recipes for its chip family, from wire-bond ICs at 10 µm to hybrid-bonded quantum processors at 1.4 nm.
+    - Added ten half-node refinements (6 µm to 2 nm) to the pure node table ahead of the Metrology Lab. Half-node bonuses accumulate over every completed refinement up to the queried node.
+    - Added two science packs: optical discs and HBM stacks. Nine workloads are now required: punched cards, punched tape, magnetic tape, disk packs, solid-state drives, mainframe modules, optical discs, HBM stacks and qubit arrays.
+    - Every research computer now accepts all nine packs plus microprocessors, and the Answer Engine requires all nine workloads.
+    - Added node technology icons and generated icons for optical discs, HBM stacks and every process node.
+    - Documented the node model, the nine-pack mapping and the new 2.1 prototype-name and science-pack traps in DESIGN.md.
+    - Added a unit spec for the node table and data-contract checks for every node's items, recipes, technology and packaging effects, the nine-pack lab inputs, and the quantum pack rename.
+  Balance:
+    - Nodes 10 µm, 3 µm and 1 µm run in the Wafer Fab. From 350 nm the wafer and die recipes move to the VLSI Fab and consume coolant.
+    - Nodes from 350 nm to 1.4 nm are compute-gated, rising from 8 compute, 16 memory and 8 bandwidth to 192 compute, 384 memory and 192 bandwidth. The first three nodes stay offline so they can be researched without a network.
+    - The last node is listed internally as process-1-4nm because prototype names cannot contain dots; its display label remains 1.4 nm.
+    - VLSI Process keeps its machines and chemistry but no longer unlocks wafers, dies or the system on a chip; those are node content now.
+    - Planar Process no longer unlocks integrated circuits; Microarchitecture now requires the 3 µm node and has no effects of its own.
+    - Advanced Packaging unlocks only the chiplet and HBM stack; Heterogeneous Compute and Quantum Advantage are pure gates.
+    - The Datacenter technology now also requires the 350 nm node.
+    - The Question requires the 1.4 nm node, all nine science packs and microprocessors.
+    - The quantum science pack is renamed to chiptorio-quantum-science-pack throughout labs, technologies and the Answer Engine.
+  Bugfixes:
+    - The unit suite no longer stops after the graph spec, so research spec failures are reported again. The greedy lab test now expects four active labs from eight compute at two per lab.
+---------------------------------------------------------------------------------------------------
 Version: 0.7.0
 Date: 2026-10-27
   Features:

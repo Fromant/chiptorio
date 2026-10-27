@@ -92,6 +92,73 @@ M.TECHS = {
     bandwidth = 8,
     profiles = { scalar = 1 },
   },
+  -- Process nodes. The first three (10 um, 3 um, 1 um) are deliberately absent:
+  -- they are the pre-network ladder and must be researchable offline. From
+  -- 350 nm every node is a compute gate, so advancing a node needs a bigger
+  -- network even though the chip profiles never change (DESIGN §4.4).
+  ["process-350nm"] = {
+    floor = 8,
+    per_lab = 2,
+    memory = 16,
+    bandwidth = 8,
+    profiles = { scalar = 1 },
+  },
+  ["process-180nm"] = {
+    floor = 16,
+    per_lab = 4,
+    memory = 32,
+    bandwidth = 16,
+    profiles = { scalar = 1 },
+  },
+  ["process-90nm"] = {
+    floor = 24,
+    per_lab = 6,
+    memory = 48,
+    bandwidth = 24,
+    profiles = { scalar = 1 },
+  },
+  ["process-45nm"] = {
+    floor = 32,
+    per_lab = 8,
+    memory = 64,
+    bandwidth = 32,
+    profiles = { scalar = 1 },
+  },
+  ["process-22nm"] = {
+    floor = 48,
+    per_lab = 12,
+    memory = 96,
+    bandwidth = 48,
+    profiles = { scalar = 0.75, vector = 0.25 },
+  },
+  ["process-14nm"] = {
+    floor = 64,
+    per_lab = 16,
+    memory = 128,
+    bandwidth = 64,
+    profiles = { scalar = 0.75, vector = 0.25 },
+  },
+  ["process-7nm"] = {
+    floor = 96,
+    per_lab = 24,
+    memory = 192,
+    bandwidth = 96,
+    profiles = { scalar = 0.6, vector = 0.4 },
+  },
+  ["process-3nm"] = {
+    floor = 128,
+    per_lab = 32,
+    memory = 256,
+    bandwidth = 128,
+    profiles = { scalar = 0.5, vector = 0.5 },
+  },
+  ["process-1-4nm"] = {
+    floor = 192,
+    per_lab = 48,
+    memory = 384,
+    bandwidth = 192,
+    profiles = { scalar = 0.5, vector = 0.5 },
+  },
   ["datacenter"] = {
     floor = 32,
     per_lab = 8,

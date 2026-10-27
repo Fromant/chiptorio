@@ -28,7 +28,7 @@ M.recipe({
   category = "chiptorio-fab",
   energy_required = 12,
   ingredients = {
-    M.item("vlsi-die", 2),
+    M.item("node-350nm-die", 2),
     M.item("integrated-circuit", 2),
     M.item("copper-plate", 2),
   },

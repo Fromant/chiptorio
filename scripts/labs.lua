@@ -144,17 +144,19 @@ make_lab({
   },
 })
 
--- Extra lab inputs. The seventh workload is a tool item, so every generation
--- can read it. `microprocessor` is only used by The Question, but it must be
--- in every lab's input list or that technology can load and never be
--- researched. This is the same anti-deadlock rule as for the vanilla packs:
--- the Cryostat is faster and more module-hungry, not the only machine that
--- accepts a given input.
+-- Extra lab inputs. The three custom workloads are ordinary item prototypes,
+-- so every generation can read them. `microprocessor` is only used by The
+-- Question, but it must be in every lab's input list or that technology can
+-- load and never be researched. This is the same anti-deadlock rule as for the
+-- vanilla packs: the Cryostat is faster and more module-hungry, not the only
+-- machine that accepts a given input.
 --
 -- `microprocessor` is a module prototype, so the existence check must look in
 -- `data.raw.module` too; a plain `data.raw.item` lookup would reject it.
 local EXTRA_INPUTS = {
-  "quantum-science-pack",
+  "chiptorio-optical-science-pack",
+  "chiptorio-hbm-science-pack",
+  "chiptorio-quantum-science-pack",
   "microprocessor",
 }
 for _, extra in ipairs(EXTRA_INPUTS) do
