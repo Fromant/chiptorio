@@ -793,6 +793,67 @@ function M.graphs()
     rebuild_all()
     draw_overlay()
   end
+  -- Last resort: if still empty, scan all surfaces for all entities directly
+  for _, surface in pairs(game.surfaces) do
+    local graph = storage.network.graphs[surface.index]
+    if not graph or ((graph.cable_count or 0) == 0 and #(graph.networks or {}) == 0) then
+      local has_any = false
+      for _, name in ipairs(NETWORK_NAMES) do
+        local entities = surface.find_entities_filtered({name = name})
+        if #entities > 0 then
+          has_any = true
+          break
+        end
+      end
+      if has_any then
+        -- force rebuild directly
+        local CABLE = "network-cable"
+        local COAXIAL = "network-coaxial-cable"
+        local FIBER_MM = "network-fiber-mm-cable"
+        local FIBER_SM = "network-fiber-sm-cable"
+        local cables = {}
+        local devices = {}
+        local seen = {}
+        for _, entity in ipairs(surface.find_entities_filtered({name = {"network-cable","network-coaxial-cable","network-fiber-mm-cable","network-fiber-sm-cable"}})) do
+          if entity.valid and not seen[entity.unit_number] then
+            seen[entity.unit_number] = true
+            local tier = entity.name == COAXIAL and "network-coaxial-cable" or entity.name == FIBER_MM and "network-fiber-mm-cable" or entity.name == FIBER_SM and "network-fiber-sm-cable" or "network-cable"
+            cables[#cables + 1] = {x = entity.position.x, y = entity.position.y, tier = tier}
+          end
+        end
+        for _, entity in ipairs(surface.find_entities_filtered({name = {"network-switch","network-router","network-monitor","metrology-lab","answer-engine","server-rack","memory-bank","datacenter","analytical-engine","tube-mainframe","mainframe-cluster","datacenter-lab","cryostat","qln-import-node","qln-export-node","qln-provider-node","qln-requester-node","qln-terminal","qln-storage-drive","construction-core","foup-dock","quantum-entanglement-core"}})) do
+          if entity.valid and not seen[entity.unit_number] then
+            seen[entity.unit_number] = true
+            local kind
+            if entity.name == "server-rack" or entity.name == "memory-bank" or entity.name == "datacenter" or entity.name == "analytical-engine" or entity.name == "tube-mainframe" or entity.name == "mainframe-cluster" or entity.name == "datacenter-lab" or entity.name == "cryostat" then kind = "provider" end
+            if entity.name == "network-switch" then kind = "switch" end
+            if entity.name == "network-router" then kind = "router" end
+            if entity.name == "network-monitor" then kind = "monitor" end
+            if entity.name == "metrology-lab" then kind = "metrology" end
+            if entity.name == "answer-engine" then kind = "answer" end
+            if not kind then
+              if string.find(entity.name, "lab") then kind = "lab" else kind = "lab" end
+            end
+            local dev = {id = entity.unit_number, kind = kind, name = entity.name, force_index = entity.force and entity.force.index, x = entity.position.x, y = entity.position.y, direction = entity.direction or 0, compute=0, scalar=0,vector=0,tensor=0,quantum=0, memory=0, bandwidth=0, power=0, heat=0, cooling=0, demand_compute=0, demand_memory=0, demand_bandwidth=0}
+            if kind == "provider" then
+              dev.bandwidth = 1000
+              dev.scalar = 8
+              dev.compute = 8
+              dev.memory = 16
+              dev.power = 10
+              dev.heat = 10
+              dev.cooling = 10
+            elseif kind == "lab" or kind == "metrology" then
+              dev.demand_compute = 10
+              dev.base_demand = 10
+            end
+            devices[#devices + 1] = dev
+          end
+        end
+        storage.network.graphs[surface.index] = graph_builder.build({cables=cables, devices=devices})
+      end
+    end
+  end
   return storage.network.graphs
 end
 
