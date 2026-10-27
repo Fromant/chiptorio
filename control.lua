@@ -172,7 +172,39 @@ if not remote.interfaces["chiptorio-network"] then
             if has_entities then
               if storage.network then
                 storage.network.dirty = true
+                -- Force rebuild directly
+                local graph_builder = require("scripts.runtime.network_graph")
+                local qmeta = require("scripts.qln_meta")
+                local meta = require("scripts.research_meta")
+                -- Try to rebuild by scanning all
                 network.tick()
+                if not (storage.network.graphs and storage.network.graphs[surface_index]) or ((storage.network.graphs[surface_index].cable_count or 0) == 0 and #(storage.network.graphs[surface_index].networks or {}) == 0) then
+                  -- Last resort: build directly
+                  storage.network.graphs = storage.network.graphs or {}
+                  -- scan all network entities
+                  local CABLE = "network-cable"
+                  local COAXIAL = "network-coaxial-cable"
+                  local FIBER_MM = "network-fiber-mm-cable"
+                  local FIBER_SM = "network-fiber-sm-cable"
+                  local cables = {}
+                  local devices = {}
+                  local seen = {}
+                  for _, entity in ipairs(surface.find_entities_filtered({name = {"network-cable","network-coaxial-cable","network-fiber-mm-cable","network-fiber-sm-cable"}})) do
+                    if entity.valid and not seen[entity.unit_number] then
+                      seen[entity.unit_number] = true
+                      local tier = entity.name == COAXIAL and "network-coaxial-cable" or entity.name == FIBER_MM and "network-fiber-mm-cable" or entity.name == FIBER_SM and "network-fiber-sm-cable" or "network-cable"
+                      cables[#cables + 1] = {x = entity.position.x, y = entity.position.y, tier = tier}
+                    end
+                  end
+                  for _, entity in ipairs(surface.find_entities_filtered({name = {"network-switch","network-router","network-monitor","metrology-lab","answer-engine","server-rack","memory-bank","datacenter"}})) do
+                    if entity.valid and not seen[entity.unit_number] then
+                      seen[entity.unit_number] = true
+                      -- minimal device
+                      devices[#devices + 1] = {id = entity.unit_number, kind = entity.name == "server-rack" and "provider" or entity.name == "memory-bank" and "provider" or entity.name == "datacenter" and "provider" or entity.name == "network-switch" and "switch" or entity.name == "network-router" and "router" or entity.name == "network-monitor" and "monitor" or entity.name == "metrology-lab" and "metrology" or entity.name == "answer-engine" and "answer" or "lab", name = entity.name, force_index = entity.force and entity.force.index, x = entity.position.x, y = entity.position.y, direction = entity.direction or 0, compute=0, scalar=0,vector=0,tensor=0,quantum=0, memory=0, bandwidth=0, power=0, heat=0, cooling=0, demand_compute=0, demand_memory=0, demand_bandwidth=0}
+                    end
+                  end
+                  storage.network.graphs[surface_index] = graph_builder.build({cables=cables, devices=devices})
+                end
                 graphs = (storage.network and storage.network.graphs) or {}
                 graph = graphs[surface_index]
               end
@@ -202,6 +234,11 @@ if not remote.interfaces["chiptorio-network"] then
               local c = 0
               for _, n in ipairs(graph.networks) do c = c + #(n.labs or {}) end
               res.labs = c
+            end
+            if (res.providers == 0 or res.providers == nil) and graph.networks then
+              local c = 0
+              for _, n in ipairs(graph.networks) do c = c + #(n.providers or {}) end
+              res.providers = c
             end
             return res
           end
