@@ -152,17 +152,20 @@ if not remote.interfaces["chiptorio-network"] then
     -- /c remote.call("chiptorio-network", "status")
     status = network.status,
     topology = function(surface_index)
-      init_storage()
-      network.ensure_graph()
+      network.graphs()
       if surface_index then
-        local graph = storage.network.graphs and storage.network.graphs[surface_index]
+        local graph = storage.network and storage.network.graphs and storage.network.graphs[surface_index]
         if graph then
           local res = {
             cable_count = graph.cable_count or 0,
             networks = graph.networks or {},
             unconnected = graph.unconnected or {},
             conflicts = graph.conflicts or {},
-            labs = graph.lab_count or 0,
+            labs = graph.lab_count or (graph.networks and (function()
+              local c = 0
+              for _, n in ipairs(graph.networks) do c = c + #(n.labs or {}) end
+              return c
+            end)()) or 0,
             providers = graph.provider_count or 0,
             metrology = graph.metrology_count or 0,
             nodes = graph.node_count or 0,
@@ -176,11 +179,16 @@ if not remote.interfaces["chiptorio-network"] then
             heat = graph.heat or 0,
             cooling = graph.cooling or 0,
           }
+          if res.labs == 0 and graph.networks then
+            local c = 0
+            for _, n in ipairs(graph.networks) do c = c + #(n.labs or {}) end
+            res.labs = c
+          end
           return res
         end
         return { cable_count = 0, networks = {}, unconnected = {}, conflicts = {} }
       end
-      return storage.network.graphs or {}
+      return (storage.network and storage.network.graphs) or {}
     end,
     -- /c remote.call("chiptorio-network", "overlay", true)
     -- Custom-input events cannot be raised from script, so the overlay tests and
