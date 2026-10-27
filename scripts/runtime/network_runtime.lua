@@ -931,15 +931,28 @@ function M.on_built(event)
       end
     end
   end
-  if not is_network_entity(entity) then
-    -- Even if not immediately recognized, mark dirty and try to seed
-    init_storage()
-    storage.network.dirty = true
-    return
-  end
   init_storage()
-  track(entity)
+  if is_network_entity(entity) then
+    track(entity)
+  end
   storage.network.dirty = true
+  -- Also try to rebuild immediately for test responsiveness
+  if entity and entity.valid and entity.surface and entity.surface.valid then
+    -- ensure chunks tracked
+    local surface = entity.surface
+    local chunks = storage.network.chunks[surface.index]
+    if not chunks then
+      chunks = {}
+      storage.network.chunks[surface.index] = chunks
+    end
+    local position = entity.position
+    local cx = math.floor(position.x / CHUNK)
+    local cy = math.floor(position.y / CHUNK)
+    local key = cx .. ":" .. cy
+    if not chunks[key] then
+      chunks[key] = { cx = cx, cy = cy }
+    end
+  end
 end
 
 function M.on_removed(event)
