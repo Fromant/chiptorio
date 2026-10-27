@@ -675,6 +675,17 @@ function M.graphs()
     rebuild_all()
     draw_overlay()
   end
+  -- If no chunks tracked but entities exist, seed them
+  local has_chunks = false
+  for _, _ in pairs(storage.network.chunks or {}) do
+    has_chunks = true
+    break
+  end
+  if not has_chunks then
+    seed_chunks()
+    rebuild_all()
+    draw_overlay()
+  end
   return storage.network.graphs
 end
 
