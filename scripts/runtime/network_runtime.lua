@@ -634,6 +634,19 @@ local function rebuild_all()
       signatures[index] = provider_signature(surface)
     end
   end
+  -- Also rebuild any surfaces that have network entities but no chunks tracked
+  for _, surface in pairs(game.surfaces) do
+    if not graphs[surface.index] then
+      for _, name in ipairs(NETWORK_NAMES) do
+        local entities = surface.find_entities_filtered({name = name})
+        if #entities > 0 then
+          graphs[surface.index] = rebuild_surface(surface)
+          signatures[surface.index] = provider_signature(surface)
+          break
+        end
+      end
+    end
+  end
   storage.network.graphs = graphs
   storage.network.module_signatures = signatures
   storage.network.dirty = false
@@ -792,7 +805,19 @@ end
 
 function M.on_built(event)
   local entity = event.entity or event.created_entity or event.destination
+  if not entity and event then
+    -- sometimes entity might be passed differently
+    for k, v in pairs(event) do
+      if type(v) == "table" and v.valid and v.name then
+        entity = v
+        break
+      end
+    end
+  end
   if not is_network_entity(entity) then
+    -- Even if not immediately recognized, mark dirty and try to seed
+    init_storage()
+    storage.network.dirty = true
     return
   end
   init_storage()
