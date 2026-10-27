@@ -174,7 +174,10 @@ Write-Host "Chiptorio $($info.version)"
 Write-Host "Factorio: $Factorio"
 Write-Host "Mod dir:  $mods ($mode)"
 
-$arguments = @("--mod-directory", "`"$mods`"") + $GameArgs
+$arguments = @("--mod-directory", $mods)
+if ($GameArgs) {
+  $arguments += $GameArgs
+}
 $process = Start-Process -FilePath $Factorio -ArgumentList $arguments -PassThru
 if ($NoWait) {
   Write-Host "Factorio started (PID $($process.Id))."

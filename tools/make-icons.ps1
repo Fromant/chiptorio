@@ -66,6 +66,7 @@ $ink    = "#0c1116"
 $panel  = "#1a2430"
 $line   = "#33475a"
 $cyan   = "#45e0c0"
+$blue   = "#5b8ff9"
 $gold   = "#e0b040"
 $red    = "#e05555"
 $green  = "#4fbf6a"
@@ -335,6 +336,17 @@ Rect $g 4 6 8 2 $ink
 Rect $g 6 7 2 2 $gold
 Rect $g 7 9 2 1 $steel
 Save-Icon $b "circuit-assembler"
+
+$b, $g = New-Canvas
+Rect $g 2 3 12 11 $panel
+Rect $g 3 4 10 1 $line
+Rect $g 3 10 10 1 $line
+Rect $g 4 5 8 2 $ink
+Rect $g 5 7 2 2 $gold
+Rect $g 8 7 2 2 $gold
+Rect $g 6 9 4 1 $blue
+Rect $g 7 10 2 1 $steel
+Save-Icon $b "computer-assembler"
 
 # --- computers -------------------------------------------------------------
 
@@ -1280,6 +1292,18 @@ $techIcons = @{
   "datacenter"            = "datacenter"
   "advanced-packaging"    = "chiplet"
   "heterogeneous-compute" = "gpu"
+  "machine-learning"      = "training-cluster"
+  "ai-specialist"         = "specialist-model"
+  "ai-general"            = "general-model"
+  "ai-frontier"           = "frontier-model"
+  "artificial-general-intelligence" = "agi-model"
+  "chip-performance"      = "multi-core-cpu"
+  "chip-efficiency"       = "cooling-unit"
+  "memory-density"        = "3d-nand-module"
+  "memory-bandwidth"      = "hbm-stack"
+  "network-bandwidth"     = "network-router"
+  "cooling-efficiency"    = "cooling-tower"
+  "quantum-correction"    = "error-corrected-qubit"
   "quantum-computing"          = "qubit"
   "quantum-error-correction"   = "error-corrected-qubit"
   "quantum-advantage"          = "quantum-processor"
