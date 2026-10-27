@@ -131,15 +131,17 @@ script.on_event(defines.events.on_research_finished, function(event)
   research.on_technology_researched(game.forces[event.force_index], event.research.name)
 end)
 
-remote.add_interface("chiptorio-network", {
-  -- /c remote.call("chiptorio-network", "status")
-  status = network.status,
-  topology = network.summary,
-  -- /c remote.call("chiptorio-network", "overlay", true)
-  -- Custom-input events cannot be raised from script, so the overlay tests and
-  -- debug hooks go through this instead of faking a keypress.
-  overlay = network.set_overlay,
-})
+if not remote.interfaces["chiptorio-network"] then
+  remote.add_interface("chiptorio-network", {
+    -- /c remote.call("chiptorio-network", "status")
+    status = network.status,
+    topology = network.summary,
+    -- /c remote.call("chiptorio-network", "overlay", true)
+    -- Custom-input events cannot be raised from script, so the overlay tests and
+    -- debug hooks go through this instead of faking a keypress.
+    overlay = network.set_overlay,
+  })
+end
 
 remote.add_interface("chiptorio-research", {
   -- /c remote.call("chiptorio-research", "status")
