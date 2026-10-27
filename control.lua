@@ -156,119 +156,87 @@ do
     -- /c remote.call("chiptorio-network", "status")
     status = network.status,
     topology = function(surface_index)
-      network.graphs()
+      local graph_builder = require("scripts.runtime.network_graph")
       if surface_index then
         local surface = game.surfaces[surface_index]
         if surface and surface.valid then
-          -- Force rebuild if graph is empty but entities exist
-          local graphs = (storage.network and storage.network.graphs) or {}
-          local graph = graphs[surface_index]
-          if not graph or ((graph.cable_count or 0) == 0 and #(graph.networks or {}) == 0) then
-            -- Try to find any network entities and rebuild
-            local has_entities = false
-            for _, name in ipairs({"network-cable","network-coaxial-cable","network-fiber-mm-cable","network-fiber-sm-cable","network-switch","network-router","network-monitor","server-rack","memory-bank","datacenter","analytical-engine","tube-mainframe","mainframe-cluster","datacenter-lab","cryostat","metrology-lab","qln-import-node","qln-export-node","qln-provider-node","qln-requester-node","qln-terminal","qln-storage-drive","construction-core","foup-dock","quantum-entanglement-core","answer-engine"}) do
-              local entities = surface.find_entities_filtered({name = name})
-              if #entities > 0 then
-                has_entities = true
-                break
-              end
-            end
-            if has_entities then
-              if storage.network then
-                storage.network.dirty = true
-                -- Force rebuild directly
-                local graph_builder = require("scripts.runtime.network_graph")
-                local qmeta = require("scripts.qln_meta")
-                local meta = require("scripts.research_meta")
-                -- Try to rebuild by scanning all
-                network.tick()
-                if not (storage.network.graphs and storage.network.graphs[surface_index]) or ((storage.network.graphs[surface_index].cable_count or 0) == 0 and #(storage.network.graphs[surface_index].networks or {}) == 0) then
-                  -- Last resort: build directly
-                  storage.network.graphs = storage.network.graphs or {}
-                  -- scan all network entities
-                  local CABLE = "network-cable"
-                  local COAXIAL = "network-coaxial-cable"
-                  local FIBER_MM = "network-fiber-mm-cable"
-                  local FIBER_SM = "network-fiber-sm-cable"
-                  local cables = {}
-                  local devices = {}
-                  local seen = {}
-                  for _, entity in ipairs(surface.find_entities_filtered({name = {"network-cable","network-coaxial-cable","network-fiber-mm-cable","network-fiber-sm-cable"}})) do
-                    if entity.valid and not seen[entity.unit_number] then
-                      seen[entity.unit_number] = true
-                      local tier = entity.name == COAXIAL and "network-coaxial-cable" or entity.name == FIBER_MM and "network-fiber-mm-cable" or entity.name == FIBER_SM and "network-fiber-sm-cable" or "network-cable"
-                      cables[#cables + 1] = {x = entity.position.x, y = entity.position.y, tier = tier}
-                    end
-                  end
-                  for _, entity in ipairs(surface.find_entities_filtered({name = {"network-switch","network-router","network-monitor","metrology-lab","answer-engine","server-rack","memory-bank","datacenter","analytical-engine","tube-mainframe","mainframe-cluster","datacenter-lab","cryostat"}})) do
-                    if entity.valid and not seen[entity.unit_number] then
-                      seen[entity.unit_number] = true
-                      local kind
-                      if entity.name == "server-rack" or entity.name == "memory-bank" or entity.name == "datacenter" or entity.name == "analytical-engine" or entity.name == "tube-mainframe" or entity.name == "mainframe-cluster" or entity.name == "datacenter-lab" or entity.name == "cryostat" then kind = "provider" end
-                      if entity.name == "network-switch" then kind = "switch" end
-                      if entity.name == "network-router" then kind = "router" end
-                      if entity.name == "network-monitor" then kind = "monitor" end
-                      if entity.name == "metrology-lab" then kind = "metrology" end
-                      if entity.name == "answer-engine" then kind = "answer" end
-                      if not kind then kind = "lab" end
-                      local dev = {id = entity.unit_number, kind = kind, name = entity.name, force_index = entity.force and entity.force.index or 1, x = entity.position.x, y = entity.position.y, direction = entity.direction or 0, compute=0, scalar=0,vector=0,tensor=0,quantum=0, memory=0, bandwidth=0, power=0, heat=0, cooling=0, demand_compute=0, demand_memory=0, demand_bandwidth=0}
-                      if kind == "provider" then
-                        dev.bandwidth = 1000
-                        dev.scalar = 8
-                        dev.compute = 8
-                        dev.memory = 16
-                        dev.power = 10
-                        dev.heat = 10
-                        dev.cooling = 10
-                      elseif kind == "lab" then
-                        dev.demand_compute = 10
-                        dev.base_demand = 10
-                      elseif kind == "metrology" then
-                        dev.demand_compute = 0
-                        dev.base_demand = 0
-                      end
-                      devices[#devices + 1] = dev
-                    end
-                  end
-                  storage.network.graphs[surface_index] = graph_builder.build({cables=cables, devices=devices})
-                end
-                graphs = (storage.network and storage.network.graphs) or {}
-                graph = graphs[surface_index]
-              end
+          local cables = {}
+          local devices = {}
+          local seen = {}
+          for _, entity in ipairs(surface.find_entities_filtered({name = {"network-cable","network-coaxial-cable","network-fiber-mm-cable","network-fiber-sm-cable"}})) do
+            if entity.valid and not seen[entity.unit_number] then
+              seen[entity.unit_number] = true
+              local tier = entity.name == "network-coaxial-cable" and "network-coaxial-cable" or entity.name == "network-fiber-mm-cable" and "network-fiber-mm-cable" or entity.name == "network-fiber-sm-cable" and "network-fiber-sm-cable" or "network-cable"
+              cables[#cables + 1] = {x = entity.position.x, y = entity.position.y, tier = tier}
             end
           end
-          if graph then
-            local res = {
-              cable_count = graph.cable_count or 0,
-              networks = graph.networks or {},
-              unconnected = graph.unconnected or {},
-              conflicts = graph.conflicts or {},
-              labs = graph.lab_count or 0,
-              providers = graph.provider_count or 0,
-              metrology = graph.metrology_count or 0,
-              nodes = graph.node_count or 0,
-              scalar = graph.scalar or 0,
-              vector = graph.vector or 0,
-              tensor = graph.tensor or 0,
-              quantum = graph.quantum or 0,
-              memory = graph.memory or 0,
-              bandwidth = graph.bandwidth or 0,
-              power = graph.power or 0,
-              heat = graph.heat or 0,
-              cooling = graph.cooling or 0,
-            }
-            if (res.labs == 0 or res.labs == nil) and graph.networks then
-              local c = 0
-              for _, n in ipairs(graph.networks) do c = c + #(n.labs or {}) end
-              res.labs = c
+          for _, entity in ipairs(surface.find_entities_filtered({name = {"network-switch","network-router","network-monitor","metrology-lab","answer-engine","server-rack","memory-bank","datacenter","analytical-engine","tube-mainframe","mainframe-cluster","datacenter-lab","cryostat","lab","chemical-lab","electrostatic-lab","analytical-lab","qln-import-node","qln-export-node","qln-provider-node","qln-requester-node","qln-terminal","qln-storage-drive","construction-core","foup-dock","quantum-entanglement-core"}})) do
+            if entity.valid and not seen[entity.unit_number] then
+              seen[entity.unit_number] = true
+              local kind
+              if entity.name == "server-rack" or entity.name == "memory-bank" or entity.name == "datacenter" or entity.name == "analytical-engine" or entity.name == "tube-mainframe" or entity.name == "mainframe-cluster" or entity.name == "datacenter-lab" or entity.name == "cryostat" then kind = "provider"
+              elseif entity.name == "network-switch" then kind = "switch"
+              elseif entity.name == "network-router" then kind = "router"
+              elseif entity.name == "network-monitor" then kind = "monitor"
+              elseif entity.name == "metrology-lab" then kind = "metrology"
+              elseif entity.name == "answer-engine" then kind = "answer"
+              elseif string.find(entity.name, "qln") then kind = entity.name == "qln-storage-drive" and "qln-drive" or "qln"
+              else kind = "lab" end
+              local dev = {id = entity.unit_number, kind = kind, name = entity.name, force_index = (entity.force and entity.force.index) or 1, x = entity.position.x, y = entity.position.y, direction = entity.direction or 0, compute=0, scalar=0,vector=0,tensor=0,quantum=0, memory=0, bandwidth=0, power=0, heat=0, cooling=0, demand_compute=0, demand_memory=0, demand_bandwidth=0}
+              if kind == "provider" then
+                dev.bandwidth = 1000
+                dev.scalar = 8
+                dev.compute = 8
+                dev.memory = 16
+              elseif kind == "lab" then
+                dev.demand_compute = 10
+                dev.base_demand = 10
+              elseif kind == "metrology" then
+                dev.demand_compute = 0
+                dev.base_demand = 0
+              end
+              devices[#devices + 1] = dev
             end
-            if (res.providers == 0 or res.providers == nil) and graph.networks then
-              local c = 0
-              for _, n in ipairs(graph.networks) do c = c + #(n.providers or {}) end
-              res.providers = c
-            end
-            return res
           end
+          local graph = graph_builder.build({cables=cables, devices=devices})
+          storage.network = storage.network or {}
+          storage.network.graphs = storage.network.graphs or {}
+          storage.network.graphs[surface_index] = graph
+          local res = {
+            cable_count = graph.cable_count or 0,
+            networks = graph.networks or {},
+            unconnected = graph.unconnected or {},
+            conflicts = graph.conflicts or {},
+            labs = graph.lab_count or 0,
+            providers = graph.provider_count or 0,
+            metrology = graph.metrology_count or 0,
+            nodes = graph.node_count or 0,
+            scalar = graph.scalar or 0,
+            vector = graph.vector or 0,
+            tensor = graph.tensor or 0,
+            quantum = graph.quantum or 0,
+            memory = graph.memory or 0,
+            bandwidth = graph.bandwidth or 0,
+            power = graph.power or 0,
+            heat = graph.heat or 0,
+            cooling = graph.cooling or 0,
+          }
+          if (res.labs == 0 or res.labs == nil) and graph.networks then
+            local c = 0
+            for _, n in ipairs(graph.networks) do c = c + #(n.labs or {}) end
+            res.labs = c
+          end
+          if (res.providers == 0 or res.providers == nil) and graph.networks then
+            local c = 0
+            for _, n in ipairs(graph.networks) do c = c + #(n.providers or {}) end
+            res.providers = c
+          end
+          if (res.metrology == 0 or res.metrology == nil) and graph.networks then
+            local c = 0
+            for _, n in ipairs(graph.networks) do c = c + #(n.metrology or {}) end
+            res.metrology = c
+          end
+          return res
         end
         return { cable_count = 0, networks = {}, unconnected = {}, conflicts = {} }
       end
