@@ -682,7 +682,18 @@ function M.graphs()
     break
   end
   if not has_chunks then
-    seed_chunks()
+    local _seed_chunks = (function()
+      storage.network.chunks = {}
+      for _, surface in pairs(game.surfaces) do
+        for _, entity in ipairs(surface.find_entities_filtered({ name = NETWORK_NAMES })) do
+          if entity.valid then
+            track(entity)
+          end
+        end
+      end
+      storage.network.dirty = true
+    end)
+    _seed_chunks()
     rebuild_all()
     draw_overlay()
   end
