@@ -94,9 +94,9 @@ $create = Start-Process -FilePath $Factorio `
 
 $problems = @()
 if ($create.ExitCode -ne 0) {
-  -- only treat non-zero exit as failure if there are actual error messages
-  -- Factorio returns exit code 1 when the Steam API requires a restart,
-  -- but the map may have been created successfully anyway.
+  # only treat non-zero exit as failure if there are actual error messages
+  # Factorio returns exit code 1 when the Steam API requires a restart,
+  # but the map may have been created successfully anyway.
   $log = Get-Content -LiteralPath $logPath -Raw
   if ($log -match "(?im)Error|Failed|chiptorio.*error|cannot be loaded|Invalid prototype|Unknown prototype") {
     $problems += "map creation exited with code $($create.ExitCode)"
@@ -118,7 +118,7 @@ $bench = Start-Process -FilePath $Factorio `
 
 $problems = @()
 if ($bench.ExitCode -ne 0) {
-  -- same logic for benchmark: Factorio may return 1 on Steam restart
+  # same logic for benchmark: Factorio may return 1 on Steam restart
   $log = Get-Content -LiteralPath $logPath -Raw
   if ($log -match "(?im)Error|Failed|chiptorio.*error|cannot be loaded|Invalid prototype|Unknown prototype") {
     $problems += "benchmark exited with code $($bench.ExitCode)"
