@@ -127,8 +127,8 @@ end)
 script.on_event(defines.events.on_gui_text_changed, qln.on_gui_text_changed)
 
 script.on_event(defines.events.on_lua_shortcut, network.on_lua_shortcut)
-script.on_event(defines.events.on_technology_researched, function(event)
-  research.on_technology_researched(game.forces[event.force_index], event.technology.name)
+script.on_event(defines.events.on_research_finished, function(event)
+  research.on_technology_researched(game.forces[event.force_index], event.research.name)
 end)
 
 remote.add_interface("chiptorio-network", {
