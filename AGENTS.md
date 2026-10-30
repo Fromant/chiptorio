@@ -1,70 +1,121 @@
-# Chiptorio
+# Chiptorio — Agent Instructions
 
-Factorio 2.1 total-conversion mod (Lua, no Space Age, Nauvis only). `DESIGN.md` is the authoritative design and architecture document; read §15 before changing prototypes and §16 before changing behaviour. `changelog.txt` and `info.json` are the release record.
-
-Version 1.0.0 is feature-complete: P0 mechanics (power/cooling throttle, infinite research, monitor tabs, network redesign, circuits board ladder) and QLN/Answer Engine are implemented. `TODO.md` is the gap register for P1 verification work (save/load, force isolation, determinism, performance, locale/icon completeness). Do not treat the status header in `DESIGN.md` as current; `README.md` Status, `TODO.md` and `changelog.txt` are.
+This file contains conventions for coding agents working in this repository.
+User-facing documentation is in [`README.md`](README.md) and
+[`docs/`](docs/). The authoritative design is in [`DESIGN.md`](DESIGN.md).
+The gap register is in [`TODO.md`](TODO.md).
 
 ## Verify
 
-- There is no build, lint, typecheck, or test-runner step. Verification is headless Factorio:
-  - `powershell -ExecutionPolicy Bypass -File tools\run-mod.ps1` links the working tree into `%TEMP%\chiptorio-dev\mods`, enables it and launches a playable Factorio; `-Copy` snapshots the tree and `-NoWait` returns immediately.
-  - `powershell -ExecutionPolicy Bypass -File tools\test-mod.ps1` copies the mod to `%TEMP%\chiptorio-test`, loads the data stage, creates a map, runs 600 ticks, and scans `%APPDATA%\Factorio\factorio-current.log`.
-  - `powershell -ExecutionPolicy Bypass -File tools\test-all.ps1` runs the smoke test, the contract probe, the save/load probe and the power-grid probe. Run `tools\test-contract.ps1` directly for probe-only iteration; its `-Ticks` must be a multiple of 60 (default 300). Run `tools\test-power-grid.ps1` directly for power-grid-only iteration.
-  - The probe is a separate test mod in `tools/test-probe/`. Its data stage unit-tests the pure modules through a cross-mod `require("__chiptorio__/scripts/...")`, so adding `game`, `storage`, or `data` access to a pure module breaks the unit suite. A new spec must be required from `tools/test-probe/data.lua` before `unit_harness.finish`; a new runtime suite belongs in `tools/test-probe/control.lua`.
-  - Data-contract assertions live in `tools/test-probe/data-updates.lua`. A prototype change usually needs a matching check there, not just a passing smoke test.
-- Every script resolves Factorio from `-Factorio`, `FACTORIO_EXE`, a repository-root `.env`, then auto-detected Steam/common install paths. Keep path logic in `tools/common.ps1`; do not hardcode a local install. `.env` is gitignored and `.env.example` is the tracked template. Use `-Keep` to inspect the temporary save and log.
-- The test log markers are `CHIPTORIO-TEST PASS <suite>` and `CHIPTORIO-TEST FAIL <suite>`. The wrapper requires `PASS unit`, `PASS data`, `PASS runtime`, `PASS force-isolation`, `PASS power-grid` and `PASS playthrough`; a new suite must add a marker and a matching assertion in the PowerShell wrapper. Keep `unit_harness.finish` after all unit specs: calling it inside one spec hides later failures.
+Verification is headless Factorio. There is no build, lint, typecheck, or
+test-runner step.
 
-## Load-stage rules
+- `tools\test-all.ps1` — smoke test → contract → registration audit →
+  save/load → power-grid → performance. Any failure exits non-zero.
+- `tools\test-contract.ps1` — probe-only iteration; `-Ticks` must be a
+  multiple of 60 (default 300).
+- `tools\test-power-grid.ps1` — power-grid-only iteration.
+- `tools\test-perf.ps1` — performance-only iteration.
+- `tools\test-registration.ps1` — registration audit-only iteration.
+- `tools\test-save-load.ps1` — save/load-only iteration.
+- `tools\run-mod.ps1` — links the working tree into `%TEMP%\chiptorio-dev\mods`,
+  enables it, and launches a playable Factorio. `-Copy` snapshots the tree;
+  `-NoWait` returns immediately.
 
-- `data.lua` is order-sensitive: items and fluids, then machines and labs, then recipes and technologies. `data-updates.lua` is only for vanilla mutations after all mods load.
-- `data.lua` must keep `require("scripts.network")`. `internet` unlocks `network-cable`, `network-switch`, `network-router` and `network-monitor` by recipe name, so omitting the module fails map creation with `recipe with name 'network-cable' does not exist`.
-- `scripts/network.lua` defines cable tiers (twisted pair, coaxial, multi-mode fiber, single-mode fiber), 3×2 rotatable switches and routers. Cables collide with everything (`collision_layer = object`, `collision_mask = object`) — they cannot be placed on machines or belts, and nothing can be placed on them. Switches merge cable segments; routers bridge segments and act as WiFi access points with 16-tile reach (`radius_visualisation` shows range). Cables are `pipe` clones only for connection-aware auto-tiling: their sixteen one-tile sprites live in `graphics/entity/cable/`, are tinted per tier, and `fluid_box.pipe_covers` stays nil so no vanilla pipe segment leaks in.
-- `scripts/technology.lua` gates the wiring on `internet`. The server rack belongs to `internet`, not `planar-process`.
-- `scripts/process_nodes.lua` is pure and is the single source of truth for the twelve process nodes, ten half-nodes, node item names, die yields and the half-node bonus. `scripts/node_items.lua` and `scripts/node_recipes.lua` generate prototypes from it, and `scripts/technology.lua` only supplies tech-tree position and cost. A node makes the six architecture chips cheaper; do not add a per-node chip name or change the profiles in `scripts/research_meta.lua`. Internal keys must be prototype-safe (`1-4nm`, not `1.4nm`); keep the dotted label in the locale.
-- Chips and memory modules are `module` prototypes (category `chiptorio-chip` / `chiptorio-memory`, `effect = {}`), because a provider's module inventory is the only machine-readable "what is installed" surface. They live in `data.raw.module`; check items with `M.item_exists`, not `data.raw.item`.
-- Compute providers (`server-rack`, `memory-bank`, `datacenter`) are lab clones with `inputs = {}` and `researching_speed = 0.001`. Do not give them science packs; that would turn them into ordinary labs. Never set `allowed_effects` on a lab clone - it is an `EffectTypeLimitation`, and a boolean map fails to load. Keep the numbers in `scripts/research_meta.lua`.
-- The Metrology Lab is the other lab clone: its inputs are the ten Process Qualification Wafers, `module_slots = 0`, and it is generated in `scripts/metrology.lua` from `process_nodes.HALF_NODES`. Its test structure and the ten pilot recipes live in the same module. A pilot recipe runs in the refined node's fab category and must stay unlocked by its `refine-*` technology, never enabled at start. The 6 µm and 1.5 µm refinements must stay offline; from 800 nm the lab needs a network gate. Do not require a vector profile before the GPU exists at 90 nm, or the ladder deadlocks.
-- Every `scripts/*.lua` module must be explicitly required from a load-stage entrypoint; the directory is not auto-loaded. Require each module once, from the stage that owns it.
-- QLN (DESIGN §9) is implemented. `scripts/qln.lua` owns the prototypes, `scripts/qln_meta.lua` the pure tuning, `scripts/runtime/qln_transport.lua` the pure storage maths, and `scripts/runtime/qln_runtime.lua` the only QLN module that touches entities or `storage`. Storage is per Storage Drive (`storage.qln.drives[unit_number]`); capacity comes from memory modules in drives. Quantum Entanglement Cores pair in unit-number order and union their networks into one storage group. Keep the pure maths in `qln_transport.lua` and the monitor section registered through `network.set_qln_provider`.
-- Memory generations live in `scripts/memory.lua` and the cell values in `qln_meta.DRIVE_CELLS`. Eleven generations run from SRAM to 3D NAND; each unlocks from the process-node technology of its era, and SRAM stays on `internet`. Keep the prototype list, the QLN cell table, the technology effects and `tools/test-probe/data-updates.lua` in sync.
-- The FOUP Dock is a container with a relative mode panel (`defines.relative_gui_type.item_with_inventory_gui`, position right) rather than a screen frame, so its ten slots stay usable. It is deliberately absent from `QLN_NODE_NAMES` in `qln_runtime.lua`; `dock_accepts` / `dock_outputs` give Import and Export Nodes mode-aware direction. A sealing dock takes `foup` and `node-*-wafer` and exports `foup-sealed-*`; an unsealing dock does the reverse. Never remove those filters, or an Export Node pushes products back into the dock it just filled.
-- `data-updates.lua` hides the vanilla lab and retargets the first-science trigger to `analytical-engine`. Its load-time assertions prevent a fresh-save softlock; do not remove them.
-- `scripts/prune.lua` removes enemies, robots, and combat. It hides prototypes and disables recipes instead of deleting them, because deleting an item means scrubbing every prototype that references it. It then removes empty technologies and rewires prerequisites. Add new removals to the tables in that module, not ad-hoc loops in `data-updates.lua`.
-- Enemies are disabled by clearing `autoplace` on the base spawner and worm prototypes. Do not delete the `enemy-base` autoplace control: the base planet map-generation tables still reference it.
-- Prototypes are cloned and tinted from base entities via `scripts/util.lua`; do not add custom entity art. Keep the six vanilla science-pack internal names and change only their localised names and recipes, or the vanilla tech tree breaks. See DESIGN §4.3 for the mapping.
-- Every research computer must accept every workload plus `microprocessor`; `scripts/labs.lua` appends and asserts these inputs. Never gate packs by lab generation, which can deadlock the vanilla tech tree.
-- Adding a workload means creating the item, appending it to every lab's `inputs`, using it in technology ingredients, and updating `scripts/answer_meta.lua`.
-- DESIGN §15 also lists 2.1 API traps: recipe `categories` versus `category`, no fluid ingredients in the `crafting` category, positional technology ingredients, `icon` versus `icons`, and `__1__` locale placeholders.
+All scripts resolve Factorio from `-Factorio`, `FACTORIO_EXE`, a repository
+root `.env`, then auto-detected Steam/common install paths. Keep path logic in
+`tools/common.ps1`; do not hardcode a local install. `.env` is gitignored and
+`.env.example` is the tracked template. Use `-Keep` to inspect the temporary
+save and log.
 
-## Runtime rules
+## Test log markers
 
-- `control.lua` owns the single `script.on_nth_tick(60)` dispatcher and the `on_init` / `on_configuration_changed` handlers. Modules expose plain functions; they must not register those events themselves, or one module will silently replace another. Register each remote interface name once: `answer_engine` and `qln_runtime` register their own, while network/research/qualification are registered in `control.lua`.
-- `scripts/runtime/network_graph.lua` is pure: no `game`, no `storage`, no prototypes. The probe unit tests require it across mods. `scripts/runtime/network_runtime.lua` owns the chunk index, cached graph, module polling, overlay and monitor, and it rebuilds at most once per second. Keep topology maths out of the runtime file.
-- A machine connects to the network only if physically adjacent to a cable/switch tile or within a router's 16-tile wireless reach. Cables form raw segments by 4-way adjacency; switches merge segments; routers bridge segments. Segment bandwidth is the weakest cable tier present (weakest-link rule).
-- Persist runtime state in `storage`, initialized from `on_init` and `on_configuration_changed`, never in module globals.
-- The throughput gate is gone. Do not reintroduce production-rate gates; the redesign gates research on network compute, memory, and bandwidth (DESIGN §7).
-- `scripts/research_meta.lua` is the single source of truth for lab demand, chip and memory profiles, provider slots and every technology gate. `scripts/runtime/research_alloc.lua` is the pure allocator; `scripts/runtime/research_runtime.lua` is the only research module that touches entities and `storage`. Labs are paused with `disabled_by_script`, never deleted.
-- Decay is at most 2% of `LuaForce.research_progress` per minute. Memory, bandwidth and cooling shortfalls are hard stops; a pure compute or power shortfall decays in proportion to `1 - profile_compute/floor` or `1 - power/heat`. Profiles are shares, so surplus of one compute kind cannot cover another.
-- Provider module contents change without inventory events. `network_runtime.poll_modules()` compares a signature once per second; `network.graphs()` polls before reading so a remote call sees the current chips.
-- Qualification is per-force state in `storage.qualification.forces[force_index]` (`qualified`, `samples`). `scripts/runtime/qualification_alloc.lua` is pure; `scripts/runtime/qualification_runtime.lua` is the only qualification module that reads entities or writes `storage`, and it is the only module that touches `defines.inventory.lab_input`.
-- A qualified yield bonus is an absolute `force.recipes[name].productivity_bonus` on the refined node's wafer and die recipes (`allow_productivity = true`), so setting it again cannot stack. Compute and power bonuses go through `network.set_chip_multipliers`, which must mark the graph dirty. Memory capacity and backplane bandwidth are hardware and must never be scaled by a refinement.
-- `network_runtime` must not require `qualification_runtime` or `qln_runtime`. Both monitor sections and the multiplier setter are registered through `network.set_qualification_provider`, `network.set_qln_provider` and plain calls to avoid a require cycle.
-- QLN is the item backbone. The Construction Core replaces construction robots: it mines deconstruction targets into a force inventory, then moves the items into QLN storage, and it pays for a ghost with the entity's own building item. It is an **accumulator clone**, not a lab clone: a lab only holds energy while it researches, so an idle lab core sits at zero, while an accumulator's charge refills from the grid and `entity.energy` is writable as the work budget. `LuaEntity.mine` in 2.1 takes `force` as a boolean, so call it with `{ inventory = inventory }` only. A lab-clone QLN entity snaps `.5` coordinates to integers; place cables or use integer coordinates in tests.
-- The Answer Engine is a lab clone with no inputs; its 42-minute clock, GUI, scoring, and victory screen live in `scripts/answer_engine.lua`, not in ordinary research. It consumes its item draw from QLN storage through `qln.consume`, never from its own inventory.
+`CHIPTORIO-TEST PASS <suite>` and `CHIPTORIO-TEST FAIL <suite>`. The wrapper
+requires `PASS unit`, `PASS data`, `PASS runtime`, `PASS force-isolation`,
+`PASS power-grid` and `PASS playthrough`. A new suite must add a marker and a
+matching assertion in the PowerShell wrapper. Keep
+`unit_harness.finish` after all unit specs: calling it inside one spec hides
+later failures.
+
+`--benchmark` raises all `on_nth_tick`/`on_tick` handlers only at tick 0 and
+does not dispatch script events for later ticks. Multi-tick checks (power
+grid) must run on a real headless server, not a benchmark.
+
+## Where to find things
+
+| Topic | Location |
+|-------|----------|
+| Overview, features, installation | `README.md`, `docs/overview.md`, `docs/installation.md` |
+| Test scripts, markers, procedures | `docs/testing.md` |
+| Runtime architecture, module map | `docs/architecture.md` |
+| Load-stage rules, prototype conventions | `docs/prototypes.md` |
+| Generated assets, locale, release | `docs/assets.md` |
+| Debug hooks, remote interfaces | `docs/debug.md` |
+| P1 verification status | `docs/p1-verification.md` |
+| Authoritative design | `DESIGN.md` (§15 before prototypes, §16 before behaviour) |
+| Gap register | `TODO.md` |
+
+## Key rules (summary; full details in docs/)
+
+- `data.lua` is order-sensitive: items and fluids, then machines and labs,
+  then recipes and technologies. `data-updates.lua` is only for vanilla
+  mutations after all mods load.
+- `data.lua` must keep `require("scripts.network")`.
+- `scripts/process_nodes.lua` is pure and is the single source of truth for
+  the twelve process nodes, ten half-nodes, node item names, die yields and
+  the half-node bonus.
+- Chips and memory modules are `module` prototypes; check items with
+  `M.item_exists`, not `data.raw.item`.
+- Compute providers are lab clones with `inputs = {}` and
+  `researching_speed = 0.001`. Never set `allowed_effects` on a lab clone.
+- Every `scripts/*.lua` module must be explicitly required from a
+  load-stage entrypoint; require each module once, from the stage that owns it.
+- `control.lua` owns the single `script.on_nth_tick(60)` dispatcher. Modules
+  expose plain functions; they must not register events themselves.
+- Persist runtime state in `storage`, initialized from `on_init` and
+  `on_configuration_changed`, never in module globals.
+- Labs are paused with `disabled_by_script`, never deleted.
+- `scripts/research_meta.lua` is the single source of truth for lab demand,
+  chip and memory profiles, provider slots and every technology gate.
+- `scripts/runtime/research_alloc.lua` is the pure allocator;
+  `scripts/runtime/research_runtime.lua` is the only research module that
+  touches entities and `storage`.
+- `scripts/runtime/network_graph.lua` is pure: no `game`, no `storage`, no
+  prototypes.
+- `network_runtime` must not require `qualification_runtime` or `qln_runtime`.
+  Both monitor sections and the multiplier setter are registered through
+  `network.set_qualification_provider`, `network.set_qln_provider` and plain
+  calls.
+- `scripts/prune.lua` removes enemies, robots, and combat. It hides prototypes
+  and disables recipes instead of deleting them. Add new removals to the
+  tables in that module, not ad-hoc loops in `data-updates.lua`.
+- Enemies are disabled by clearing `autoplace` on the base spawner and worm
+  prototypes. Do not delete the `enemy-base` autoplace control.
+- Prototypes are cloned and tinted from base entities via `scripts/util.lua`;
+  do not add custom entity art.
+- Keep the six vanilla science-pack internal names; change only localised
+  names and recipes.
+- DESIGN §15 lists 2.1 API traps: recipe `categories` vs `category`, no fluid
+  ingredients in `crafting`, positional technology ingredients, `icon` vs
+  `icons`, and `__1__` locale placeholders.
 
 ## Generated assets, locale, release
 
-- `tools/make-icons.ps1` regenerates all item icons, technology icons, the sixteen connection-aware cable world sprites in `graphics/entity/cable/`, `thumbnail.png`, and `graphics/answer-ending.png`. Do not hand-edit generated PNGs. A new icon needs a `Save-Icon` call and an entry in the contact-sheet `$order`; a new cable shape needs an entry in `$cableShapes` and in `CABLE_SHAPES` in `scripts/network.lua` and `tools/test-probe/data-updates.lua`; a new technology also needs an entry in `$techIcons`.
-- `tools/make-sound.ps1` rebuilds `sound/answer-fanfare.ogg` and requires `ffmpeg` on `PATH`.
-- Add `locale/en/locale.cfg` entries for new items, entities, and technologies; placeholders are `__1__`, not `%s`.
-- Release: bump `info.json` `version` and add a dated `changelog.txt` entry under Features/Balance/Bugfixes, newest first.
+- `tools\make-icons.ps1` regenerates all item icons, technology icons, the
+  sixteen cable world sprites, `thumbnail.png`, and
+  `graphics/answer-ending.png`. Do not hand-edit generated PNGs.
+- `tools\make-sound.ps1` rebuilds `sound/answer-fanfare.ogg` and requires
+  `ffmpeg` on `PATH`.
+- Add `locale/en/locale.cfg` entries for new items, entities, and
+  technologies; placeholders are `__1__`, not `%s`.
+- Release: bump `info.json` `version` and add a dated `changelog.txt` entry
+  under Features/Balance/Bugfixes, newest first.
 
 ## Debug hooks
 
-- `/c remote.call("chiptorio-answer", "status")` logs engine state; `debug_complete` exercises the victory and score path. `evaluate` returns the gate, score and victory as a table, `boot` starts the clock, and `step <seconds>` advances it without waiting for the tick.
-- `/c remote.call("chiptorio-network", "status")` logs per-surface cable, segment and network counts. `/c remote.call("chiptorio-network", "topology", 1)` returns the same numbers as a table for tests. `/c remote.call("chiptorio-network", "overlay", true)` sets the overlay without a keypress, because custom inputs cannot be raised from script.
-- `/c remote.call("chiptorio-research", "status")` logs the current technology's gate, decay and active labs. `evaluate <tech>` returns the same as a table and applies the lab pausing, and `step <seconds>` advances decay without waiting for the tick.
-- `/c remote.call("chiptorio-qualification", "status")` logs every researched half-node's batch, support and reason, plus the force-wide bonus. `state` returns the qualified keys and sample counts, `evaluate <key>` inspects one half-node without changing it, and `step <seconds>` advances qualification without waiting for the tick.
-- `/c remote.call("chiptorio-qln", "status")` logs every group's drives, items, capacity and nodes. `state <force>` returns the same as a table, `deposit <force> <surface> <network> <item> <count>` and `withdraw ...` move items without a node, `step <seconds>` runs the transfer loop, `group_status <entity>` inspects one entity's pool, and `set_foup_mode <entity> <seal|unseal>` switches a dock for headless tests.
-- `ALT + N` toggles the network overlay; the monitor shortcut opens the same window as a placed monitor.
+- `/c remote.call("chiptorio-answer", "status")` — logs engine state
+- `/c remote.call("chiptorio-network", "status")` — logs cable/segment/network
+  counts
+- `/c remote.call("chiptorio-research", "status")` — logs gate, decay, labs
+- `/c remote.call("chiptorio-qualification", "status")` — logs half-node state
+- `/c remote.call("chiptorio-qln", "status")` — logs drives, items, capacity

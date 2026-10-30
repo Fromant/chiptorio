@@ -54,7 +54,9 @@ runtime, force-isolation and playthrough probes) unless a caveat says otherwise.
 - Generated icons and sound, locale entries, and data contracts for all of the
   above.
 
-Caveats that are *not* covered by the automated suite are listed in P1.6, P1.8 and P1.9.
+Caveats that are *not* covered by the automated suite are listed in P1.6 only;
+P1.5, P1.7, P1.8 and P1.9 are automated and asserted by `tools/test-all.ps1`
+(see [`docs/p1-verification.md`](docs/p1-verification.md)).
 
 ---
 
