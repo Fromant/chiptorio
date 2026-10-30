@@ -264,7 +264,12 @@ local techs = {
       ["chiptorio-quantum-science-pack"] = 2,
       ["utility-science-pack"] = 1,
     },
-    prerequisites = { "quantum-error-correction" },
+    -- The join point of the two late columns: error correction supplies the
+    -- logical qubit, and the 7 nm node supplies the quantum processor that
+    -- packages it. Everything that needs both (the neural and quantum boards
+    -- and computers) gates here, so nothing is announced before it can be
+    -- built. This also matches DESIGN 20.9: the 7 nm quantum era.
+    prerequisites = { "quantum-error-correction", "process-7nm" },
     -- A pure gate: the quantum processor itself is packaged by the 7 nm,
     -- 3 nm and 1.4 nm node recipes. The neural processor is the tensor source
     -- the Answer Engine needs, so it arrives with the quantum era.
@@ -443,6 +448,13 @@ local techs = {
     infinite = true,
   },
   {
+    -- The infinite ladder must not depend on an infinite technology.
+    -- Factorio never sets `researched = true` on an infinite technology, and
+    -- the engine silently refuses to queue any technology whose prerequisite
+    -- is not researched. Gating `chip-performance` on `the-question` therefore
+    -- made the whole ladder unreachable. The last finite technology is the
+    -- endgame gate every player already passes before The Question.
+    --
     -- Infinite research: +5% compute per level, uncapped.
     name = "chip-performance",
     order = "a[chiptorio]-z1",
@@ -453,7 +465,7 @@ local techs = {
       ["utility-science-pack"] = 1,
       ["chiptorio-hbm-science-pack"] = 1,
     },
-    prerequisites = { "the-question" },
+    prerequisites = { "process-1-4nm" },
     effects = {},
     infinite = true,
   },
@@ -468,7 +480,7 @@ local techs = {
       ["utility-science-pack"] = 1,
       ["chiptorio-hbm-science-pack"] = 1,
     },
-    prerequisites = { "chip-performance" },
+    prerequisites = { "process-1-4nm" },
     effects = {},
     infinite = true,
   },
@@ -483,7 +495,7 @@ local techs = {
       ["utility-science-pack"] = 1,
       ["chiptorio-optical-science-pack"] = 1,
     },
-    prerequisites = { "chip-performance" },
+    prerequisites = { "process-1-4nm" },
     effects = {},
     infinite = true,
   },
@@ -498,7 +510,7 @@ local techs = {
       ["utility-science-pack"] = 1,
       ["chiptorio-optical-science-pack"] = 1,
     },
-    prerequisites = { "memory-density" },
+    prerequisites = { "process-1-4nm" },
     effects = {},
     infinite = true,
   },
@@ -513,7 +525,7 @@ local techs = {
       ["utility-science-pack"] = 1,
       ["chiptorio-quantum-science-pack"] = 1,
     },
-    prerequisites = { "chip-performance" },
+    prerequisites = { "process-1-4nm" },
     effects = {},
     infinite = true,
   },
@@ -528,7 +540,7 @@ local techs = {
       ["utility-science-pack"] = 1,
       ["chiptorio-quantum-science-pack"] = 1,
     },
-    prerequisites = { "chip-efficiency" },
+    prerequisites = { "process-1-4nm" },
     effects = {},
     infinite = true,
   },
@@ -543,7 +555,7 @@ local techs = {
       ["utility-science-pack"] = 1,
       ["chiptorio-quantum-science-pack"] = 1,
     },
-    prerequisites = { "chip-performance" },
+    prerequisites = { "process-1-4nm" },
     effects = {},
     infinite = true,
   },

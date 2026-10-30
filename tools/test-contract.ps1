@@ -76,7 +76,12 @@ function Get-LogProblems {
   )
   foreach ($p in $patterns) {
     $m = [regex]::Matches($log, "(?im)^.*$p.*$")
-    foreach ($hit in $m) { $found += $hit.Value.Trim() }
+    foreach ($hit in $m) {
+      # Diagnostics deliberately name things like quantum-error-correction, which
+      # would otherwise trip the "chiptorio.*error" pattern.
+      if ($hit.Value -match "CHIPTORIO-TEST INFO") { continue }
+      $found += $hit.Value.Trim()
+    }
   }
   return $found
 }
@@ -149,6 +154,12 @@ if (Test-Path $logPath) {
   }
   if ($log -notmatch "CHIPTORIO-TEST PASS runtime") {
     $problems += "runtime probe did not log PASS"
+  }
+  if ($log -notmatch "CHIPTORIO-TEST PASS force-isolation") {
+    $problems += "force-isolation probe did not log PASS"
+  }
+  if ($log -notmatch "CHIPTORIO-TEST PASS playthrough") {
+    $problems += "playthrough probe did not log PASS"
   }
 }
 

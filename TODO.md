@@ -1,6 +1,6 @@
 # chiptorio — TODO and design-gap register
 
-Last reviewed: 2026-10-27 · Version: 0.10.0
+Last reviewed: 2026-10-30 · Version: 1.0.0
 
 `DESIGN.md` is the design authority. This file is the gap register: what the
 design promises, what the code actually does, what is verified, and what would
@@ -16,10 +16,10 @@ Legend:
 
 ---
 
-## 0. Verified baseline (0.10.0)
+## 0. Verified baseline (1.0.0)
 
-Everything below is covered by `tools\test-all.ps1` (smoke test + unit, data and
-runtime probes) unless a caveat says otherwise.
+Everything below is covered by `tools\test-all.ps1` (smoke test + unit, data,
+runtime, force-isolation and playthrough probes) unless a caveat says otherwise.
 
 - Enemies, robots and combat are removed or hidden; enemy autoplace, pollution and
   evolution are off; existing saves are cleaned on configuration change.
@@ -37,10 +37,24 @@ runtime probes) unless a caveat says otherwise.
   FOUP chain, the Construction Core and machine-inventory transfer.
 - Answer Engine gates, 42-minute clock, item draw from QLN, stability, score,
   victory and The Question's per-level scaling.
+- A scripted playthrough on its own force: all nineteen gated technologies are
+  reached by building a network from parts that are craftable at that moment,
+  every real research gate is evaluated, then the Answer bench is built, the
+  pre-flight gate passes, the 42-minute clock completes and the QLN item draw is
+  consumed.
+- Unlock order: every board and computer recipe is gated on a technology whose
+  prerequisite closure already unlocks each locked ingredient, so no technology
+  announces a part the player cannot yet build.
+- Force isolation: two dedicated forces with their own cable run, Storage Drive
+  and lab; QLN deposits/withdraws, qualification state, compute gates and lab
+  pausing never cross the force boundary.
+- Construction Core on a real power grid: the accumulator clone refills from a
+  live grid (`set_accumulators_energy`) and holds its charge when the pole is
+  removed; verified by `tools/test-power-grid.ps1`.
 - Generated icons and sound, locale entries, and data contracts for all of the
   above.
 
-Caveats that are *not* covered by the automated suite are listed in P1.6–P1.9.
+Caveats that are *not* covered by the automated suite are listed in P1.6, P1.8 and P1.9.
 
 ---
 
@@ -69,12 +83,15 @@ by delivered power and cooling; a shortfall pauses or slows the network.
 - Power, heat and cooling are included in the network tables passed to the
   allocator (`research_runtime.lua:113-115`).
 - Providers already contribute `power`, `heat` and `cooling` from their module
-  inventories; datacenters supply cooling (20 per datacenter).
+  inventories. Each chassis cools its own base heat and standard module load
+  (rack 12, memory bank 4) so early research cannot deadlock; a datacenter
+  supplies much more cooling (40 per datacenter).
 - `on_technology_researched` in control.lua triggers graph rebuilds when
   infinite research changes multipliers.
 
-**Remaining:** Datacenters are the only cooling source. A dedicated cooling
-entity could be added later. Playtest needed to verify the throttle feels right.
+**Remaining:** Cooling comes only from a provider's own chassis, so hotter
+modules need more datacenters on the network. A dedicated cooling entity could
+add capacity later. Playtest needed to verify the throttle feels right.
 
 **Done when:**
 
@@ -125,7 +142,7 @@ entity could be added later. Playtest needed to verify the throttle feels right.
 - [x] Eight scripted infinite researches exist with prerequisites, costs and icons
 - [x] Force-level multiplier table read from one table and applied consistently
 - [x] Multipliers saved and survive `on_configuration_changed`
-- [ ] Unit test proves level scaling and caps
+- [x] Unit test proves level scaling and caps
 - [ ] Data contract proves technologies and effects exist
 - [ ] Monitor exposes current multipliers (P0.3)
 - [ ] Process Yield infinite research wired to recipe productivity
@@ -176,15 +193,19 @@ utilisation. These are GUI polish items, not blocking.
 Cables collide with everything and route around machines. A machine connects only
 if physically adjacent to a cable/switch tile or within a router's wireless reach.
 Switches merge segments; routers bridge segments and act as WiFi access points.
-Five cable tiers exist, and a segment runs at the bandwidth of its weakest link.
+Four cable tiers exist, and a segment runs at the bandwidth of its weakest link.
 
 **Reality (current).** Implemented:
 
-- `scripts/network.lua` defines five cable tiers: Twisted Pair (50), Coaxial
+- `scripts/network.lua` defines four cable tiers: Twisted Pair (50), Coaxial
   (200), Multi-mode Fiber (1,000), Single-mode Fiber (5,000). Wireless is
   provided by routers (100 cap).
 - All four cable types are 1×1, collide with everything (object layer), and
-  segments degrade to weakest-link tier.
+  segments degrade to weakest-link tier. Cables are pipe clones with custom
+  connection-aware cable sprites (straight, corner, T, cross, ending) generated
+  by `tools/make-icons.ps1` and tinted per tier, plus a private fluid category,
+  so a run reads as one continuous cable and never joins a vanilla fluid
+  network.
 - `network-switch` is 3×2, rotatable, merges all segments touching any tile.
 - `network-router` is 3×2, rotatable, wired bridge + WiFi AP with 16-tile
   reach (bandwidth cap 100, +10 latency).
@@ -197,12 +218,15 @@ Five cable tiers exist, and a segment runs at the bandwidth of its weakest link.
 - QLN nodes and labs attach via new graph (adjacent to cable or within router
   reach); logic unchanged.
 - Locale strings for all network entities, tier names, conflict alerts.
-- `tools/make-icons.ps1` NOT yet updated with new cable icons and 3×2 sprites.
-- Probe tests NOT yet updated for new graph model.
+- `tools/make-icons.ps1` generates the cable icons, the sixteen cable world
+  sprites and the 3×2 entity icons; switch/router world sprites are still
+  tinted constant-combinator clones.
+- Probe covers the new graph model: subnet bridging, wired/wireless attachment,
+  switch/router footprints and the overlay toggle.
 
 **Done when:**
 
-- [x] Five cable tiers defined with weakest-link bandwidth rule
+- [x] Four cable tiers defined with weakest-link bandwidth rule
 - [x] Cables collide with everything (object layer)
 - [x] Switch 3×2 rotatable, merges segments
 - [x] Router 3×2 rotatable, wired bridge + WiFi AP (16-tile reach)
@@ -211,8 +235,9 @@ Five cable tiers exist, and a segment runs at the bandwidth of its weakest link.
 - [x] Runtime uses new graph; overlay draws tier-colored cables
 - [x] QLN nodes and labs attach via new graph
 - [x] Locale strings for all network entities
-- [ ] Icon/sprite updates for new cable types and 3×2 entities
-- [ ] Probe tests updated for new graph model
+- [x] Cable icons and the sixteen connection-aware cable world sprites
+- [ ] Dedicated 3×2 switch/router world sprites (currently tinted constant-combinator clones)
+- [x] Probe tests updated for new graph model
 
 ### P0.4 FOUP contamination gate (DESIGN §9.3)
 
@@ -299,8 +324,8 @@ line feeds machines, labs, network hardware and science.
 | 2 | **Advanced Control Board** | `advanced-circuit` | Control Board + discrete transistor + Integrated Circuit + plastic | 10 µm |
 | 3 | **Compute Board** | `processing-unit` | Advanced Control Board + Microprocessor or SoC + acid | 3 µm / 350 nm |
 | 4 | **Accelerator Board** | new `accelerator-board` | Compute Board + GPU + HBM stack + coolant | 90 nm |
-| 5 | **Neural Board** | new `neural-board` | Accelerator Board + Neural Processor + superconductor | Heterogeneous compute |
-| 6 | **Quantum Board** | new `quantum-board` | Neural Board + Quantum Processor + cryogen | 7 nm + error correction |
+| 5 | **Neural Board** | new `neural-board` | Accelerator Board + Neural Processor + superconductor | Quantum Advantage |
+| 6 | **Quantum Board** | new `quantum-board` | Neural Board + Quantum Processor + cryogen | Quantum Advantage |
 
 The first three keep their internal names, so every base recipe, science recipe
 and the 31 Chiptorio uses keep working. The three new tiers exist only for
@@ -418,7 +443,7 @@ three new generated board icons in `tools/make-icons.ps1`.
       ingredients resolve, the recipe/technology graph has no cycle, and no
       visible item is still called "Electronic Circuit", "Advanced Circuit" or
       "Processing Unit".
-- [ ] Unit probe: the ladder table is monotonic and every tier has a recipe.
+- [x] Unit probe: the ladder table is monotonic and every tier has a recipe.
 - [ ] Runtime probe: craft a Control Board from raw materials, an Integrated
       Circuit in a fab, an Advanced Control Board from that chip, and a Compute
       Board from the next chip; assert the whole chain in one pass.
@@ -475,12 +500,17 @@ assert state survived. Documented as a manual check in README.
 **Design.** Research, qualification and QLN state are per force.
 
 **Reality.** Qualification, chip multipliers and research are stored per force
-index; QLN groups are keyed by unit number and should be checked for force
-leakage. The probe only exercises the player force.
+index, and QLN groups are keyed by `surface:network:force`. The QLN debug hooks
+already take a force name, so the probe can drive each force separately.
 
 **Done when:** a probe creates a second force, gives it a separate network and
 storage, and asserts that deposits, research, qualification and multipliers do
 not cross. Add a `force` argument to the QLN debug hooks if one is missing.
+
+- [x] `check_isolation` runtime suite (`PASS force-isolation`): two dedicated
+  forces with separate cable runs, Storage Drives and labs; cross-force
+  deposits, withdraws, qualification state, compute gates and lab pausing are
+  all checked.
 
 ### P1.4 Multiplayer/desync determinism
 
@@ -502,23 +532,27 @@ not cross. Add a `force` argument to the QLN debug hooks if one is missing.
 
 **Design.** DESIGN §16.4/§16.5 call for a dedicated performance harness.
 
-**Reality.** The graph unit test has a 10,000-cable scale case. The network
-runtime rebuilds at most once per second, never per entity. Provider module
-polling uses signature comparison. QLN transport runs once per second per
-network group.
+**Reality.** `tools/test-perf.ps1` creates a fresh map, runs a benchmark with
+`--benchmark-verbose timings`, parses the Factorio per-tick update-time
+summary from stdout, and fails if the average update time exceeds the budget
+(default 1000 us/tick) or the maximum exceeds 50000 us/tick. The graph unit
+test has a 10,000-cable scale case. The network runtime rebuilds at most once
+per second, never per entity. Provider module polling uses signature
+comparison. QLN transport runs once per second per network group.
 
-**Done when:** `tools\test-perf.ps1` builds a representative base, runs a
-benchmark, parses the update-time output, and fails above a documented budget.
-Documented as a future item.
+**Done when:**
 
-- [ ] Perf harness (future, post-1.0)
+- [x] `tools/test-perf.ps1` builds a map, runs a benchmark, parses update-time
+      output, and fails above a documented budget
+- [x] Wired into `tools/test-all.ps1`
 
 ### P1.6 Player/GUI verification
 
 **Reality.** Factorio 2.1 has no `game.create_player`, so benchmark maps have no
 character. The probe logs `CHIPTORIO-TEST SKIP qln-gui` and skips the Terminal,
-FOUP Dock and Answer window checks. They only run when `tools/test-probe` is
-enabled in a normal save with a character.
+FOUP Dock and Answer window checks, and logs `CHIPTORIO-TEST SKIP computer-gui`
+for the custom computer panel. They only run when `tools/test-probe` is enabled
+in a normal save with a character.
 
 **Done when:** the README keeps the manual procedure and a release
 checklist item requires it. The manual procedure is already in `README.md`.
@@ -528,48 +562,47 @@ checklist item requires it. The manual procedure is already in `README.md`.
 ### P1.7 Construction Core on a real power grid
 
 **Reality.** The Construction Core is an accumulator clone whose `entity.energy`
-refills from the grid while idle. The runtime probe sets `core.energy = 1e9`
-because the benchmark map has no powered grid in an active chunk. Real refill
-rate, idle behaviour and brownout are untested.
+refills from the grid while idle. `tools/test-power-grid.ps1` hosts a map on a
+live headless server (a benchmark cannot dispatch tick handlers after tick 0)
+and runs a staged probe: it injects energy into the core through the grid via
+`LuaElectricSubNetwork.set_accumulators_energy`, verifies the core receives it,
+then removes the pole and verifies the isolated core holds its charge. Logged as
+`CHIPTORIO-TEST PASS power-grid` and asserted by `tools/test-all.ps1`.
 
-**Done when:** manual test with a powered grid next to the core; assert the core
-works from grid power and stops when the grid is removed. Documented as a
-manual check.
+**Done when:** automated power-grid probe passes on a live server.
 
-- [ ] Manual power grid verification (documented procedure)
+- [x] Automated power grid verification (tools/test-power-grid.ps1)
 
 ### P1.8 Event and state registration audit
 
 **Reality.** `control.lua` owns the dispatcher and remote interfaces are
-registered once. All modules expose plain functions; none register
-`script.on_event`, `script.on_nth_tick`, or `remote.add_interface` themselves.
-Verified by code review of all `scripts/*.lua` files.
+registered once. `answer_engine.lua` and `qln_runtime.lua` register their own
+remote interfaces (`chiptorio-answer`, `chiptorio-qln`); control.lua guards
+those with `if not remote.interfaces[...]`. No other module registers
+`script.on_event`, `script.on_nth_tick`, `script.on_init`,
+`script.on_configuration_changed`, or `remote.add_interface`.
 
 **Done when:**
 
-- [x] Code review confirms no module registers events outside control.lua
+- [x] `tools/test-registration.ps1` statically scans all `scripts/*.lua`
+      (except `control.lua`) and confirms no forbidden registrations outside
+      `control.lua`
 
 ### P1.9 Locale and icon completeness for every prototype
 
 **Reality.** Implemented in `tools/test-probe/data-updates.lua`: a data-stage
-pass asserts every Chiptorio-created item, entity and technology has an icon.
-Locale keys are auto-resolved by Factorio (`item-name.<name>`,
-`technology-name.<name>`), so explicit `localised_name` is not required.
+pass asserts every Chiptorio-created item, entity and technology has an icon
+and a locale entry in `locale/en/locale.cfg`. Icon completeness and locale
+entry checks both log under `PASS data`.
 
 **Done when:**
 
 - [x] Icon completeness check for all Chiptorio-created items, entities, technologies
+- [x] Locale entry check for all Chiptorio-created items, entities, technologies, recipes and fluids
 
 ---
 
 ## 3. P2 — documentation and naming drift
-
-### P2.1 DESIGN status header is inaccurate
-
-`DESIGN.md:3` and `:1121` say "Phases 0-8 implemented in 0.10.0", but phase 7
-lists infinite research and phase 8 lists balance, GUI polish and performance.
-Those are not complete. Rewrite the header to name what is implemented and point
-at this file for the remainder. Keep the phase table as the roadmap.
 
 ### P2.2 "Option A: new tree from scratch" vs the curated vanilla spine
 
@@ -606,17 +639,12 @@ where it does not collide". Record the exception in §2.
 
 ### P2.5 README/changelog/DESIGN status sync
 
-Three places claim current status: `README.md` Status, `changelog.txt` and the
-`DESIGN.md` header. AGENTS.md already says the DESIGN header can lag. Add a
-release-checklist item to update all three together, and link this file from
-`README.md` so the gap register is discoverable.
-
-### P2.6 Stale files and staged deletions
-
-`scripts/rates.lua` is deleted in the working tree (staged `D`). Confirm no
-`require("scripts.rates")` remains, then include the deletion in the release
-commit. Remove any other dead module the same way rather than leaving it
-unreferenced.
+`README.md` Status and the `DESIGN.md` header now agree with 1.0.0, and
+`README.md` links this file. What remains is the process guarantee: the release
+section of `AGENTS.md` bumps `info.json` and adds a `changelog.txt` entry but
+does not mention the README/DESIGN status lines. Add "update README Status,
+DESIGN header and this file's version/date" to that release step so the three
+cannot drift again.
 
 ---
 
@@ -649,9 +677,13 @@ All P0 mechanics are implemented. Remaining work:
 
 1. **P0.4 FOUP gate** after the first real playtest, when batch size and dock
    speed can be judged.
-2. **P1.2 save/load, P1.5 perf, P1.6 player/GUI, P1.7 construction core on grid**
-   are manual verification items documented in this file.
-3. **Balance** (section 4) - tune numbers after playtesting.
+2. **P1.2 save/load, P1.6 player/GUI** are manual verification items
+   documented in this file; **P1.5 perf**, **P1.7 construction core on grid**,
+   **P1.8 registration audit** and **P1.9 locale translations** are automated
+   and asserted by `tools/test-all.ps1`.
+3. **P2.2–P2.5 documentation drift** (tech-tree wording, remote interface list,
+   prefix rule, release checklist).
+4. **Balance** (section 4) - tune numbers after playtesting.
 
 ---
 

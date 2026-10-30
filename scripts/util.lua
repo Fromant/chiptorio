@@ -184,13 +184,27 @@ function M.tint_animation(animation, color)
   end
 end
 
+--- Recolour every sprite in a connection-aware picture table (PipePictures and
+--- similar structs). Auto-tiling entities keep one sprite per connection shape,
+--- so tinting a single `picture` is not enough.
+function M.tint_pictures(pictures, color)
+  if type(pictures) ~= "table" or not color then
+    return pictures
+  end
+  for _, sprite in pairs(pictures) do
+    tint_sprite(sprite, color)
+  end
+  return pictures
+end
+
 --- Return a deep copy of a base entity's static world sprite, ready to be used
 --- as a container clone's `picture`. Different prototype types keep their
 --- visual in different fields, so the helper looks in every place the base game
 --- actually uses:
 ---   * `picture` / `picture_off` / `picture_on` - chests and lamps
 ---   * `sprites.north` - combinators and display panels
----   * `pictures.straight_vertical_single` - pipes (used for the cable run)
+---   * `pictures.straight_vertical_single` / `pictures.north` - connection-aware
+---     donors, of which only the single-tile sprite is taken
 ---   * `animation` / `graphics_set.animation` - machines
 --- The copy is tinted unless `tint` is nil, so callers never mutate a donor.
 function M.world_sprite(proto, tint)

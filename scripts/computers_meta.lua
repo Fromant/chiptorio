@@ -52,7 +52,10 @@ M.COMPUTERS = {
     base = {
       { type = "item", name = "advanced-circuit", amount = 1 },  -- Advanced Control Board
       { type = "item", name = "system-on-chip", amount = 1 },
-      { type = "item", name = "ddr3-module", amount = 1 },
+      -- The memory era of the technology that unlocks the server: process-350nm
+      -- unlocks DDR, so the recipe must not ask for a later generation or the
+      -- server would be unbuildable when its technology completes.
+      { type = "item", name = "ddr-module", amount = 1 },
     },
     profile = { scalar = 32, memory = 512, bandwidth = 64 },
     power = 60,
@@ -69,7 +72,10 @@ M.COMPUTERS = {
     base = {
       { type = "item", name = "accelerator-board", amount = 1 },
       { type = "item", name = "gpu", amount = 1 },
-      { type = "item", name = "hbm-module", amount = 1 },
+      -- process-90nm unlocks DDR3 and the supercomputer, and the supercomputer
+      -- is the ladder's only vector source before heterogeneous-compute. An
+      -- HBM part here would deadlock every later vector gate.
+      { type = "item", name = "ddr3-module", amount = 1 },
     },
     profile = { scalar = 8, vector = 64, memory = 1024, bandwidth = 128 },
     power = 100,
@@ -79,7 +85,8 @@ M.COMPUTERS = {
     name = "neural-computer",
     label = "neural-computer",
     order = "d[neural-computer]",
-    gate = "heterogeneous-compute",
+    -- HBM3 arrives with process-7nm, which quantum-advantage requires.
+    gate = "quantum-advantage",
     tint = { r = 0.70, g = 0.30, b = 0.90 },
     energy = 15,
     results = 1,
@@ -96,7 +103,9 @@ M.COMPUTERS = {
     name = "quantum-computer",
     label = "quantum-computer",
     order = "e[quantum-computer]",
-    gate = "quantum-error-correction",
+    -- 3D NAND arrives with process-7nm, and the Quantum Board needs the QPU
+    -- and the neural processor, so the whole module waits for quantum-advantage.
+    gate = "quantum-advantage",
     tint = { r = 0.30, g = 0.20, b = 0.80 },
     energy = 20,
     results = 1,

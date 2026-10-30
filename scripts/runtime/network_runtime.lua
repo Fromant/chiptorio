@@ -33,6 +33,8 @@ local ROUTER = "network-router"
 local MONITOR = "network-monitor"
 local METROLOGY = "metrology-lab"
 local ANSWER = "answer-engine"
+local AI_TRAINING = "training-cluster"
+local AI_INFERENCE = "inference-lab"
 
 local PROVIDER_NAMES = { "server-rack", "memory-bank", "datacenter" }
 
@@ -44,7 +46,7 @@ table.sort(LAB_NAMES)
 
 -- Every entity the network layer tracks. Repeater is dropped; it is folded
 -- into the switch's junction-box role.
-local NETWORK_NAMES = { CABLE, COAXIAL, FIBER_MM, FIBER_SM, SWITCH, ROUTER, MONITOR, METROLOGY, ANSWER }
+local NETWORK_NAMES = { CABLE, COAXIAL, FIBER_MM, FIBER_SM, SWITCH, ROUTER, MONITOR, METROLOGY, ANSWER, AI_TRAINING, AI_INFERENCE }
 for _, name in ipairs(PROVIDER_NAMES) do
   NETWORK_NAMES[#NETWORK_NAMES + 1] = name
 end
@@ -80,6 +82,8 @@ local NETWORK_KINDS = {
   [MONITOR] = "monitor",
   [METROLOGY] = "metrology",
   [ANSWER] = "answer",
+  [AI_TRAINING] = "ai",
+  [AI_INFERENCE] = "ai",
 }
 for _, name in ipairs(PROVIDER_NAMES) do
   NETWORK_KINDS[name] = "provider"
@@ -176,6 +180,28 @@ end
 local COMPUTE_KINDS = { "scalar", "vector", "tensor", "quantum" }
 local POWER_FIELDS = { "power", "heat", "cooling" }
 
+--- Tile coordinates occupied by an entity. The graph attaches a device only
+-- when a cable touches one of these tiles, so a 3x3 provider must expose its
+-- whole footprint, not just its centre. `bounding_box` includes rotation.
+local function entity_tiles(entity)
+  local box = entity.bounding_box
+  if not box then
+    return nil
+  end
+  local left_top, right_bottom = box.left_top, box.right_bottom
+  local x0 = math.floor(left_top.x + 1e-6)
+  local y0 = math.floor(left_top.y + 1e-6)
+  local x1 = math.floor(right_bottom.x - 1e-6)
+  local y1 = math.floor(right_bottom.y - 1e-6)
+  local tiles = {}
+  for x = x0, x1 do
+    for y = y0, y1 do
+      tiles[#tiles + 1] = { x, y }
+    end
+  end
+  return tiles
+end
+
 local function new_device(entity, kind)
   return {
     id = entity.unit_number,
@@ -185,6 +211,7 @@ local function new_device(entity, kind)
     x = entity.position.x,
     y = entity.position.y,
     direction = entity.direction or 0,
+    tiles = entity_tiles(entity),
     compute = 0,
     scalar = 0,
     vector = 0,
@@ -247,19 +274,36 @@ local function provider_descriptor(entity)
     return nil
   end
 
-  local multiplier = M.chip_multipliers(entity.force and entity.force.index or 0)
-  local power_scale = multiplier.power or 1
-
   local force_index = entity.force and entity.force.index or 0
+  local multiplier = M.chip_multipliers(force_index)
+
+  -- Infinite research is stored as a level, not a multiplier: level 2 means
+  -- `infinite_multiplier(tech, 2)`, never 2. A missing entry is level 0 (not
+  -- researched), which must stay at 1 rather than become `infinite_multiplier(0)`.
   local infinite = storage.research and storage.research.infinite_multipliers
     and storage.research.infinite_multipliers[force_index] or {}
-  local efficiency_mult = infinite["chip-efficiency"] or 1
-  local cooling_mult = infinite["cooling-efficiency"] or 1
+  local function infinite_mult(tech_name)
+    local level = infinite[tech_name] or 0
+    if level <= 0 then
+      return 1
+    end
+    return meta.infinite_multiplier(tech_name, level)
+  end
+
+  local efficiency_mult = infinite_mult("chip-efficiency")
+  local cooling_mult = infinite_mult("cooling-efficiency")
+
+  -- Fold efficiency into the multiplier table so installed computers and
+  -- memory modules are scaled exactly like the provider base power and heat.
+  local scaled = {
+    compute = multiplier.compute or 1,
+    power = (multiplier.power or 1) * efficiency_mult,
+  }
 
   local device = new_device(entity, "provider")
   device.bandwidth = profile.bandwidth or 0
-  device.power = (profile.power or 0) * power_scale * efficiency_mult
-  device.heat = (profile.heat or 0) * power_scale * efficiency_mult
+  device.power = (profile.power or 0) * scaled.power
+  device.heat = (profile.heat or 0) * scaled.power
   device.cooling = (profile.cooling or 0) * cooling_mult
   device.computer_slots = profile.computer_slots or 0
   device.memory_slots = profile.memory_slots or 0
@@ -280,14 +324,14 @@ local function provider_descriptor(entity)
         count = device.computer_slots - device.computers
       end
       device.computers = device.computers + count
-      add_profile(device, computer, count, multiplier)
+      add_profile(device, computer, count, scaled)
     elseif memory and device.memory_modules < device.memory_slots then
       local count = item.count
       if count > device.memory_slots - device.memory_modules then
         count = device.memory_slots - device.memory_modules
       end
       device.memory_modules = device.memory_modules + count
-      add_profile(device, memory, count, multiplier)
+      add_profile(device, memory, count, scaled)
     end
   end
 
@@ -755,23 +799,14 @@ end
 -- second's.
 function M.graphs()
   init_storage()
-  -- Always rebuild everything from scratch
-  storage.network.chunks = {}
-  for _, surface in pairs(game.surfaces) do
-    storage.network.chunks[surface.index] = {}
-    for _, name in ipairs(NETWORK_NAMES) do
-      local entities = surface.find_entities_filtered({name = name})
-      for _, entity in ipairs(entities) do
-        if entity.valid then
-          track(entity)
-        end
-      end
-    end
-  end
+  -- Module inventories change without an event; polling here means a remote
+  -- debug call (and the research tick) sees the current chips, not last
+  -- second's. The rebuild itself stays coalesced: only a dirty graph is rebuilt.
   M.poll_modules()
-  storage.network.dirty = true
-  rebuild_all()
-  draw_overlay()
+  if storage.network.dirty then
+    rebuild_all()
+    draw_overlay()
+  end
   return storage.network.graphs
 end
 
@@ -1424,29 +1459,72 @@ function M.on_lua_shortcut(event)
   end
 end
 
-remote.add_interface("chiptorio-network", {
-  -- /c remote.call("chiptorio-network", "status")
-  status = function()
-    init_storage()
-    M.graphs()
-    for _, surface in pairs(game.surfaces) do
-      local graph = scan_surface(surface)
-      local nets = graph.networks or {}
-      local unconn = graph.unconnected or {}
-      log(string.format(
-        "CHIPTORIO NETWORK surface=%d cables=%d networks=%d unconnected=%d",
-        surface.index,
-        graph.cable_count or 0,
-        #nets,
-        #unconn
-      ))
-    end
-  end,
-  topology = function()
-    return storage.network.graphs or {}
-  end,
-  -- /c remote.call("chiptorio-network", "overlay", true)
-  overlay = M.set_overlay,
-})
+--- Aggregate a surface graph into the flat summary the probe and monitor read.
+local function summarise_graph(graph)
+  local summary = {
+    cable_count = graph.cable_count or 0,
+    networks = graph.networks or {},
+    unconnected = #(graph.unconnected or {}),
+    conflicts = graph.conflicts or {},
+    raw_segments = graph.raw_segments or {},
+    merged_segments = graph.merged_segments or {},
+    labs = 0,
+    providers = 0,
+    metrology = 0,
+    nodes = 0,
+    scalar = 0,
+    vector = 0,
+    tensor = 0,
+    quantum = 0,
+    memory = 0,
+    bandwidth = 0,
+    power = 0,
+    heat = 0,
+    cooling = 0,
+  }
+  for _, net in ipairs(summary.networks) do
+    summary.labs = summary.labs + #(net.labs or {})
+    summary.providers = summary.providers + #(net.providers or {})
+    summary.metrology = summary.metrology + #(net.metrology or {})
+    summary.nodes = summary.nodes + #(net.qln_nodes or {})
+    summary.scalar = summary.scalar + (net.scalar or 0)
+    summary.vector = summary.vector + (net.vector or 0)
+    summary.tensor = summary.tensor + (net.tensor or 0)
+    summary.quantum = summary.quantum + (net.quantum or 0)
+    summary.memory = summary.memory + (net.memory or 0)
+    summary.bandwidth = summary.bandwidth + (net.bandwidth or 0)
+    summary.power = summary.power + (net.power or 0)
+    summary.heat = summary.heat + (net.heat or 0)
+    summary.cooling = summary.cooling + (net.cooling or 0)
+  end
+  return summary
+end
+
+--- Return the current graph for one surface, or every surface when no index is
+-- given. Rebuilds first if anything marked the topology dirty, so a debug call
+-- never reports last second's wiring.
+function M.topology(surface_index)
+  local graphs = M.graphs()
+  if surface_index then
+    return summarise_graph(graphs[surface_index] or empty_graph())
+  end
+  return graphs
+end
+
+--- Log the topology of every surface. Used by status/debug commands.
+function M.status()
+  init_storage()
+  M.graphs()
+  for _, surface in pairs(game.surfaces) do
+    local graph = scan_surface(surface)
+    log(string.format(
+      "CHIPTORIO NETWORK surface=%d cables=%d networks=%d unconnected=%d",
+      surface.index,
+      graph.cable_count or 0,
+      #(graph.networks or {}),
+      #(graph.unconnected or {})
+    ))
+  end
+end
 
 return M

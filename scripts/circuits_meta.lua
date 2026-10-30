@@ -149,7 +149,9 @@ M.BOARDS = {
     },
     alts = {
       {
-        gate = "heterogeneous-compute",
+        -- The NPU accelerator needs the neural processor, which is unlocked by
+        -- quantum-advantage, not by the heterogeneous-compute gate itself.
+        gate = "quantum-advantage",
         energy = 8,
         results = 1,
         ingredients = {
@@ -165,7 +167,10 @@ M.BOARDS = {
     name = "neural-board",
     label = "neural-board",
     order = "e[neural-board]",
-    gate = "heterogeneous-compute",
+    -- Gate on the technology that unlocks the neural processor. The neural
+    -- computer also needs HBM3 from process-7nm, which quantum-advantage
+    -- requires, so the board and the computer arrive together.
+    gate = "quantum-advantage",
     tint = { r = 0.70, g = 0.30, b = 0.90 },
     energy = 12,
     results = 1,
@@ -176,7 +181,10 @@ M.BOARDS = {
     },
     alts = {
       {
-        gate = "quantum-error-correction",
+        -- The QPU build. process-7nm packages the quantum processor from
+        -- physical qubits, so this is the earliest technology where the
+        -- alternative board can actually be assembled.
+        gate = "process-7nm",
         energy = 10,
         results = 1,
         ingredients = {
@@ -191,7 +199,7 @@ M.BOARDS = {
     name = "quantum-board",
     label = "quantum-board",
     order = "f[quantum-board]",
-    gate = "quantum-error-correction",
+    gate = "quantum-advantage",
     tint = { r = 0.30, g = 0.20, b = 0.80 },
     energy = 15,
     results = 1,

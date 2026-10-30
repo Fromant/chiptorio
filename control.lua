@@ -138,116 +138,30 @@ script.on_event(defines.events.on_research_finished, function(event)
       return
     end
     local force = event.force
+    if not force and tech.force then
+      -- `on_research_finished` in 2.1 carries only the LuaTechnology: there is
+      -- no `force` field on the event. The technology knows its own force.
+      force = tech.force
+    end
     if not force and event.force_index then
-      local f_ok = pcall(function() force = game.forces[event.force_index] end)
-      if not f_ok then force = nil end
+      local f_ok, f = pcall(function() return game.forces[event.force_index] end)
+      if f_ok then force = f end
     end
     if not force then return end
     research.on_technology_researched(force, tech_name)
   end)
 end)
 
--- Always override network interface to be aggressive for tests
-do
-  if remote.interfaces["chiptorio-network"] then
-    pcall(function() remote.remove_interface("chiptorio-network") end)
-  end
-  remote.add_interface("chiptorio-network", {
-    -- /c remote.call("chiptorio-network", "status")
-    status = network.status,
-    topology = function(surface_index)
-      local graph_builder = require("scripts.runtime.network_graph")
-      if surface_index then
-        local surface = game.surfaces[surface_index]
-        if surface and surface.valid then
-          local cables = {}
-          local devices = {}
-          local seen = {}
-          for _, entity in ipairs(surface.find_entities_filtered({name = {"network-cable","network-coaxial-cable","network-fiber-mm-cable","network-fiber-sm-cable"}})) do
-            if entity.valid and not seen[entity.unit_number] then
-              seen[entity.unit_number] = true
-              local tier = entity.name == "network-coaxial-cable" and "network-coaxial-cable" or entity.name == "network-fiber-mm-cable" and "network-fiber-mm-cable" or entity.name == "network-fiber-sm-cable" and "network-fiber-sm-cable" or "network-cable"
-              cables[#cables + 1] = {x = entity.position.x, y = entity.position.y, tier = tier}
-            end
-          end
-          for _, entity in ipairs(surface.find_entities_filtered({name = {"network-switch","network-router","network-monitor","metrology-lab","answer-engine","server-rack","memory-bank","datacenter","analytical-engine","tube-mainframe","mainframe-cluster","datacenter-lab","cryostat","lab","chemical-lab","electrostatic-lab","analytical-lab","qln-import-node","qln-export-node","qln-provider-node","qln-requester-node","qln-terminal","qln-storage-drive","construction-core","foup-dock","quantum-entanglement-core"}})) do
-            if entity.valid and not seen[entity.unit_number] then
-              seen[entity.unit_number] = true
-              local kind
-              if entity.name == "server-rack" or entity.name == "memory-bank" or entity.name == "datacenter" or entity.name == "analytical-engine" or entity.name == "tube-mainframe" or entity.name == "mainframe-cluster" or entity.name == "datacenter-lab" or entity.name == "cryostat" then kind = "provider"
-              elseif entity.name == "network-switch" then kind = "switch"
-              elseif entity.name == "network-router" then kind = "router"
-              elseif entity.name == "network-monitor" then kind = "monitor"
-              elseif entity.name == "metrology-lab" then kind = "metrology"
-              elseif entity.name == "answer-engine" then kind = "answer"
-              elseif string.find(entity.name, "qln") then kind = entity.name == "qln-storage-drive" and "qln-drive" or "qln"
-              else kind = "lab" end
-              local dev = {id = entity.unit_number, kind = kind, name = entity.name, force_index = (entity.force and entity.force.index) or 1, x = entity.position.x, y = entity.position.y, direction = entity.direction or 0, compute=0, scalar=0,vector=0,tensor=0,quantum=0, memory=0, bandwidth=0, power=0, heat=0, cooling=0, demand_compute=0, demand_memory=0, demand_bandwidth=0}
-              if kind == "provider" then
-                dev.bandwidth = 1000
-                dev.scalar = 8
-                dev.compute = 8
-                dev.memory = 16
-              elseif kind == "lab" then
-                dev.demand_compute = 10
-                dev.base_demand = 10
-              elseif kind == "metrology" then
-                dev.demand_compute = 0
-                dev.base_demand = 0
-              end
-              devices[#devices + 1] = dev
-            end
-          end
-          local graph = graph_builder.build({cables=cables, devices=devices})
-          storage.network = storage.network or {}
-          storage.network.graphs = storage.network.graphs or {}
-          storage.network.graphs[surface_index] = graph
-          local res = {
-            cable_count = graph.cable_count or 0,
-            networks = graph.networks or {},
-            unconnected = graph.unconnected or {},
-            conflicts = graph.conflicts or {},
-            labs = graph.lab_count or 0,
-            providers = graph.provider_count or 0,
-            metrology = graph.metrology_count or 0,
-            nodes = graph.node_count or 0,
-            scalar = graph.scalar or 0,
-            vector = graph.vector or 0,
-            tensor = graph.tensor or 0,
-            quantum = graph.quantum or 0,
-            memory = graph.memory or 0,
-            bandwidth = graph.bandwidth or 0,
-            power = graph.power or 0,
-            heat = graph.heat or 0,
-            cooling = graph.cooling or 0,
-          }
-          if (res.labs == 0 or res.labs == nil) and graph.networks then
-            local c = 0
-            for _, n in ipairs(graph.networks) do c = c + #(n.labs or {}) end
-            res.labs = c
-          end
-          if (res.providers == 0 or res.providers == nil) and graph.networks then
-            local c = 0
-            for _, n in ipairs(graph.networks) do c = c + #(n.providers or {}) end
-            res.providers = c
-          end
-          if (res.metrology == 0 or res.metrology == nil) and graph.networks then
-            local c = 0
-            for _, n in ipairs(graph.networks) do c = c + #(n.metrology or {}) end
-            res.metrology = c
-          end
-          return res
-        end
-        return { cable_count = 0, networks = {}, unconnected = {}, conflicts = {} }
-      end
-      return (storage.network and storage.network.graphs) or {}
-    end,
-    -- /c remote.call("chiptorio-network", "overlay", true)
-    -- Custom-input events cannot be raised from script, so the overlay tests and
-    -- debug hooks go through this instead of faking a keypress.
-    overlay = network.set_overlay,
-  })
-end
+remote.add_interface("chiptorio-network", {
+  -- /c remote.call("chiptorio-network", "status")
+  status = network.status,
+  -- /c remote.call("chiptorio-network", "topology", 1)
+  topology = network.topology,
+  -- /c remote.call("chiptorio-network", "overlay", true)
+  -- Custom-input events cannot be raised from script, so the overlay tests and
+  -- debug hooks go through this instead of faking a keypress.
+  overlay = network.set_overlay,
+})
 
 if not remote.interfaces["chiptorio-research"] then
   remote.add_interface("chiptorio-research", {
@@ -257,6 +171,10 @@ if not remote.interfaces["chiptorio-research"] then
     evaluate = research.evaluate,
     -- /c remote.call("chiptorio-research", "step", 60)
     step = research.step,
+    -- /c remote.call("chiptorio-research", "infinite", 1)
+    infinite = research.infinite_state,
+    -- /c remote.call("chiptorio-research", "multipliers", 1)
+    multipliers = research.multiplier_state,
   })
 end
 
@@ -287,6 +205,19 @@ if not remote.interfaces["chiptorio-ai"] then
     install_model = ai.install_model,
     -- /c remote.call("chiptorio-ai", "uninstall_model", entity)
     uninstall_model = ai.uninstall_model,
+    -- /c remote.call("chiptorio-ai", "tick")
+    -- Test/debug helper: advance training and inference without waiting for the
+    -- 60-tick dispatcher.
+    tick = ai.tick,
+    -- /c remote.call("chiptorio-ai", "insight", "player", "small-model")
+    -- Accept a force name so the runtime probe does not need `game.forces`.
+    insight = function(force, model_name)
+      local target = type(force) == "string" and game.forces[force] or force
+      if not target then
+        return 0
+      end
+      return ai.insight_factor(target, model_name)
+    end,
   })
 end
 

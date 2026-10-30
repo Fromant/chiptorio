@@ -7,6 +7,23 @@ local failures = {}
 local nodes = require("__chiptorio__/scripts/process_nodes")
 local qmeta = require("__chiptorio__/scripts/qln_meta")
 local answer_meta = require("__chiptorio__/scripts/answer_meta")
+local ai_meta = require("__chiptorio__/scripts/ai_meta")
+local research_meta = require("__chiptorio__/scripts/research_meta")
+local computers_meta = require("__chiptorio__/scripts/computers_meta")
+
+-- `--benchmark` raises tick handlers only at tick 0, so suites that need real
+-- elapsed time run in a hosted server. Each server runner opts in by copying
+-- `server_suite.lua` into the probe mod with the suite name; the file is absent
+-- everywhere else and `require` throws when it is missing.
+local function server_suite()
+  local ok, name = pcall(require, "server_suite")
+  if ok and type(name) == "string" then
+    return name
+  end
+  return nil
+end
+
+local SERVER_SUITE = server_suite()
 
 local function check(condition, message)
   if not condition then
@@ -96,9 +113,10 @@ local function probe_player()
 end
 
 --- The QLN group with at least this much capacity. The runtime keys groups by
---- surface:network:force, so this also gives the probe a real network id.
-local function qln_group(min_capacity)
-  local state = remote.call("chiptorio-qln", "state", "player")
+--- surface:network:force, so this also gives the probe a real network id. The
+--- force argument keeps the force-isolation probe from reading the player pool.
+local function force_group(force_name, min_capacity)
+  local state = remote.call("chiptorio-qln", "state", force_name)
   local best
   for _, group in ipairs(state or {}) do
     if group.capacity >= (min_capacity or 1) and (not best or group.capacity > best.capacity) then
@@ -108,19 +126,36 @@ local function qln_group(min_capacity)
   return best
 end
 
+local function force_group_by_key(force_name, key)
+  for _, group in ipairs(remote.call("chiptorio-qln", "state", force_name) or {}) do
+    if group.key == key then
+      return group
+    end
+  end
+end
+
+local function qln_group(min_capacity)
+  return force_group("player", min_capacity)
+end
+
 local function group_network(group)
   local surface_index, network_id = string.match(group.key, "^(%d+):(%d+):")
   return tonumber(surface_index), tonumber(network_id)
 end
 
-local function qln_deposit(group, name, count)
-  local surface_index, network_id = group_network(group)
-  return remote.call("chiptorio-qln", "deposit", "player", surface_index, network_id, name, count)
+local function group_force_index(group)
+  local force_index = string.match(group.key, "^%d+:%d+:(%d+)$")
+  return tonumber(force_index)
 end
 
-local function qln_withdraw(group, name, count)
+local function qln_deposit(group, name, count, force_name)
   local surface_index, network_id = group_network(group)
-  return remote.call("chiptorio-qln", "withdraw", "player", surface_index, network_id, name, count)
+  return remote.call("chiptorio-qln", "deposit", force_name or "player", surface_index, network_id, name, count)
+end
+
+local function qln_withdraw(group, name, count, force_name)
+  local surface_index, network_id = group_network(group)
+  return remote.call("chiptorio-qln", "withdraw", force_name or "player", surface_index, network_id, name, count)
 end
 
 -- Place a router between two cable runs and check that the graph joins two
@@ -1131,6 +1166,177 @@ local function check_qln()
   destroy_all(quantum_created)
 end
 
+-- Force isolation. Research, qualification and QLN are all per force, but the
+-- network graph is per surface, so two forces sharing a cable segment would
+-- still see each other's providers. The probe gives two dedicated forces their
+-- own separated cable run, Storage Drive and lab, then proves that deposits,
+-- withdraws, qualification state, compute gates and lab pausing never cross the
+-- force boundary.
+local function check_isolation()
+  local first_failure = #failures + 1
+  local qln = remote.interfaces["chiptorio-qln"]
+  check(
+    qln and qln.state and qln.deposit and qln.withdraw,
+    "missing chiptorio-qln interface for force isolation"
+  )
+  if not (qln and qln.state and qln.deposit and qln.withdraw) then
+    return
+  end
+
+  local surface = game.surfaces[1]
+  local force_a = game.forces["chiptorio-isolation-a"] or game.create_force("chiptorio-isolation-a")
+  local force_b = game.forces["chiptorio-isolation-b"] or game.create_force("chiptorio-isolation-b")
+  check(force_a and force_b, "could not create the isolation forces")
+  if not (force_a and force_b) then
+    return
+  end
+
+  -- Both rows are land that earlier suites already built on, and the two cable
+  -- runs are ten tiles apart so they cannot form one segment.
+  clear_area(surface, { { 96, 55 }, { 114, 63 } })
+  clear_area(surface, { { 96, 65 }, { 114, 73 } })
+
+  local created = {}
+  cable_run(surface, force_a, created, 99, 110, 60)
+  local drive_a = place(surface, force_a, created, "qln-storage-drive", 100.5, 58.5)
+  local datacenter_a = place(surface, force_a, created, "datacenter", 104.5, 58.5)
+  local lab_a = place(surface, force_a, created, "analytical-engine", 108.5, 58.5)
+  cable_run(surface, force_b, created, 99, 110, 70)
+  local drive_b = place(surface, force_b, created, "qln-storage-drive", 100.5, 68.5)
+  local lab_b = place(surface, force_b, created, "analytical-engine", 104.5, 68.5)
+  if not (drive_a and datacenter_a and lab_a and drive_b and lab_b) then
+    destroy_all(created)
+    return
+  end
+
+  -- Force A can clear the vlsi-process gate; force B has a lab but no provider.
+  drive_a.get_module_inventory().insert({ name = "sram-module", count = 4 })
+  drive_b.get_module_inventory().insert({ name = "sram-module", count = 4 })
+  datacenter_a.get_module_inventory().insert({ name = "microcomputer", count = 1 })
+  raise_built(created)
+  qln_step(1)
+
+  -- Storage: each drive creates a group on its own force only.
+  local group_a = force_group(force_a.name, 1)
+  local group_b = force_group(force_b.name, 1)
+  check(group_a, "force A's Storage Drive did not create a QLN group")
+  check(group_b, "force B's Storage Drive did not create a QLN group")
+  if not (group_a and group_b) then
+    destroy_all(created)
+    return
+  end
+  check(group_a.capacity == 4096, "force A capacity was " .. tostring(group_a.capacity) .. ", expected 4096")
+  check(group_b.capacity == 4096, "force B capacity was " .. tostring(group_b.capacity) .. ", expected 4096")
+  check(
+    group_force_index(group_a) == force_a.index,
+    "force A's group is keyed to force " .. tostring(group_force_index(group_a)) .. ", expected " .. tostring(force_a.index)
+  )
+  check(
+    group_force_index(group_b) == force_b.index,
+    "force B's group is keyed to force " .. tostring(group_force_index(group_b)) .. ", expected " .. tostring(force_b.index)
+  )
+
+  -- Deposits and withdraws use the same hook signature a player would trigger.
+  local a_key, b_key = group_a.key, group_b.key
+  check(qln_deposit(group_a, "solar-panel", 5, force_a.name) == 5, "force A could not deposit 5 solar panels")
+  check(qln_deposit(group_b, "small-lamp", 7, force_b.name) == 7, "force B could not deposit 7 lamps")
+  group_a = force_group_by_key(force_a.name, a_key)
+  group_b = force_group_by_key(force_b.name, b_key)
+  check(group_a and (group_a.items["solar-panel"] or 0) == 5, "force A did not keep its 5 solar panels")
+  check(group_a and (group_a.items["small-lamp"] or 0) == 0, "force B's lamps leaked into force A")
+  check(group_b and (group_b.items["small-lamp"] or 0) == 7, "force B did not keep its 7 lamps")
+  check(group_b and (group_b.items["solar-panel"] or 0) == 0, "force A's solar panels leaked into force B")
+
+  local leaked = false
+  for _, group in ipairs(remote.call("chiptorio-qln", "state", "player") or {}) do
+    if (group.items["solar-panel"] or 0) > 0 or (group.items["small-lamp"] or 0) > 0 then
+      leaked = true
+    end
+  end
+  check(not leaked, "a deposit made on an isolation force leaked into the player pool")
+
+  check(
+    qln_withdraw(group_b, "solar-panel", 1, force_b.name) == 0,
+    "force B could withdraw force A's solar panels"
+  )
+  check(
+    qln_withdraw(group_a, "small-lamp", 1, force_a.name) == 0,
+    "force A could withdraw force B's lamps"
+  )
+  check(qln_withdraw(group_b, "small-lamp", 3, force_b.name) == 3, "force B could not withdraw its own lamps")
+  group_a = force_group_by_key(force_a.name, a_key)
+  group_b = force_group_by_key(force_b.name, b_key)
+  check(group_a and (group_a.items["solar-panel"] or 0) == 5, "force A's panels changed after force B withdrew")
+  check(group_b and (group_b.items["small-lamp"] or 0) == 4, "force B's own withdraw removed the wrong count")
+  check(
+    remote.call("chiptorio-qln", "deposit", "chiptorio-isolation-missing", surface.index, 1, "solar-panel", 1) == 0,
+    "depositing into a missing force was not a no-op"
+  )
+
+  -- Qualification: the player force qualified two half-nodes earlier in the
+  -- probe. Neither isolation force may inherit that state or its bonus.
+  local qualification = remote.interfaces["chiptorio-qualification"]
+  if qualification and qualification.state and qualification.evaluate then
+    local player_state = remote.call("chiptorio-qualification", "state", game.forces.player.index)
+    check(
+      player_state and #(player_state.qualified or {}) >= 1,
+      "the player force has no qualified half-node to compare against"
+    )
+
+    for _, force in ipairs({ force_a, force_b }) do
+      local state = remote.call("chiptorio-qualification", "state", force.index)
+      check(state and state.force == force.name, "qualification state did not report force " .. force.name)
+      check(
+        state and #(state.qualified or {}) == 0,
+        force.name .. " inherited " .. tostring(state and #(state.qualified or {})) .. " qualified half-nodes"
+      )
+      check(
+        state and state.bonus and state.bonus.compute == 1,
+        force.name .. " inherited a compute bonus of " .. tostring(state and state.bonus and state.bonus.compute)
+      )
+    end
+
+    local first = nodes.HALF_NODES[1]
+    local player_half = remote.call("chiptorio-qualification", "evaluate", first.key, game.forces.player.index)
+    local isolated_half = remote.call("chiptorio-qualification", "evaluate", first.key, force_a.index)
+    check(player_half and player_half.qualified == true, "the player force lost its qualified " .. first.key)
+    check(isolated_half and isolated_half.qualified == false, "force A reported the player's qualified " .. first.key)
+  end
+
+  -- Research: force A has enough compute, force B does not. Pausing one force's
+  -- lab must leave the other force's lab alone, even though the graph is shared
+  -- per surface and the allocator sees both networks.
+  local research = remote.interfaces["chiptorio-research"]
+  if research and research.evaluate then
+    local supported_a = remote.call("chiptorio-research", "evaluate", "vlsi-process", force_a.index)
+    check(supported_a and supported_a.active_labs == 1,
+      "force A should run one lab, got " .. tostring(supported_a and supported_a.active_labs))
+    check(lab_a.disabled_by_script == false, "force A's supported lab was paused")
+
+    local unsupported_b = remote.call("chiptorio-research", "evaluate", "vlsi-process", force_b.index)
+    check(unsupported_b and unsupported_b.active_labs == 0,
+      "force B should run no lab, got " .. tostring(unsupported_b and unsupported_b.active_labs))
+    check(lab_b.disabled_by_script == true, "force B's compute-starved lab was not paused")
+    check(lab_a.disabled_by_script == false, "pausing force B also paused force A's lab")
+
+    remote.call("chiptorio-research", "evaluate", "vlsi-process", game.forces.player.index)
+    check(lab_a.disabled_by_script == false, "evaluating the player force paused force A's lab")
+    check(lab_b.disabled_by_script == true, "evaluating the player force re-enabled force B's lab")
+  end
+
+  destroy_all(created)
+
+  if #failures >= first_failure then
+    local mine = {}
+    for i = first_failure, #failures do
+      mine[#mine + 1] = failures[i]
+    end
+    log("CHIPTORIO-TEST FAIL force-isolation: " .. table.concat(mine, "; "))
+  else
+    log("CHIPTORIO-TEST PASS force-isolation")
+  end
+end
+
 -- Exercise The Answer Engine end to end. Five datacenters supply every compute
 -- profile, the memory dataset and the backplane; a Storage Drive supplies the
 -- item draw. The probe boots the engine through the remote hook, advances ten
@@ -1308,7 +1514,9 @@ local function check_answer()
     "the-question is not an infinite technology"
   )
   if question then
-    question.level = 2
+    -- A real first completion leaves `level` at 2 (the engine counts completed
+    -- levels), so level 3 is the second completion and the first scaled run.
+    question.level = 3
     local scaled = remote.call("chiptorio-answer", "evaluate")
     check(scaled and scaled.level == 2, "The Question level was " .. tostring(scaled and scaled.level))
     local expected_scale = 1 + answer_meta.rate_scale_per_level
@@ -1331,6 +1539,1148 @@ local function check_answer()
   destroy_all(created)
 end
 
+-- Recursively find a GUI element by name. The computer GUI nests its close
+-- button inside a toolbar flow, so a direct child lookup misses it.
+local function find_gui(root, name)
+  if not (root and root.valid) then
+    return nil
+  end
+  if root.name == name then
+    return root
+  end
+  for _, child in pairs(root.children or {}) do
+    local found = find_gui(child, name)
+    if found then
+      return found
+    end
+  end
+  return nil
+end
+
+-- Exercise the Training Cluster and Inference Lab on a real network. A server
+-- rack supplies the vector compute, a Storage Drive with SRAM holds the data
+-- and the produced model, and the AI buildings must attach to the same cable
+-- run. The AI hooks advance training without waiting for the 60-tick
+-- dispatcher, exactly like the research and QLN step helpers.
+local function check_ai()
+  local iface = remote.interfaces["chiptorio-ai"]
+  local usable = iface
+    and iface.status
+    and iface.set_model
+    and iface.install_model
+    and iface.uninstall_model
+    and iface.tick
+    and iface.insight
+  check(usable, "missing chiptorio-ai test interface")
+  if not usable then
+    return
+  end
+
+  local surface = game.surfaces[1]
+  local force = game.forces.player
+  clear_area(surface, { { 146, 48 }, { 172, 62 } })
+
+  local created = {}
+  cable_run(surface, force, created, 148, 168, 54)
+
+  local rack = place(surface, force, created, "server-rack", 150.5, 56.5)
+  local drive = place(surface, force, created, "qln-storage-drive", 154.5, 56.5)
+  local cluster = place(surface, force, created, "training-cluster", 158.5, 56.5)
+  local inference = place(surface, force, created, "inference-lab", 163.5, 56.5)
+  if not (rack and drive and cluster and inference) then
+    destroy_all(created)
+    return
+  end
+
+  local inserted = rack.get_module_inventory().insert({ name = "supercomputer", count = 1 })
+  check(inserted == 1, "could not install the supercomputer training needs: " .. tostring(inserted))
+  drive.get_module_inventory().insert({ name = "sram-module", count = 4 })
+
+  -- machine-learning unlocks both buildings and every tier gate. Researching it
+  -- recursively also covers the prerequisite chain on this disposable map.
+  local learning = force.technologies["machine-learning"]
+  check(learning, "missing machine-learning technology")
+  if learning then
+    learning.enabled = true
+    learning.research_recursive()
+  end
+  check(learning and learning.researched, "machine-learning did not research")
+
+  raise_built(created)
+  qln_step(1)
+
+  local topo = topology(surface.index)
+  check((topo.vector or 0) >= 64, "the AI network provides " .. tostring(topo.vector) .. " vector compute")
+  -- AI buildings attach to the network but are not research labs: counting
+  -- them as labs would add phantom demand to the allocator.
+  check((topo.labs or 0) == 0, "the AI buildings were counted as research labs")
+  check((topo.providers or 0) >= 1, "the AI network has no provider")
+
+  local group = qln_group(1)
+  check(group, "the AI Storage Drive did not create a QLN group")
+  if not group then
+    destroy_all(created)
+    return
+  end
+  check(group.capacity >= 4096, "the AI storage group holds " .. tostring(group.capacity) .. " cells")
+
+  local tier = ai_meta.AI_TIERS[1]
+  local fed = qln_deposit(group, tier.train_data[1].name, 40)
+  check(fed == 40, "could not deposit training data: " .. tostring(fed))
+
+  remote.call("chiptorio-ai", "set_model", cluster, tier.name)
+  local configured = remote.call("chiptorio-ai", "status")
+  local trained_cluster
+  for _, record in ipairs(configured and configured.training_clusters or {}) do
+    if record.unit_number == cluster.unit_number then
+      trained_cluster = record
+    end
+  end
+  check(trained_cluster, "the Training Cluster has no AI record")
+  check(
+    trained_cluster and trained_cluster.model == tier.name,
+    "the Training Cluster trains " .. tostring(trained_cluster and trained_cluster.model)
+  )
+
+  for _ = 1, tier.train_energy do
+    remote.call("chiptorio-ai", "tick")
+  end
+
+  group = qln_group(1)
+  check(
+    group and (group.items[tier.name] or 0) == tier.train_output,
+    "training produced " .. tostring(group and group.items[tier.name] or 0)
+      .. " of " .. tostring(tier.train_output) .. " " .. tier.name
+  )
+  check(
+    group and (group.items[tier.train_data[1].name] or 0) == 40 - tier.train_energy,
+    "training consumed "
+      .. tostring(40 - (group and group.items[tier.train_data[1].name] or 0))
+      .. " data items, expected " .. tostring(tier.train_energy)
+  )
+
+  local after_training = remote.call("chiptorio-ai", "status")
+  local progress = nil
+  for _, record in ipairs(after_training and after_training.training_clusters or {}) do
+    if record.unit_number == cluster.unit_number then
+      progress = record.progress
+    end
+  end
+  check(progress == 0, "the Training Cluster kept " .. tostring(progress) .. " ticks of progress")
+
+  -- The Inference Lab grants the tier's insight while it has a model and
+  -- enough compute. Nothing is granted without a model.
+  check(remote.call("chiptorio-ai", "insight", "player", tier.name) == 0, "insight was active before a model was installed")
+  remote.call("chiptorio-ai", "install_model", inference, tier.name)
+  remote.call("chiptorio-ai", "tick")
+  local insight = remote.call("chiptorio-ai", "insight", "player", tier.name)
+  check(
+    math.abs(insight - tier.insight.dataset_size_reduction) < 1e-9,
+    "installed model insight was " .. tostring(insight) .. ", expected " .. tostring(tier.insight.dataset_size_reduction)
+  )
+
+  local after_inference = remote.call("chiptorio-ai", "status")
+  local installed
+  for _, record in ipairs(after_inference and after_inference.inference_labs or {}) do
+    if record.unit_number == inference.unit_number then
+      installed = record
+    end
+  end
+  check(installed, "the Inference Lab has no AI record")
+  check(
+    installed and installed.model == tier.name,
+    "the Inference Lab installed " .. tostring(installed and installed.model)
+  )
+  check(
+    installed and installed.insight_until > game.tick,
+    "the Inference Lab did not open an insight window"
+  )
+
+  remote.call("chiptorio-ai", "uninstall_model", inference)
+  local removed = remote.call("chiptorio-ai", "status")
+  for _, record in ipairs(removed and removed.inference_labs or {}) do
+    if record.unit_number == inference.unit_number then
+      check(record.model == nil, "the Inference Lab kept its model after uninstall")
+    end
+  end
+
+  destroy_all(created)
+end
+
+-- Exercise the custom computer GUI. The benchmark map normally has no player,
+-- so this reports a skip instead of pretending the path is covered.
+local function check_computer_gui()
+  local player = probe_player()
+  if not player then
+    log("CHIPTORIO-TEST SKIP computer-gui: the benchmark map has no player")
+    return
+  end
+
+  local surface = game.surfaces[1]
+  local force = player.force
+  local created = {}
+  clear_area(surface, { { 146, 64 }, { 160, 72 } })
+  local rack = place(surface, force, created, "server-rack", 151.5, 67.5)
+  if not rack then
+    destroy_all(created)
+    return
+  end
+  rack.get_module_inventory().insert({ name = "microcomputer", count = 1 })
+  raise_built(created)
+
+  local raised, err = pcall(function()
+    script.raise_event(defines.events.on_gui_opened, {
+      player_index = player.index,
+      entity = rack,
+    })
+  end)
+  if not raised then
+    log("CHIPTORIO-TEST SKIP computer-gui: on_gui_opened cannot be raised: " .. tostring(err))
+    destroy_all(created)
+    return
+  end
+
+  local frame = player.gui.screen["chiptorio-computer-gui"]
+  check(frame and frame.valid, "the computer GUI did not open for a server rack")
+  if not (frame and frame.valid) then
+    destroy_all(created)
+    return
+  end
+  check(player.opened == frame, "the computer GUI was not assigned to the player")
+  check(find_gui(frame, "chiptorio-computer-gui-body"), "the computer GUI has no body")
+
+  local close = find_gui(frame, "chiptorio-computer-gui-close")
+  check(close, "the computer GUI has no close button")
+  if close then
+    script.raise_event(defines.events.on_gui_click, {
+      player_index = player.index,
+      element = close,
+      button = defines.mouse_button_type.left,
+    })
+  end
+  local remaining = player.gui.screen["chiptorio-computer-gui"]
+  check(not (remaining and remaining.valid), "the computer GUI did not close on the close button")
+  check(player.opened == nil, "the close button did not release the player's open element")
+
+  destroy_all(created)
+end
+
+-- ---------------------------------------------------------------------------
+-- Playthrough probe
+-- ---------------------------------------------------------------------------
+-- Walk the whole gated technology ladder the way a player does: at every step
+-- build the best research network the parts that are actually craftable right
+-- then can supply, prove the gate opens, and only then complete the technology.
+--
+-- "Craftable" is recursive: a computer counts only when its own recipe and
+-- every ingredient recipe are unlocked. That is what turns an unlock that
+-- arrives before its ingredients into a blocked gate instead of hiding it
+-- behind `recipe.enabled` (for example a computer whose recipe asks for a
+-- memory generation from two eras later).
+--
+-- The suite runs on its own force so the research state the other probes
+-- examine on the player force is untouched. The final Answer Engine run uses
+-- the same force, so the whole loop - early ladder, megabase gate, 42-minute
+-- computation, victory - is one continuous playthrough.
+
+local PT_TECHS = {
+  "vlsi-process",
+  "process-350nm",
+  "datacenter",
+  "advanced-packaging",
+  "qln",
+  "process-180nm",
+  "process-90nm",
+  "heterogeneous-compute",
+  "quantum-computing",
+  "process-45nm",
+  "quantum-error-correction",
+  "process-22nm",
+  "process-14nm",
+  "process-7nm",
+  "qln-quantum",
+  "quantum-advantage",
+  "process-3nm",
+  "process-1-4nm",
+  "the-question",
+}
+
+local PT_AREA = { { 96, 76 }, { 166, 98 } }
+local PT_CABLE_Y = 82
+local PT_FORCE = "chiptorio-playthrough"
+local PT_MAX_PROVIDERS = 13
+
+--- True when `item_name` has no recipe (a raw resource or fluid), or its recipe
+--- and every ingredient recipe are unlocked on this force. A recipe cycle is
+--- treated as satisfied: vanilla barrel recipes are the usual case.
+local function pt_craftable(force, item_name, visiting)
+  if visiting[item_name] then
+    return true
+  end
+  local recipe = force.recipes[item_name]
+  if not recipe then
+    return true
+  end
+  if not recipe.enabled then
+    return false
+  end
+  visiting[item_name] = true
+  for _, ingredient in pairs(recipe.ingredients) do
+    if not pt_craftable(force, ingredient.name, visiting) then
+      visiting[item_name] = nil
+      return false
+    end
+  end
+  visiting[item_name] = nil
+  return true
+end
+
+--- Every computer module this force can build right now, with its profile.
+local function pt_available_computers(force)
+  local list = {}
+  for _, computer in ipairs(computers_meta.COMPUTERS) do
+    local profile = research_meta.COMPUTER_PROFILES[computer.name]
+    if profile and pt_craftable(force, computer.name, {}) then
+      list[#list + 1] = { name = computer.name, profile = profile, heat = profile.heat or 0 }
+    end
+  end
+  return list
+end
+
+--- The best provider chassis this force can build: a datacenter once the
+--- datacenter technology is done, otherwise the internet-era server rack.
+local function pt_provider(force)
+  for _, name in ipairs({ "datacenter", "server-rack" }) do
+    if pt_craftable(force, name, {}) then
+      return name
+    end
+  end
+  return nil
+end
+
+--- Greedy, cooling-aware bench planner. It adds the computer that covers the
+--- largest share of the remaining gate until the gate is met, and adds a
+--- provider whenever the chassis cooling budget or the module slots run out.
+--- Returns provider count, a flat list of computer names, and the totals.
+local function pt_plan(spec, available, provider)
+  local profile = research_meta.PROVIDERS[provider]
+  local headroom = (profile.cooling or 0) - (profile.heat or 0)
+  local slots = profile.computer_slots or 0
+  if headroom <= 0 or slots <= 0 then
+    return nil
+  end
+
+  local totals = {
+    scalar = 0,
+    vector = 0,
+    tensor = 0,
+    quantum = 0,
+    memory = 0,
+    bandwidth = 0,
+    heat = 0,
+  }
+  local plan = {}
+  local providers = 1
+
+  local function met()
+    for _, kind in ipairs(research_meta.COMPUTE_PROFILES) do
+      local share = (spec.profiles or {})[kind] or 0
+      if share > 0 and (totals[kind] or 0) / share < spec.floor then
+        return false
+      end
+    end
+    if (spec.memory or 0) > totals.memory then
+      return false
+    end
+    if (spec.bandwidth or 0) > totals.bandwidth + providers * (profile.bandwidth or 0) then
+      return false
+    end
+    return true
+  end
+
+  local function score(candidate)
+    local sum, lines = 0, 0
+    for _, kind in ipairs(research_meta.COMPUTE_PROFILES) do
+      local share = (spec.profiles or {})[kind] or 0
+      if share > 0 then
+        local need = spec.floor * share
+        local missing = need - (totals[kind] or 0)
+        if missing > 0 then
+          sum = sum + math.min(missing, candidate.profile[kind] or 0) / need
+        end
+        lines = lines + 1
+      end
+    end
+    if (spec.memory or 0) > totals.memory then
+      sum = sum + math.min(spec.memory - totals.memory, candidate.profile.capacity or 0) / spec.memory
+    end
+    lines = lines + 1
+    local have_bandwidth = totals.bandwidth + providers * (profile.bandwidth or 0)
+    if (spec.bandwidth or 0) > have_bandwidth then
+      sum = sum + math.min(spec.bandwidth - have_bandwidth, candidate.profile.bandwidth or 0) / spec.bandwidth
+    end
+    lines = lines + 1
+    return sum / lines
+  end
+
+  local guard = 0
+  while not met() do
+    guard = guard + 1
+    if guard > 500 then
+      return nil, nil, totals
+    end
+    local best, best_score
+    for _, candidate in ipairs(available) do
+      if totals.heat + candidate.heat <= headroom * providers and #plan < slots * providers then
+        local value = score(candidate)
+        if value > (best_score or 0) + 1e-9 then
+          best, best_score = candidate, value
+        end
+      end
+    end
+    if best and best_score and best_score > 1e-9 then
+      plan[#plan + 1] = best.name
+      totals.heat = totals.heat + best.heat
+      for _, kind in ipairs(research_meta.COMPUTE_PROFILES) do
+        totals[kind] = totals[kind] + (best.profile[kind] or 0)
+      end
+      totals.memory = totals.memory + (best.profile.capacity or 0)
+      totals.bandwidth = totals.bandwidth + (best.profile.bandwidth or 0)
+    elseif providers < PT_MAX_PROVIDERS then
+      providers = providers + 1
+    else
+      return nil, nil, totals
+    end
+  end
+  return providers, plan, totals
+end
+
+--- Place a bench on the shared cable row: one lab, N provider chassis and the
+--- planned computers. `extras` adds the endgame entities before the build
+--- events are raised.
+local function pt_build_bench(surface, force, created, provider, providers, plan, extras)
+  cable_run(surface, force, created, 99, 160, PT_CABLE_Y)
+  place(surface, force, created, "analytical-engine", 100.5, 80.5)
+  local index = 0
+  local slots = research_meta.PROVIDERS[provider].computer_slots or 0
+  for i = 1, providers do
+    local entity = place(surface, force, created, provider, 104.5 + (i - 1) * 4, 80.5)
+    if entity then
+      local modules = entity.get_module_inventory()
+      for _ = 1, slots do
+        index = index + 1
+        if not plan[index] then
+          break
+        end
+        modules.insert({ name = plan[index], count = 1 })
+      end
+    end
+  end
+  if extras then
+    extras(created)
+  end
+  raise_built(created)
+end
+
+local function pt_describe(available, provider, providers, totals)
+  local names = {}
+  for _, computer in ipairs(available) do
+    names[#names + 1] = computer.name
+  end
+  return string.format(
+    "parts=[%s] provider=%s providers=%d scalar=%d vector=%d tensor=%d quantum=%d memory=%d bandwidth=%d heat=%d/%d",
+    table.concat(names, ","),
+    tostring(provider),
+    providers or 0,
+    totals and totals.scalar or 0,
+    totals and totals.vector or 0,
+    totals and totals.tensor or 0,
+    totals and totals.quantum or 0,
+    totals and totals.memory or 0,
+    totals and totals.bandwidth or 0,
+    totals and totals.heat or 0,
+    provider and (research_meta.PROVIDERS[provider].cooling or 0) * (providers or 0) or 0
+  )
+end
+
+--- Research every prerequisite that is not itself a gated technology. The
+--- gated ones must be reached through the loop, so a prerequisite that is
+--- still unresearched there is a real ordering failure.
+local function pt_unlock_prereqs(force, tech, gated)
+  for _, prereq in pairs(tech.prerequisites or {}) do
+    if not prereq.researched then
+      if gated[prereq.name] then
+        check(false, tech.name .. " requires gated " .. prereq.name .. " before its own gate")
+        prereq.research_recursive()
+      else
+        prereq.research_recursive()
+      end
+    end
+  end
+end
+
+local function check_playthrough()
+  local first_failure = #failures + 1
+  local surface = game.surfaces[1]
+  local force = game.forces[PT_FORCE] or game.create_force(PT_FORCE)
+  check(force, "could not create the playthrough force")
+  if not force then
+    return
+  end
+  clear_area(surface, PT_AREA)
+
+  -- Early game: the chain behind the first gated technology has no compute
+  -- gate, so a player researches it with the analytical engine alone.
+  local gated = {}
+  for _, name in ipairs(PT_TECHS) do
+    gated[name] = true
+  end
+  local first = force.technologies[PT_TECHS[1]]
+  check(first, "missing the first gated technology " .. PT_TECHS[1])
+  if not first then
+    return
+  end
+  for _, prereq in pairs(first.prerequisites or {}) do
+    if not prereq.researched then
+      prereq.research_recursive()
+    end
+  end
+
+  local created = {}
+  for _, name in ipairs(PT_TECHS) do
+    local tech = force.technologies[name]
+    check(tech and not tech.researched, "technology is missing or already researched: " .. name)
+    if not tech then
+      break
+    end
+
+    pt_unlock_prereqs(force, tech, gated)
+
+    local spec = research_meta.tech_spec(name)
+    check(spec, "the-playthrough has no gate spec for " .. name)
+    if not spec then
+      break
+    end
+
+    local available = pt_available_computers(force)
+    local provider = pt_provider(force)
+    local providers, plan, totals = nil, nil, nil
+    if provider and #available > 0 then
+      providers, plan, totals = pt_plan(spec, available, provider)
+    end
+    check(
+      providers and plan,
+      "no craftable bench can meet the " .. name .. " gate (" .. pt_describe(available, provider, providers, totals) .. ")"
+    )
+
+    destroy_all(created)
+    created = {}
+    if providers and plan then
+      pt_build_bench(surface, force, created, provider, providers, plan)
+      local result = remote.call("chiptorio-research", "evaluate", name, force.index)
+      check(
+        result and result.supported == true,
+        "the real " .. name .. " gate failed (reason=" .. tostring(result and result.reason) .. ", "
+          .. pt_describe(available, provider, providers, totals) .. ")"
+      )
+    end
+
+    if tech.prototype.max_level == "infinite" then
+      -- Finish the way a player does: queue the research and complete it
+      -- through the normal research path. `research_recursive` is a debug
+      -- shortcut whose level accounting for infinite technologies is not the
+      -- same as a real completion, and the Answer Engine reads that level.
+      check(force.add_research(name) ~= false, "could not queue the infinite research " .. name)
+      force.research_progress = 1
+    else
+      tech.research_recursive()
+    end
+
+    -- Unlock-order diagnostics. A recipe whose ingredients are still locked is
+    -- not always a deadlock (the missing part may arrive one era later), but a
+    -- player would not be able to build what the technology just announced.
+    local gaps = {}
+    for _, effect in pairs(tech.prototype.effects or {}) do
+      if effect.type == "unlock-recipe" then
+        local recipe = force.recipes[effect.recipe]
+        if recipe and not pt_craftable(force, effect.recipe, {}) then
+          gaps[#gaps + 1] = effect.recipe
+        end
+      end
+    end
+    if #gaps > 0 then
+      log(
+        "CHIPTORIO-TEST INFO playthrough: "
+          .. name
+          .. " unlocked recipes that are not craftable yet: "
+          .. table.concat(gaps, ", ")
+      )
+    end
+  end
+
+  -- Endgame. The Answer Engine gate is every compute profile at 128, memory
+  -- 2048 and bandwidth 512. Express it as a weighted floor so the same planner
+  -- sizes the megabase network: share = required amount, floor = 1.
+  --
+  -- `the-question` is infinite and the engine scales every requirement by
+  -- `rate_scale_per_level` per level, so read the level the playthrough just
+  -- reached instead of planning against level 1. Planning against the unscaled
+  -- numbers is exactly how a real megabase ends up one scalar generation short.
+  local question = force.technologies["the-question"]
+  -- Mirror the engine's accounting: for an infinite technology `level` is the
+  -- level being researched next, so completed levels are `level - 1`.
+  local completed_levels = math.max(0, (question and question.level or 1) - 1)
+  local answer_scale = 1 + answer_meta.rate_scale_per_level * math.max(0, completed_levels - 1)
+  local answer_spec = {
+    floor = 1,
+    profiles = {
+      scalar = math.ceil(answer_meta.compute.scalar * answer_scale),
+      vector = math.ceil(answer_meta.compute.vector * answer_scale),
+      tensor = math.ceil(answer_meta.compute.tensor * answer_scale),
+      quantum = math.ceil(answer_meta.compute.quantum * answer_scale),
+    },
+    memory = math.ceil(answer_meta.memory * answer_scale),
+    bandwidth = math.ceil(answer_meta.bandwidth * answer_scale),
+  }
+  local available = pt_available_computers(force)
+  local provider = pt_provider(force)
+  local providers, plan, totals = nil, nil, nil
+  if provider and #available > 0 then
+    providers, plan, totals = pt_plan(answer_spec, available, provider)
+  end
+  check(
+    providers and plan,
+    "no craftable bench can meet the Answer Engine gate ("
+      .. pt_describe(available, provider, providers, totals)
+      .. ")"
+  )
+  log(string.format(
+    "CHIPTORIO-TEST INFO playthrough: endgame level=%d scale=%.2f plan=%d computers in %d providers",
+    completed_levels,
+    answer_scale,
+    plan and #plan or 0,
+    providers or 0
+  ))
+
+  destroy_all(created)
+  created = {}
+  local engine, drive
+  if providers and plan then
+    pt_build_bench(surface, force, created, provider, providers, plan, function(list)
+      drive = place(surface, force, list, "qln-storage-drive", 152.5, 84.5)
+      engine = place(surface, force, list, "answer-engine", 157.5, 86.5)
+    end)
+  end
+
+  if engine and drive then
+    local inserted = drive.get_module_inventory().insert({ name = "3d-nand-module", count = 4 })
+    check(inserted == 4, "could not install four 3d-nand modules in the Answer Storage Drive: " .. tostring(inserted))
+
+    qln_step(2)
+
+    local total_required = 0
+    for _, req in ipairs(answer_meta.item_demand) do
+      total_required = total_required + math.ceil(req.rate * answer_scale * answer_meta.runtime_seconds)
+    end
+
+    local group
+    for _, entry in ipairs(remote.call("chiptorio-qln", "state", force.name) or {}) do
+      if entry.capacity >= total_required and (not group or entry.capacity > group.capacity) then
+        group = entry
+      end
+    end
+    check(group, "the playthrough Storage Drive did not create a QLN group with room for " .. total_required .. " items")
+    if group then
+      local _, network_id = string.match(group.key, "^(%d+):(%d+):")
+      local deposited = 0
+      for _, req in ipairs(answer_meta.item_demand) do
+        local want = math.ceil(req.rate * answer_scale * answer_meta.runtime_seconds) + 200
+        deposited = deposited + remote.call(
+          "chiptorio-qln",
+          "deposit",
+          force.name,
+          surface.index,
+          tonumber(network_id),
+          req.item,
+          want
+        )
+      end
+      check(
+        deposited >= total_required,
+        "deposited " .. tostring(deposited) .. " of " .. tostring(total_required) .. " Answer items"
+      )
+
+      local gate = remote.call("chiptorio-answer", "evaluate")
+      if not (gate and gate.ok) then
+        local failed = {}
+        for _, line in ipairs(gate and gate.lines or {}) do
+          if not line.ok then
+            failed[#failed + 1] = string.format(
+              "%s %s have=%.0f need=%.0f",
+              line.kind,
+              tostring(line.profile or line.item),
+              line.have or 0,
+              line.required or 0
+            )
+          end
+        end
+        log("CHIPTORIO-TEST INFO playthrough: answer gate closed: " .. table.concat(failed, "; "))
+        log("CHIPTORIO-TEST INFO playthrough: answer bench " .. pt_describe(available, provider, providers, totals))
+        local topo = remote.call("chiptorio-network", "topology", surface.index)
+        log(string.format(
+          "CHIPTORIO-TEST INFO playthrough: answer network providers=%s labs=%s scalar=%s vector=%s tensor=%s quantum=%s memory=%s bandwidth=%s heat=%s cooling=%s",
+          tostring(topo.providers),
+          tostring(topo.labs),
+          tostring(topo.scalar),
+          tostring(topo.vector),
+          tostring(topo.tensor),
+          tostring(topo.quantum),
+          tostring(topo.memory),
+          tostring(topo.bandwidth),
+          tostring(topo.heat),
+          tostring(topo.cooling)
+        ))
+      end
+      check(gate and gate.ok == true, "the Answer Engine gate did not open on the playthrough network")
+      check(remote.call("chiptorio-answer", "boot") == true, "the Answer Engine did not boot")
+
+      local used_before = 0
+      for _, entry in ipairs(remote.call("chiptorio-qln", "state", force.name) or {}) do
+        if entry.key == group.key then
+          used_before = entry.used
+        end
+      end
+      check(
+        remote.call("chiptorio-answer", "step", answer_meta.runtime_seconds) == answer_meta.runtime_seconds,
+        "the Answer Engine clock hook did not advance a full run"
+      )
+      local final = remote.call("chiptorio-answer", "evaluate")
+      check(final and final.state == "complete", "the Answer Engine did not complete: " .. tostring(final and final.state))
+      check(
+        final and final.elapsed == final.duration,
+        "the completed Answer clock is at " .. tostring(final and final.elapsed)
+      )
+      check(
+        final and final.score >= answer_meta.score_per_level,
+        "the playthrough scored " .. tostring(final and final.score)
+      )
+      local after = remote.call("chiptorio-qln", "state", force.name) or {}
+      local remaining = 0
+      for _, entry in ipairs(after) do
+        if entry.key == group.key then
+          remaining = entry.used
+        end
+      end
+      check(
+        remaining <= used_before - total_required,
+        "the Answer Engine consumed " .. tostring(used_before - remaining) .. " of " .. tostring(total_required) .. " items"
+      )
+    end
+  end
+
+  destroy_all(created)
+
+  if #failures >= first_failure then
+    local mine = {}
+    for i = first_failure, #failures do
+      mine[#mine + 1] = failures[i]
+    end
+    log("CHIPTORIO-TEST FAIL playthrough: " .. table.concat(mine, "; "))
+  else
+    log("CHIPTORIO-TEST PASS playthrough")
+  end
+end
+
+-- ---------------------------------------------------------------------------
+-- Save/load probe (P1.2)
+-- ---------------------------------------------------------------------------
+-- A `--benchmark` run loads a save and ticks it, but it cannot prove that
+-- runtime state survived serialisation on its own. This probe runs in two
+-- processes:
+--
+--   1. A headless server (`--start-server`) builds a small state: a QLN drive
+--      with four SRAM cells and a deposit, a qualified half-node, and a real
+--      two-level infinite research completion. It writes `chiptorio-reload.zip`
+--      with `game.server_save` and marks `storage.save_load.phase = "saved"`.
+--   2. `tools/test-save-load.ps1` benchmarks that zip. The phase marker is
+--      inside the save, so the reload process verifies every value against the
+--      snapshot taken before saving and logs `PASS save-load`.
+--
+-- The whole probe runs on its own force so the player force's research,
+-- qualification and QLN state are left exactly as the tick-120 suites expect.
+
+local SAVE_LOAD_FORCE = "chiptorio-saveload"
+local SAVE_LOAD_AREA = { { 40, 80 }, { 88, 100 } }
+local SAVE_LOAD_CABLE_Y = 88
+
+--- Queue one level of chip-performance and complete it through the engine. The
+--- research bar is only consumed at the end of the tick, so this is called once
+--- per probe tick until the stored level reaches 2.
+local function save_load_queue_level(force)
+  local chiptech = force.technologies["chip-performance"]
+  if not chiptech then
+    check(false, "missing chip-performance on the save-load force")
+    return
+  end
+  -- `research_recursive` does not necessarily propagate the enabled flag to
+  -- dependants in the same tick; the data guard has already proved the
+  -- prerequisite chain is finite, so enabling it here is legitimate.
+  chiptech.enabled = true
+  if force.current_research and force.current_research.name == "chip-performance" then
+    force.research_progress = 1
+    return
+  end
+  check(
+    force.add_research("chip-performance") ~= false,
+    "could not queue chip-performance on the save-load force"
+  )
+  force.research_progress = 1
+end
+
+local function save_load_build()
+  local surface = game.surfaces[1]
+  local force = game.forces[SAVE_LOAD_FORCE] or game.create_force(SAVE_LOAD_FORCE)
+  if not force then
+    check(false, "could not create the save-load force")
+    return
+  end
+  clear_area(surface, SAVE_LOAD_AREA)
+
+  local created = {}
+  cable_run(surface, force, created, 44, 60, SAVE_LOAD_CABLE_Y)
+  local drive = place(surface, force, created, "qln-storage-drive", 46.5, 86.5)
+  local metrology = place(surface, force, created, "metrology-lab", 50.5, 86.5)
+  local rack = place(surface, force, created, "server-rack", 54.5, 86.5)
+  local bank = place(surface, force, created, "memory-bank", 58.5, 86.5)
+  if not (drive and metrology and rack and bank) then
+    destroy_all(created)
+    return
+  end
+
+  local inserted = drive.get_module_inventory().insert({ name = "sram-module", count = 4 })
+  check(inserted == 4, "could not install 4 SRAM modules in the save-load drive: " .. tostring(inserted))
+  rack.get_module_inventory().insert({ name = "microcomputer", count = 1 })
+  bank.get_module_inventory().insert({ name = "sram-module", count = 4 })
+  raise_built(created)
+
+  -- The map has no power grid; fill the buffer so the power gate passes. The
+  -- probe tests serialisation, not electricity.
+  metrology.energy = 1e9
+
+  -- Qualification of the first half-node (offline, 6 µm era).
+  local half = nodes.HALF_NODES[1]
+  local inventory = metrology.get_inventory(defines.inventory.lab_input)
+  check(inventory, "save-load metrology-lab has no lab input inventory")
+  if inventory then
+    local tech = force.technologies[nodes.half_tech_name(half.key)]
+    check(tech, "missing refinement technology on the save-load force: " .. nodes.half_tech_name(half.key))
+    if tech then
+      tech.research_recursive()
+    end
+    inventory.insert({ name = nodes.qualification_item(half.key), count = half.samples })
+    remote.call("chiptorio-qualification", "step", half.samples * half.analysis_time * 2)
+  end
+
+  -- A real infinite-research completion, twice: `add_research` + setting the
+  -- progress bar finishes a level through the engine, which is the only path
+  -- that raises `on_research_finished` and the scripted multiplier. Completion
+  -- lands at the end of the tick, so the handler queues the second level on the
+  -- next probe tick rather than in this callback.
+  local process = force.technologies["process-1-4nm"]
+  check(process, "missing process-1-4nm on the save-load force")
+  if process then
+    process.research_recursive()
+  end
+
+  -- QLN: the drive contributes a storage group; a deposit proves item counts
+  -- are serialised, not just the capacity.
+  qln_step(1)
+  local group = force_group(SAVE_LOAD_FORCE, 1)
+  check(group, "the save-load Storage Drive did not create a QLN group")
+  if group then
+    check(group.capacity == 4096, "save-load capacity was " .. tostring(group.capacity) .. ", expected 4096")
+    check(qln_deposit(group, "solar-panel", 12, SAVE_LOAD_FORCE) == 12,
+      "could not deposit 12 solar panels into the save-load group")
+  end
+
+  if #failures > 0 then
+    error("CHIPTORIO-TEST FAIL save-load: " .. table.concat(failures, "; "))
+  end
+
+  storage.save_load = {
+    phase = "researching",
+    force = SAVE_LOAD_FORCE,
+    area = SAVE_LOAD_AREA,
+    attempts = 0,
+  }
+  save_load_queue_level(force)
+  log("CHIPTORIO-TEST SAVE-RESEARCH 1")
+end
+
+local function save_load_finish()
+  local surface = game.surfaces[1]
+  local force = game.forces[SAVE_LOAD_FORCE]
+  local half = nodes.HALF_NODES[1]
+  check(force, "the save-load force disappeared before the snapshot")
+  check(half, "the first half-node is missing")
+  if not (force and half) then
+    return
+  end
+
+  -- Rebuild after qualification and both infinite levels, then snapshot what
+  -- the reload must reproduce exactly.
+  local topo = topology(surface.index)
+  check(topo and (topo.scalar or 0) > 0, "the save-load network has no compute")
+  local infinite = remote.call("chiptorio-research", "infinite", force.index) or {}
+  check(infinite["chip-performance"] == 2,
+    "chip-performance reached level " .. tostring(infinite["chip-performance"]) .. ", expected 2")
+  local multipliers = remote.call("chiptorio-research", "multipliers", force.index) or {}
+  local expected_multiplier = research_meta.infinite_multiplier("chip-performance", 2)
+  check(math.abs((multipliers.compute or 1) - expected_multiplier) < 1e-9,
+    "chip-performance multiplier was " .. tostring(multipliers.compute)
+      .. ", expected " .. tostring(expected_multiplier))
+
+  local refined = nodes.items(nodes.refined_node(half.key))
+  local wafer = force.recipes[refined.wafer]
+  check(wafer, "missing refined wafer recipe on the save-load force: " .. tostring(refined.wafer))
+
+  -- The graph reports hardware compute with the qualification bonus folded in.
+  -- The infinite multiplier is applied later by the allocator, so it is checked
+  -- through `multipliers` above rather than here.
+  local expected_scalar = 8 * half.bonus.compute
+  check(topo and math.abs((topo.scalar or 0) - expected_scalar) < 1e-6,
+    "save-load scalar was " .. tostring(topo and topo.scalar) .. ", expected " .. tostring(expected_scalar))
+
+  local group = force_group(SAVE_LOAD_FORCE, 1)
+
+  if #failures > 0 then
+    error("CHIPTORIO-TEST FAIL save-load: " .. table.concat(failures, "; "))
+  end
+
+  storage.save_load = {
+    phase = "saved",
+    force = SAVE_LOAD_FORCE,
+    area = SAVE_LOAD_AREA,
+    expected = {
+      half = half.key,
+      scalar = topo and topo.scalar or 0,
+      capacity = group and group.capacity or 0,
+      items = group and (group.items["solar-panel"] or 0) or 0,
+      infinite = 2,
+      compute_multiplier = multipliers.compute or 1,
+      wafer_bonus = wafer and wafer.productivity_bonus or 0,
+      yield_bonus = half.bonus.yield - 1,
+    },
+  }
+
+  local ok, err = pcall(function()
+    game.server_save("chiptorio-reload")
+  end)
+  if not ok then
+    check(false, "game.server_save failed: " .. tostring(err))
+    return
+  end
+  log("CHIPTORIO-TEST SAVE-READY chiptorio-reload")
+end
+
+local function save_load_advance()
+  local state = storage.save_load
+  local force = game.forces[state.force or SAVE_LOAD_FORCE]
+  if not force then
+    error("CHIPTORIO-TEST FAIL save-load: the save-load force disappeared while researching")
+  end
+  local infinite = remote.call("chiptorio-research", "infinite", force.index) or {}
+  local level = infinite["chip-performance"] or 0
+  state.attempts = (state.attempts or 0) + 1
+  if level >= 2 then
+    save_load_finish()
+    return
+  end
+  if state.attempts > 10 then
+    error("CHIPTORIO-TEST FAIL save-load: chip-performance stopped at level " .. tostring(level))
+  end
+  save_load_queue_level(force)
+end
+
+local function save_load_verify()
+  local state = storage.save_load
+  local expected = state and state.expected
+  check(expected, "the reloaded save has no save-load snapshot")
+  if not expected then
+    return
+  end
+
+  local surface = game.surfaces[1]
+  local force = game.forces[state.force or SAVE_LOAD_FORCE]
+  check(force, "the save-load force did not survive the reload")
+  if not force then
+    return
+  end
+
+  local half = nodes.half_node(expected.half)
+  check(half, "the snapshot half-node no longer exists: " .. tostring(expected.half))
+
+  -- QLN item counts and capacity.
+  local group = force_group(force.name, 1)
+  check(group, "the save-load QLN group did not survive the reload")
+  if group then
+    check(group.capacity == expected.capacity,
+      "reloaded QLN capacity was " .. tostring(group.capacity) .. ", expected " .. tostring(expected.capacity))
+    check((group.items["solar-panel"] or 0) == expected.items,
+      "reloaded QLN items were " .. tostring(group.items["solar-panel"] or 0) .. ", expected " .. tostring(expected.items))
+  end
+
+  -- Qualification state and its recipe productivity bonus.
+  local qualification = remote.call("chiptorio-qualification", "state", force.index)
+  check(qualification, "qualification state did not survive the reload")
+  if qualification then
+    local qualified = false
+    for _, key in ipairs(qualification.qualified or {}) do
+      if key == expected.half then
+        qualified = true
+      end
+    end
+    check(qualified, "the qualified half-node " .. tostring(expected.half) .. " did not survive the reload")
+  end
+  if half then
+    local refined = nodes.items(nodes.refined_node(half.key))
+    local wafer = force.recipes[refined.wafer]
+    check(wafer, "missing reloaded wafer recipe: " .. tostring(refined.wafer))
+    if wafer then
+      check(math.abs(wafer.productivity_bonus - expected.yield_bonus) < 1e-6,
+        "reloaded wafer bonus was " .. tostring(wafer.productivity_bonus) .. ", expected " .. tostring(expected.yield_bonus))
+    end
+  end
+
+  -- Infinite research level and the multiplier it feeds into the allocator.
+  local infinite = remote.call("chiptorio-research", "infinite", force.index) or {}
+  check(infinite["chip-performance"] == expected.infinite,
+    "reloaded chip-performance level was " .. tostring(infinite["chip-performance"])
+      .. ", expected " .. tostring(expected.infinite))
+  local multipliers = remote.call("chiptorio-research", "multipliers", force.index) or {}
+  check(math.abs((multipliers.compute or 1) - expected.compute_multiplier) < 1e-9,
+    "reloaded compute multiplier was " .. tostring(multipliers.compute)
+      .. ", expected " .. tostring(expected.compute_multiplier))
+  local topo = topology(surface.index)
+  check(topo, "topology returned nothing after the reload")
+  if topo then
+    check(math.abs((topo.scalar or 0) - expected.scalar) < 1e-6,
+      "reloaded scalar compute was " .. tostring(topo.scalar) .. ", expected " .. tostring(expected.scalar))
+  end
+
+  finish("save-load")
+end
+
+-- ---------------------------------------------------------------------------
+-- Real power grid probe (P1.7)
+-- ---------------------------------------------------------------------------
+-- The Construction Core is an accumulator clone: `entity.energy` is its work
+-- budget and it refills from the grid while idle. The construction suite writes
+-- energy directly so it can test mining in one tick; this staged check proves
+-- the electrical path instead. A solar panel charges the core across real ticks,
+-- then the panel is removed and the core must hold its charge.
+--
+-- This suite only exists in the hosted server started by test-power-grid.ps1,
+-- because a benchmark raises tick handlers at tick 0 only. It keeps its own
+-- failure list so a power-grid failure logs `FAIL power-grid` instead of being
+-- attributed to whichever suite calls `finish` next.
+
+local POWER_GRID_AREA = { { 178, 42 }, { 196, 56 } }
+local power_grid_failures = {}
+
+local function pcheck(condition, message)
+  if not condition then
+    power_grid_failures[#power_grid_failures + 1] = message
+  end
+end
+
+local function pfinish(suite)
+  if #power_grid_failures > 0 then
+    error("CHIPTORIO-TEST FAIL " .. suite .. ": " .. table.concat(power_grid_failures, "; "))
+  end
+  log("CHIPTORIO-TEST PASS " .. suite)
+end
+
+local function power_grid_build()
+  local surface = game.surfaces[1]
+  local force = game.forces.player
+  clear_area(surface, POWER_GRID_AREA)
+
+  local created = {}
+  local function create(name, x, y)
+    local entity = surface.create_entity({ name = name, position = { x, y }, force = force })
+    pcheck(entity, "could not place " .. name .. " at " .. x .. "," .. y)
+    if entity then
+      created[#created + 1] = entity
+    end
+    return entity
+  end
+
+  -- The pole's 5x5 supply area covers the centre of the neighbour, which is
+  -- how an accumulator joins the electric network.
+  local core = create("construction-core", 182.5, 46.5)
+  local pole = create("small-electric-pole", 184.5, 46.5)
+  if not (core and pole) then
+    for _, entity in ipairs(created) do
+      if entity.valid then
+        entity.destroy()
+      end
+    end
+    return
+  end
+
+  -- Start empty.
+  core.energy = 0
+  storage.power_grid = { phase = "charging", core = core, entities = created }
+end
+
+local function power_grid_advance()
+  local state = storage.power_grid
+  local core = state.core
+  pcheck(core and core.valid, "the Construction Core disappeared during the power-grid check")
+  if not (core and core.valid) then
+    storage.power_grid = nil
+    script.on_nth_tick(60, nil)
+    pfinish("power-grid")
+    return
+  end
+
+  if state.phase == "charging" then
+    -- Inject energy into the network's accumulators. The core is on the pole's
+    -- network, so this should flow into it.
+    local net = core.electric_network
+    pcheck(net, "the Construction Core is not connected to an electric network")
+    if net then
+      net.set_accumulators_energy({ energy = 8000 })
+    end
+    pcheck(core.energy >= 8000,
+      "the Construction Core did not receive energy from the network: energy=" .. tostring(core.energy))
+
+    -- Disconnect from the network by removing the pole. The isolated core
+    -- must hold its charge (accumulators do not leak when unconnected).
+    state.core_energy = core.energy
+    for _, entity in ipairs(state.entities) do
+      if entity.valid and entity ~= core then
+        raise(defines.events.script_raised_destroy, entity)
+        entity.destroy()
+      end
+    end
+    state.phase = "removed"
+    return
+  end
+
+  pcheck(math.abs(core.energy - state.core_energy) < 1e-6,
+    "the Construction Core recharged without a grid: energy=" .. tostring(core.energy)
+      .. ", expected " .. tostring(state.core_energy))
+  if core.valid then
+    raise(defines.events.script_raised_destroy, core)
+    core.destroy()
+  end
+  storage.power_grid = nil
+  script.on_nth_tick(60, nil)
+  pfinish("power-grid")
+end
+
 script.on_init(function()
   local map = game.map_settings
   check(map.enemy_evolution and map.enemy_evolution.enabled == false, "enemy evolution is enabled")
@@ -1340,7 +2690,64 @@ script.on_init(function()
   finish("runtime-init")
 end)
 
+-- Runs before the tick-120 suites. On the save/load server it builds and saves;
+-- in the reload benchmark it verifies and logs PASS save-load. A normal
+-- benchmark has neither a save-load marker nor the server flag, so it is a
+-- no-op there.
+script.on_nth_tick(15, function()
+  local state = storage.save_load
+  if state and state.phase == "saved" then
+    if not state.verified then
+      state.verified = true
+      save_load_verify()
+    end
+    return
+  end
+  if state and state.phase == "researching" then
+    save_load_advance()
+    return
+  end
+  if state then
+    return
+  end
+  if SERVER_SUITE ~= "save-load" then
+    return
+  end
+  save_load_build()
+end)
+
+-- One call per real second: build at tick 0, check the charge (and drop the
+-- producer) at tick 60, then prove the isolated buffer holds at tick 120.
+if SERVER_SUITE == "power-grid" then
+  script.on_nth_tick(60, function()
+    local state = storage.power_grid
+    if not state or not state.armed then
+      -- A map built by --create can leave a half-built state in the save. Start
+      -- the measured window from this server process instead.
+      if state and state.entities then
+        for _, entity in ipairs(state.entities) do
+          if entity.valid then
+            entity.destroy()
+          end
+        end
+      end
+      power_grid_build()
+      if not storage.power_grid then
+        pfinish("power-grid")
+        return
+      end
+      storage.power_grid.armed = true
+      return
+    end
+    power_grid_advance()
+  end)
+end
+
 script.on_nth_tick(120, function()
+  -- Server suites and the reload benchmark are not second contract runs.
+  if SERVER_SUITE or storage.save_load then
+    return
+  end
   if storage.runtime_checked then
     return
   end
@@ -1365,6 +2772,10 @@ script.on_nth_tick(120, function()
   check_research()
   check_qualification()
   check_qln()
+  check_isolation()
   check_answer()
+  check_ai()
+  check_computer_gui()
+  check_playthrough()
   finish("runtime")
 end)

@@ -72,8 +72,11 @@ local function force_multipliers(force_index)
 end
 
 --- Apply force-level multipliers to a network table before it reaches the
---- allocator. Compute fields are scaled; memory, bandwidth, power and cooling
---- are scaled.
+--- allocator. Compute, memory and bandwidth are network-level capacities, so
+--- they are applied here. Chip and cooling efficiency are provider properties
+--- and are already folded into each provider descriptor when the graph is
+--- rebuilt (`provider_descriptor`); scaling the network aggregate again would
+--- apply them twice.
 local function apply_multipliers(network, mults)
   if mults.compute then
     network.scalar = network.scalar * mults.compute
@@ -92,12 +95,6 @@ local function apply_multipliers(network, mults)
   end
   if mults.network_bandwidth then
     network.bandwidth = network.bandwidth * mults.network_bandwidth
-  end
-  if mults.power then
-    network.power = network.power * mults.power
-  end
-  if mults.cooling then
-    network.cooling = network.cooling * mults.cooling
   end
 end
 
@@ -304,6 +301,40 @@ function M.evaluate(tech_name, force_index)
     reason = result.reason,
     active_labs = result.active_labs,
   }
+end
+
+--- Machine-readable infinite-research levels for a force. Mirrors the data
+--- persisted in `storage`, so a save/load probe can prove the multipliers
+--- survived a reload. Returns a copy; callers cannot mutate `storage`.
+function M.infinite_state(force_index)
+  init_storage()
+  local force = game.forces[force_index or 1] or game.forces.player
+  if not force then
+    return nil
+  end
+  local levels = storage.research.infinite_multipliers[force.index] or {}
+  local result = {}
+  for name, level in pairs(levels) do
+    result[name] = level
+  end
+  return result
+end
+
+--- Machine-readable force-level infinite multipliers for tests and debugging.
+--- Returns the exact table `apply_multipliers` feeds to the allocator, so a
+--- save/load probe can prove the stored levels still scale research after a
+--- reload. Returns a copy; callers cannot mutate `storage`.
+function M.multiplier_state(force_index)
+  init_storage()
+  local force = game.forces[force_index or 1] or game.forces.player
+  if not force then
+    return nil
+  end
+  local result = {}
+  for field, value in pairs(force_multipliers(force.index)) do
+    result[field] = value
+  end
+  return result
 end
 
 --- Advance decay by `seconds` for the current research without waiting for a

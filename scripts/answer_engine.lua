@@ -53,7 +53,14 @@ end
 
 local function question_level(force)
   local tech = force.technologies and force.technologies["the-question"]
-  return tech and tech.level or 0
+  if not tech then
+    return 0
+  end
+  -- LuaTechnology.level for an infinite technology is the level being
+  -- researched next: it reads 1 before the first completion and 2 after it.
+  -- The engine counts *completed* levels, so the first victory is level 1 and
+  -- uses the base demand and the base 42 points.
+  return math.max(0, (tech.level or 1) - 1)
 end
 
 local function demand_scale(force)

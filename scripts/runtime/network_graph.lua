@@ -2,11 +2,11 @@
 --
 -- DESIGN §5.2. Networking is a physical layer problem:
 --   * Cables collide with everything; they route around machines.
---   * A machine connects only if physically adjacent to a cable/switch tile,
+--   * A machine connects if a cable/switch tile is within reach of it,
 --     or within a router's wireless reach.
 --   * Switches merge segments into one subnet; routers bridge subnets and
 --     act as WiFi access points.
---   * Five cable tiers exist; a segment runs at the bandwidth of its weakest
+--   * Four cable tiers exist; a segment runs at the bandwidth of its weakest
 --     link (weakest-link rule).
 --
 -- Nothing in this file touches `game`, `storage`, or prototypes. It receives
@@ -24,6 +24,12 @@ local CABLE_TIERS = {
   ["network-fiber-mm-cable"] = { tier = 3, bandwidth = 1000, latency = 1 },
   ["network-fiber-sm-cable"] = { tier = 4, bandwidth = 5000, latency = 1 },
 }
+
+-- How far a cable or switch may be from an entity's footprint and still wire
+-- to it (Chebyshev tiles). DESIGN §5.2/§6: a lab connects to a cable within
+-- 2 tiles. Cables themselves still only conduct 4-way, so a two-tile gap
+-- between cable runs stays two segments.
+local DEVICE_REACH = 2
 
 -- Wireless reach of a router (tiles, Chebyshev).
 local WIRELESS_REACH = 16
@@ -313,21 +319,40 @@ function M.build(spec)
   local n_raw = #raw_roots
   local switch_find, switch_union = new_union(n_raw)
 
-  -- For each switch, find all raw segments wired to it and union them.
-  for _, switch in ipairs(switches) do
-    local tiles = entity_tiles(switch.x, switch.y, switch.direction or 0)
-    local seg_roots = {}
+  -- Every raw segment with a cable within DEVICE_REACH of a footprint tile.
+  -- Real cables cannot overlap a machine, but treating a same-tile cable as
+  -- connected keeps hand-built specs and chunk-edge placements unambiguous.
+  local function segments_touching(tiles)
+    local roots = {}
     for _, tile in ipairs(tiles) do
       local x, y = tile[1], tile[2]
-      -- Check 4-way adjacent tiles for cables
-      for _, adj in ipairs({ {x + 1, y}, {x - 1, y}, {x, y + 1}, {x, y - 1} }) do
-        local k = tile_key(adj[1], adj[2])
-        local root = cable_tile_segment[k]
-        if root then
-          seg_roots[root] = true
+      for dx = -DEVICE_REACH, DEVICE_REACH do
+        for dy = -DEVICE_REACH, DEVICE_REACH do
+          local root = cable_tile_segment[tile_key(x + dx, y + dy)]
+          if root then
+            roots[root] = true
+          end
         end
       end
     end
+    return roots
+  end
+
+  -- The occupancy of a switch or router. The runtime supplies the exact
+  -- footprint from `bounding_box`, which is the only reliable source: the
+  -- engine snaps the centre of an even-height entity to an integer, so a
+  -- hand-derived 3x2 box around the reported position is off by one tile.
+  local function occupancy(device)
+    if device.tiles and #device.tiles > 0 then
+      return device.tiles
+    end
+    return entity_tiles(device.x, device.y, device.direction or 0)
+  end
+
+  -- For each switch, find all raw segments wired to it and union them.
+  for _, switch in ipairs(switches) do
+    local tiles = occupancy(switch)
+    local seg_roots = segments_touching(tiles)
     local roots = {}
     for root in pairs(seg_roots) do
       roots[#roots + 1] = root
@@ -398,19 +423,12 @@ function M.build(spec)
   local router_find, router_union = new_union(#merged_roots)
 
   for _, router in ipairs(routers) do
-    local tiles = entity_tiles(router.x, router.y, router.direction or 0)
+    local tiles = occupancy(router)
+    local touch_roots = segments_touching(tiles)
     local seg_roots = {}
-    for _, tile in ipairs(tiles) do
-      local x, y = tile[1], tile[2]
-      for _, adj in ipairs({ {x + 1, y}, {x - 1, y}, {x, y + 1}, {x, y - 1} }) do
-        local k = tile_key(adj[1], adj[2])
-        -- Find merged segment containing this cable tile
-        local raw_root = cable_tile_segment[k]
-        if raw_root then
-          local mroot = switch_find(raw_root_index[raw_root])
-          seg_roots[mroot] = true
-        end
-      end
+    for raw_root in pairs(touch_roots) do
+      local mroot = switch_find(raw_root_index[raw_root])
+      seg_roots[mroot] = true
     end
     local roots = {}
     for mroot in pairs(seg_roots) do
@@ -441,6 +459,8 @@ function M.build(spec)
         labs = {},
         providers = {},
         qln_nodes = {},
+        metrology = {},
+        answer = nil,
         compute = 0, memory = 0, bandwidth = 0, latency = 0,
         scalar = 0, vector = 0, tensor = 0, quantum = 0,
         power = 0, heat = 0, cooling = 0,
@@ -475,7 +495,7 @@ function M.build(spec)
 
   -- 6. Device attachment.
   -- A device connects to the network if:
-  --   a) It is adjacent (4-way) to a cable tile belonging to a merged segment,
+  --   a) It is within reach of a cable tile belonging to a merged segment,
   --   b) OR it is within wireless reach of a router.
   -- Conflict: if a device can reach multiple different networks, it is offline.
   local device_network = {}
@@ -484,38 +504,58 @@ function M.build(spec)
   local unconnected = {}
   local conflicts = {}
 
+  -- The tiles a device occupies. The runtime supplies the real footprint so a
+  -- 3x3 machine attaches when a cable touches any of its edges. Unit tests and
+  -- hand-written specs may omit `tiles`; the centre tile is then the footprint.
+  local function device_tiles(device)
+    if device.tiles and #device.tiles > 0 then
+      return device.tiles
+    end
+    return { { math.floor(device.x), math.floor(device.y) } }
+  end
+
   local function device_networks(device)
     local nets = {}
     local seen = {}
+    local tiles = device_tiles(device)
 
-    -- Wired: check 4-way adjacency to cable tiles.
-    local cx = math.floor(device.x)
-    local cy = math.floor(device.y)
-    for _, adj in ipairs({ {cx + 1, cy}, {cx - 1, cy}, {cx, cy + 1}, {cx, cy - 1} }) do
-      local k = tile_key(adj[1], adj[2])
-      local raw_root = cable_tile_segment[k]
-      if raw_root then
-        local mroot = switch_find(raw_root_index[raw_root])
+    -- Wired: check every cable within reach of any occupied tile.
+    for _, tile in ipairs(tiles) do
+      local x, y = tile[1], tile[2]
+      for dx = -DEVICE_REACH, DEVICE_REACH do
+        for dy = -DEVICE_REACH, DEVICE_REACH do
+          local raw_root = cable_tile_segment[tile_key(x + dx, y + dy)]
+          if raw_root then
+            local mroot = switch_find(raw_root_index[raw_root])
+            local nroot = network_of_merged[mroot]
+            if nroot and not seen[nroot] then
+              seen[nroot] = true
+              nets[#nets + 1] = nroot
+            end
+          end
+        end
+      end
+    end
+
+    -- Wireless: check routers within reach of the nearest occupied tile.
+    for _, router in ipairs(routers) do
+      local rx = math.floor(router.x)
+      local ry = math.floor(router.y)
+      local in_reach = false
+      for _, tile in ipairs(tiles) do
+        if chebyshev(tile[1], tile[2], rx, ry) <= WIRELESS_REACH then
+          in_reach = true
+          break
+        end
+      end
+      if in_reach and #router.segments > 0 then
+        local mroot = router.segments[1]
         local nroot = network_of_merged[mroot]
         if nroot and not seen[nroot] then
           seen[nroot] = true
           nets[#nets + 1] = nroot
         end
-      end
-    end
-
-    -- Wireless: check routers within reach.
-    for _, router in ipairs(routers) do
-      if chebyshev(cx, cy, math.floor(router.x), math.floor(router.y)) <= WIRELESS_REACH then
-        if #router.segments > 0 then
-          local mroot = router.segments[1]
-          local nroot = network_of_merged[mroot]
-          if nroot and not seen[nroot] then
-            seen[nroot] = true
-            nets[#nets + 1] = nroot
-          end
-          device_wireless_router[device.id] = router.id
-        end
+        device_wireless_router[device.id] = router.id
       end
     end
 
@@ -535,6 +575,10 @@ function M.build(spec)
         net.providers[#net.providers + 1] = device.id
       elseif device.kind == "qln" or device.kind == "qln-drive" then
         net.qln_nodes[#net.qln_nodes + 1] = device.id
+      elseif device.kind == "metrology" then
+        net.metrology[#net.metrology + 1] = device.id
+      elseif device.kind == "answer" then
+        net.answer = device.id
       end
       accumulate(net, device)
     else
@@ -568,6 +612,7 @@ function M.build(spec)
     table.sort(net.labs)
     table.sort(net.providers)
     table.sort(net.qln_nodes)
+    table.sort(net.metrology)
     table.sort(net.routers)
   end
   table.sort(unconnected)

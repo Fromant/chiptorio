@@ -1328,6 +1328,106 @@ Save-Icon $b "network-fiber-sm-cable"
 Write-Host "network cable icons done."
 
 # =========================================================================
+# 17C. NETWORK CABLE WORLD SPRITES
+# =========================================================================
+# Cables are pipe clones, so the engine picks a sprite per connection shape.
+# Each sprite below is one tile (64x64 at scale 0.5) and every arm reaches the
+# canvas edge so neighbouring tiles join without a seam. The art is a neutral
+# grey ribbon; scripts/network.lua tints it per tier.
+
+$cableDir = Join-Path $root "graphics\entity\cable"
+New-Item -ItemType Directory -Force -Path $cableDir | Out-Null
+
+$cableEdge = Col "#2b2929"
+$cableBody = Col "#a8a8a8"
+$cableCore = Col "#e4e4e4"
+
+function Cable-Points([string]$spec) {
+  $list = @()
+  foreach ($pair in $spec.Split(";")) {
+    $xy = $pair.Split(",")
+    $list += [System.Drawing.PointF]::new([single]$xy[0], [single]$xy[1])
+  }
+  return $list
+}
+
+function Cable-Band($g, [System.Drawing.PointF[]]$points) {
+  $widths = @(20.0, 15.0, 5.0)
+  $colours = @($cableEdge, $cableBody, $cableCore)
+  for ($i = 0; $i -lt $widths.Count; $i++) {
+    $pen = New-Object System.Drawing.Pen -ArgumentList $colours[$i], ([single]$widths[$i])
+    $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
+    $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Flat
+    $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Flat
+    $g.DrawLines($pen, $points)
+    $pen.Dispose()
+  }
+}
+
+# A splice bead where arms meet, and a socket where a run ends.
+function Cable-Joint($g, [double]$r, [bool]$socket) {
+  Disc $g 32 32 $r $cableEdge
+  Disc $g 32 32 ($r - 3) $cableBody
+  Disc $g 32 32 ($r - 6) $cableCore
+  if ($socket) { Disc $g 32 32 2 $cableEdge }
+}
+
+$cableShapes = @(
+  @("straight_vertical_single", "32,-4;32,68", "splice"),
+  @("straight_vertical", "32,-4;32,68", ""),
+  @("straight_horizontal", "-4,32;68,32", ""),
+  @("corner_up_right", "32,-4;32,32;68,32", ""),
+  @("corner_up_left", "32,-4;32,32;-4,32", ""),
+  @("corner_down_right", "32,68;32,32;68,32", ""),
+  @("corner_down_left", "32,68;32,32;-4,32", ""),
+  @("t_up", "32,32;32,-4|-4,32;68,32", "splice"),
+  @("t_down", "32,32;32,68|-4,32;68,32", "splice"),
+  @("t_left", "32,32;-4,32|32,-4;32,68", "splice"),
+  @("t_right", "32,32;68,32|32,-4;32,68", "splice"),
+  @("cross", "32,-4;32,68|-4,32;68,32", "splice"),
+  @("ending_up", "32,-4;32,21", "socket"),
+  @("ending_down", "32,68;32,43", "socket"),
+  @("ending_left", "-4,32;21,32", "socket"),
+  @("ending_right", "68,32;43,32", "socket")
+)
+
+foreach ($shape in $cableShapes) {
+  $bmp = New-Object System.Drawing.Bitmap 64, 64
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.Clear([System.Drawing.Color]::Transparent)
+  $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+  $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
+  foreach ($sub in $shape[1].Split("|")) { Cable-Band $g (Cable-Points $sub) }
+  if ($shape[2] -eq "splice") { Cable-Joint $g 12 $false }
+  if ($shape[2] -eq "socket") { Cable-Joint $g 12 $true }
+  $bmp.Save((Join-Path $cableDir ($shape[0] + ".png")), [System.Drawing.Imaging.ImageFormat]::Png)
+  $g.Dispose(); $bmp.Dispose()
+}
+
+# Shape contact sheet so the auto-tiling set can be eyeballed.
+$cell = 128
+$sheetCols = 4
+$sheetRows = 4
+$cableSheet = New-Object System.Drawing.Bitmap ($sheetCols * $cell), ($sheetRows * $cell)
+$cg = [System.Drawing.Graphics]::FromImage($cableSheet)
+$cg.Clear($panel)
+$cg.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+$cg.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
+for ($i = 0; $i -lt $cableShapes.Count; $i++) {
+  $img = [System.Drawing.Image]::FromFile((Join-Path $cableDir ($cableShapes[$i][0] + ".png")))
+  $x = ($i % $sheetCols) * $cell
+  $y = [Math]::Floor($i / $sheetCols) * $cell
+  $cg.DrawImage($img, $x, $y, $cell, $cell)
+  $img.Dispose()
+}
+$cableSheetPath = Join-Path $env:TEMP "chiptorio-cables.png"
+$cableSheet.Save($cableSheetPath, [System.Drawing.Imaging.ImageFormat]::Png)
+$cg.Dispose(); $cableSheet.Dispose()
+
+Write-Host "Wrote $($cableShapes.Count) cable sprites to $cableDir"
+Write-Host "Cable shape sheet: $cableSheetPath"
+
+# =========================================================================
 # 17. CONTACT SHEET
 # =========================================================================
 

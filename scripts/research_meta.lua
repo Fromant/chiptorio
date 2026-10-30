@@ -63,6 +63,17 @@ M.MEMORY_PROFILES = {
 -- Providers accept computer modules (`category = chiptorio-computer`) in their
 -- computer slots, and memory modules in their memory slots. A computer bundles
 -- its own compute and memory; memory banks provide additional bulk memory.
+--
+-- `cooling` is the heat a provider's chassis dissipates. Every provider must
+-- cover its own base heat and its standard module load, or the first
+-- compute-gated technology would deadlock: `vlsi-process` runs on a server rack
+-- and a memory bank, and it is the technology that unlocks the datacenter, so
+-- no datacenter can exist yet to supply cooling. A rack is sized for its four
+-- microcomputers and a bank for its four SRAM sticks; the datacenter has real
+-- built-in cooling and covers a full load of microcomputers with headroom.
+-- Hotter modules (servers, GPUs, quantum computers) exceed a single provider's
+-- chassis and need more datacenters on the network. A dedicated cooling entity
+-- that adds capacity beyond the chassis remains future work (TODO P0.1).
 M.PROVIDERS = {
   ["server-rack"] = {
     computer_slots = 4,
@@ -71,7 +82,7 @@ M.PROVIDERS = {
     power = 150,
     drain = "20kW",
     heat = 4,
-    cooling = 0,
+    cooling = 12,  -- 4 base + 4 microcomputers x 2 heat
   },
   ["memory-bank"] = {
     computer_slots = 0,
@@ -80,7 +91,7 @@ M.PROVIDERS = {
     power = 80,
     drain = "10kW",
     heat = 2,
-    cooling = 0,
+    cooling = 4,  -- 2 base + 4 SRAM x 0.5 heat
   },
   ["datacenter"] = {
     computer_slots = 8,
@@ -89,7 +100,7 @@ M.PROVIDERS = {
     power = 1000,
     drain = "100kW",
     heat = 20,
-    cooling = 20,
+    cooling = 40,  -- 20 base + 8 microcomputers x 2 + 4 SRAM x 0.5, rounded up
   },
 }
 
