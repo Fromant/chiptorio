@@ -608,45 +608,46 @@ entry checks both log under `PASS data`.
 
 ### P2.2 "Option A: new tree from scratch" vs the curated vanilla spine
 
-`DESIGN.md:30,117-121` says the tech tree is built from scratch with a curated
-Foundation chapter. The implementation keeps the vanilla spine and attaches
-Chiptorio branches; it does not rebuild every technology. Either:
+**Decision recorded.** DESIGN.md §16 and §4.2 now describe the actual implementation:
+a curated vanilla spine with Chiptorio branches attached, not a full tech-tree
+rebuild. `DESIGN.md:30` and `:92` updated to match. The Foundation chapter keeps
+vanilla technology names (safer for existing recipe unlocks), resolving open
+decision item §19.7.
 
-- rewrite §4.2 to describe the curated-spine implementation (recommended), or
-- schedule the full rebuild as a post-1.0 project.
-
-Do not leave the doc claiming a rebuild that did not happen.
+- [x] DESIGN.md §16 decision log updated
+- [x] DESIGN.md §4.2 rewritten to describe curated-spine implementation
+- [x] DESIGN.md §19.7 open decision resolved
 
 ### P2.3 Remote interface names
 
-`DESIGN.md:61` lists `chiptorio`, `chiptorio-network`, `chiptorio-answer` and
-`chiptorio-tests`. The registered interfaces are `chiptorio-network`,
-`chiptorio-research`, `chiptorio-qualification`, `chiptorio-qln` and
-`chiptorio-answer`. There is no `chiptorio` or `chiptorio-tests` interface.
+**Decision recorded.** DESIGN.md §2 naming section updated to the actual
+registered interfaces: `chiptorio-network`, `chiptorio-research`,
+`chiptorio-qualification`, `chiptorio-qln`, `chiptorio-answer`, `chiptorio-ai`.
+No `chiptorio` or `chiptorio-tests` interface exists; none added — the probe
+calls each interface directly, which is sufficient and avoids a facade that
+would need to be kept in sync.
 
-Either update the list or add the missing aliases. Adding a `chiptorio-tests`
-facade is useful: it gives the probe and future CI one stable entry point.
+- [x] DESIGN.md §2 remote interface list corrected
 
 ### P2.4 Prototype prefix rule
 
-`DESIGN.md` §2 says custom prototypes are `chiptorio-`-prefixed. Many are not:
-`network-cable`, `network-switch`, `network-router`, `network-monitor`,
-`server-rack`, `memory-bank`, `datacenter`, `process-*`, `node-*`, `refine-*`,
-`foup-*`, the chip items, and so on.
+**Decision recorded.** DESIGN.md §2 naming section updated: `chiptorio-` prefix
+is preferred but not enforced; legacy and prototype names may be unprefixed
+(`network-cable`, `server-rack`, `process-*`, `node-*`, `refine-*`, `foup-*`,
+chip items). Public item/entity names must be unique and documented; new public
+content should prefer the prefix where it does not collide. Renaming existing
+prototypes would break saves and every recipe reference, so it is explicitly
+not done.
 
-Renaming prototypes now would break saves and every recipe reference. Recommended:
-relax the rule to "public item/entity names must be unique and documented;
-internal names may be unprefixed; new public content should prefer the prefix
-where it does not collide". Record the exception in §2.
+- [x] DESIGN.md §2 prototype prefix rule relaxed and documented
 
 ### P2.5 README/changelog/DESIGN status sync
 
-`README.md` Status and the `DESIGN.md` header now agree with 1.0.0, and
-`README.md` links this file. What remains is the process guarantee: the release
-section of `AGENTS.md` bumps `info.json` and adds a `changelog.txt` entry but
-does not mention the README/DESIGN status lines. Add "update README Status,
-DESIGN header and this file's version/date" to that release step so the three
-cannot drift again.
+**Decision recorded.** AGENTS.md release step now includes "update README
+Status, DESIGN header and this file's version/date" so the three cannot drift
+again.
+
+- [x] AGENTS.md release step updated with status-sync requirement
 
 ---
 

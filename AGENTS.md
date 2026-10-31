@@ -108,8 +108,9 @@ grid) must run on a real headless server, not a benchmark.
   `ffmpeg` on `PATH`.
 - Add `locale/en/locale.cfg` entries for new items, entities, and
   technologies; placeholders are `__1__`, not `%s`.
-- Release: bump `info.json` `version` and add a dated `changelog.txt` entry
-  under Features/Balance/Bugfixes, newest first.
+- Release: bump `info.json` `version`, add a dated `changelog.txt` entry under
+  Features/Balance/Bugfixes (newest first), and update README Status, DESIGN
+  header, and TODO.md version/date so the three cannot drift again.
 
 ## Debug hooks
 

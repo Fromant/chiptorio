@@ -30,7 +30,7 @@ Confirmed decisions:
 13. Every mechanic is tested: pure logic, data contracts, runtime integration, save/load, and performance.
 14. **Node scope:** 12 major process nodes + 10 half-node refinements.
 15. **Half-node refinements require a qualification step**, not just research.
-16. **Tech tree:** Option A — a new chiptorio progression tree with a Foundation chapter that reorganizes/clones the vanilla tech spine; military, bot, and enemy technologies are removed.
+16. **Tech tree:** Curated vanilla spine with Chiptorio branches attached — not a full rebuild (Option A was not implemented). Foundation chapter reorganizes the vanilla spine; military, bot, and enemy technologies are removed.
 17. v0.5 saves break; no migration.
 18. Versioning: `0.6.0` is the first internet-enabled build; `1.0.0` is the complete redesign.
 19. **Circuits are integrated, not deleted.** The three vanilla circuit items keep their internal names and become boards: `electronic-circuit` → Control Board, `advanced-circuit` → Advanced Control Board, `processing-unit` → Compute Board. Boards are crafted in a Circuit Assembler from chips, memory, and passives. Only the Integrated Circuit chip is still called a "circuit".
@@ -71,8 +71,8 @@ Rename scope:
 - `info.json` `name` → `chiptorio`
 - asset paths → `__chiptorio__/...`
 - locale prefix → `chiptorio.`
-- remote interfaces → `chiptorio`, `chiptorio-network`, `chiptorio-answer`, `chiptorio-tests`
-- prototype prefixes → `chiptorio-`
+- remote interfaces → `chiptorio-network`, `chiptorio-research`, `chiptorio-qualification`, `chiptorio-qln`, `chiptorio-answer`, `chiptorio-ai`
+- prototype prefixes → `chiptorio-` preferred but not enforced; legacy and prototype names may be unprefixed (`network-cable`, `server-rack`, `process-*`, `node-*`, `refine-*`, `foup-*`, chip items). Public item/entity names must be unique and documented; new public content should prefer the `chiptorio-` prefix where it does not collide.
 - script module paths, test directories, docs, tooling
 - repository references and generated asset scripts
 
@@ -89,7 +89,6 @@ Compatibility:
 
 In scope:
 
-- complete tech-tree rebuild (Option A)
 - network/compute/memory/bandwidth economy
 - 12 major nodes + 10 half-node refinements
 - lithography, transistor, packaging, memory, architecture branches
@@ -127,16 +126,15 @@ Six chapters, deeper than the current eight thin eras:
 
 (Seven labels including Foundation; “six semiconductor chapters” plus Foundation is also acceptable wording.)
 
-### 4.2 Tech tree — Option A
+### 4.2 Tech tree — curated vanilla spine with Chiptorio branches
 
-- The vanilla progression tree is hidden or removed.
-- A new chiptorio tree is built from scratch.
-- The **Foundation** chapter is a reorganized, curated vanilla spine: automation, electronics, oil, trains, construction. It may clone/rewrite vanilla technologies rather than re-inventing every base recipe.
-- Military, bot, and enemy technologies are removed.
+- The vanilla progression tree is kept as the spine; Chiptorio branches attach to it.
+- Military, bot, and enemy technologies are removed or hidden.
 - Chip, internet, memory, QLN, packaging, and process branches are entirely new.
+- The Foundation chapter uses vanilla technology names where possible (safer for existing recipe unlocks), with Chiptorio additions gated behind matching process nodes.
 - Every recipe must be unlocked by exactly one technology or explicitly enabled from the start.
 - Every technology must be reachable from the start.
-- Technology chapters are implemented as technology groups if the 2.1 prototype supports them; otherwise as prerequisite clusters and explicit ordering.
+- Technology chapters are implemented as prerequisite clusters and explicit ordering (2.1 prototype does not support technology groups).
 
 Data-contract tests enforce:
 
@@ -1193,7 +1191,7 @@ Fallbacks:
    Resolved: optional later; not in 1.0.
 5. True multiplayer/desync test scope.
 6. Final art direction and custom entity art for 1.0 vs 1.1.
-7. Whether the Foundation chapter keeps vanilla technology names (safer for existing recipe unlocks) or clones them under new chiptorio names.
+7. ~~Whether the Foundation chapter keeps vanilla technology names (safer for existing recipe unlocks) or clones them under new chiptorio names.~~ Resolved: keeps vanilla names; Chiptorio branches attach with new names.
 8. Exact balance numbers after playtesting.
 9. ~~Exact AI tier sample counts, model recipes, and insight values.~~
    Resolved in `scripts/ai_meta.lua` AI_TIERS table; values are starting points for playtesting.
