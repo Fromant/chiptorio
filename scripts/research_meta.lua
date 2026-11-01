@@ -325,12 +325,34 @@ M.COMPUTE_PROFILES = { "scalar", "vector", "tensor", "quantum" }
 
 --- Gate table for a technology, or nil for technologies that work offline.
 function M.tech_spec(name)
-  return M.TECHS[name]
+  
+-- Labs have no native directional animation/rotation. These are render variants
+-- of the same provider, never additional technology gates or chassis profiles.
+M.RACK_VARIANTS = { "server-rack", "server-rack-east", "server-rack-south", "server-rack-west" }
+function M.provider_name(name)
+  for _, variant in ipairs(M.RACK_VARIANTS) do
+    if name == variant then return "server-rack" end
+  end
+  return name
+end
+
+return M.TECHS[name]
 end
 
 --- Network gate for a half-node qualification, or nil when it works offline.
 function M.qualification_gate(key)
-  return M.QUALIFICATION_GATES[key]
+  
+-- Labs have no native directional animation/rotation. These are render variants
+-- of the same provider, never additional technology gates or chassis profiles.
+M.RACK_VARIANTS = { "server-rack", "server-rack-east", "server-rack-south", "server-rack-west" }
+function M.provider_name(name)
+  for _, variant in ipairs(M.RACK_VARIANTS) do
+    if name == variant then return "server-rack" end
+  end
+  return name
+end
+
+return M.QUALIFICATION_GATES[key]
 end
 
 --- Effective compute demand of one lab for this technology.
@@ -409,6 +431,17 @@ end
 function M.scale(spec, level)
   local per_level = spec and spec.infinite_scale or 0
   return 1 + per_level * ((level or 1) - 1)
+end
+
+
+-- Labs have no native directional animation/rotation. These are render variants
+-- of the same provider, never additional technology gates or chassis profiles.
+M.RACK_VARIANTS = { "server-rack", "server-rack-east", "server-rack-south", "server-rack-west" }
+function M.provider_name(name)
+  for _, variant in ipairs(M.RACK_VARIANTS) do
+    if name == variant then return "server-rack" end
+  end
+  return name
 end
 
 return M

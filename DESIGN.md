@@ -42,7 +42,7 @@ Confirmed decisions:
 25. **No crusher for 1.0.0.** `stone → silica` is crafted directly. A crusher may be added later from open-source reference mechanics, with no mod dependency.
 26. **No backward-compatible save migration.** 0.10.0 saves break; clean break for 1.0.0.
 27. **Vanilla modules disabled for now.** Computers, racks, and datacenters accept only `chiptorio-computer` modules; vanilla module categories are not accepted. Reconsider after 1.0.
-28. **Vanilla `electronics` technology is replaced.** The `electronics` tech and its `electronic-circuit` recipe are superseded by the Thermionics chain: vacuum tubes → Control Board → board ladder.
+28. **Vanilla `electronics` technology keeps its early bootstrap role.** It remains the `craft 10 copper plates` trigger that unlocks copper cable and small electric poles, but its `electronic-circuit` recipe is superseded by the Thermionics chain: vacuum tubes → Control Board → board ladder. Gating the whole technology behind Thermionics deadlocks the start, because the first research costs punched cards that need the cable it unlocks.
 
 Open decisions are listed in §19.
 
@@ -565,7 +565,10 @@ The data stage generates tooltips from this table. Runtime uses the same table. 
 
 - The Internet technology requires only `microarchitecture` (the first microprocessor).
 - It requires no compute: it is the technology that creates compute.
-- It unlocks the Assembly Fab, the Server Rack, the Memory Bank, SRAM, and the wiring.
+- It unlocks the Server Rack, the Memory Bank, SRAM, and the wiring.
+- The Assembly Fab arrives earlier, with `process-10um`: it packages the first die,
+  and production science packs (needed by `process-3um`) are assembled in it. Putting
+  it on the Internet deadlocks the tree, because the Internet is behind those packs.
 - `vlsi-process` is the first compute-gated technology and requires `internet`.
 - No deadlock: the player can always build the first network with pre-internet tech.
 
@@ -576,7 +579,10 @@ The data stage generates tooltips from this table. Runtime uses the same table. 
 - No technology requires a compute profile that no available chip provides.
 - No technology requires more memory than the tier can build.
 - Every prerequisite is researchable without the technology it unlocks.
-- Data-contract tests enforce these rules.
+- No science pack is crafted only in a machine that the same pack unlocks.
+- No machine is built from an item that only its own recipe category produces.
+- Data-contract tests enforce these rules with a full factory/research simulation,
+  not just a prerequisite walk.
 
 ---
 
@@ -1036,7 +1042,7 @@ Still to add: infinite multipliers, property tests, save/load.
 
 Implemented: icons and locale exist, chip and memory modules are modules with an empty
 effect and the right category, providers are labs with no inputs and both module
-categories, provider recipes start locked, `assembly-fab` exists, `internet` unlocks the
+categories, provider recipes start locked, `assembly-fab` exists and is unlocked by `process-10um`, `internet` unlocks the
 network and the first providers, `datacenter` unlocks the lab/provider/DRAM, `vlsi-process`
 requires the internet, lab inputs include every workload, no military/bot/enemy remnants,
 no throughput-gate references. The process-node contract checks every node's three items,
@@ -1048,7 +1054,12 @@ the Metrology Lab (visible, lab clone, near-zero research speed, all ten PQWs as
 the test structure, one locked pilot recipe per half-node that produces its PQW, one
 `refine-*` technology per half-node with the right prerequisite and internet split, node
 wafer/die recipes that allow productivity, and that `the-question` requires every
-refinement.
+refinement. The progression contract simulates the whole factory: it seeds raw
+resources, closes over recipes whose machine and ingredients exist, then over
+technologies whose packs exist, and fails on a research frontier (no affordable first
+technology) or on a machine whose build recipe needs an item only its own category
+produces. It also fails on any visible locked recipe with no visible unlocking
+technology, which catches recipes orphaned by the robot/combat pruning.
 
 The QLN contract checks every node is a visible, minable entity with a matching item and
 a locked recipe, that the Storage Drive is a lab clone with four module slots and accepts
@@ -1624,7 +1635,7 @@ Compute Board.
 | Vanilla recipe | Change | Gate |
 |---|---|---|
 | `analytical-engine` | circuits removed; iron gears + copper plates + iron plates only | start |
-| `electronics` technology | replaced by the Thermionics chain | removed |
+| `electronics` technology | keeps the early copper-plate trigger and bootstrap recipes (copper cable, small electric pole); Control Board effect moves out | start |
 | `electronic-circuit` → Control Board | iron plate + copper cable + vacuum tubes | Thermionics |
 | `advanced-circuit` → Advanced Control Board | Control Board + discrete transistors + Integrated Circuit + plastic | 10 µm |
 | `processing-unit` → Compute Board | Advanced Control Board + Microprocessor + copper plate + sulfuric acid | 3 µm / 350 nm |

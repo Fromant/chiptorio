@@ -12,6 +12,7 @@
 | `chiptorio-network` | `status` | Logs per-surface cable, segment, network counts |
 | | `topology <surface>` | Returns the same numbers as a table |
 | | `overlay <bool>` | Sets the overlay without a keypress |
+| | `monitor <player>` | Opens the monitor for a player index, like the shortcut |
 | `chiptorio-research` | `status` | Logs current tech's gate, decay, active labs |
 | | `evaluate <tech>` | Returns gate/decay/active labs as a table; applies lab pausing |
 | | `step <seconds>` | Advances decay without waiting for ticks |

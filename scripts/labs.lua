@@ -1,9 +1,9 @@
 -- Computer generations.
 --
--- The base lab is hidden (see data-updates.lua). Every generation accepts ALL
--- workloads, because gating packs by machine silently deadlocks the vanilla
--- tech tree. What improves per generation is speed, power cost and module
--- slots - i.e. how much compute you get per chip.
+-- The base lab is hidden (see data-updates.lua). Each generation accepts only
+-- the science packs up to its tier, plus any custom workloads it is rated for.
+-- What improves per generation is speed, power cost, and input capacity.
+-- Labs do NOT accept module slots -- chips go into providers, not labs.
 --
 -- Only the Analytical Engine is craftable without research. Later generations
 -- are unlocked by their technology, and the loading stage asserts that the
@@ -26,7 +26,10 @@ local function make_lab(spec)
   entity.next_upgrade = nil
   entity.researching_speed = spec.speed
   entity.energy_usage = spec.power
-  entity.module_slots = spec.modules
+  entity.module_slots = spec.modules or 0
+  if spec.inputs then
+    entity.inputs = spec.inputs
+  end
   entity.fast_replaceable_group = "chiptorio-computers"
   entity.hidden = false
   entity.hidden_in_factoriopedia = false
@@ -65,13 +68,14 @@ make_lab({
   name = "analytical-engine",
   order = "a[analytical-engine]",
   speed = 0.5,
-  power = "90kW",
+  power = "240kW",
   modules = 0,
   craft_time = 5,
   custom_animation = "analytical-engine",
-  size_w = 128,
-  size_h = 128,
+  size_w = 160,
+  size_h = 160,
   scale = 0.5,
+  inputs = { "automation-science-pack" },
   ingredients = {
     M.item("iron-gear-wheel", 8),
     M.item("copper-plate", 20),
@@ -84,13 +88,14 @@ make_lab({
   order = "b[tube-mainframe]",
   speed = 1.0,
   power = "240kW",
-  modules = 2,
+  modules = 0,
   craft_time = 10,
   enabled = false,
   custom_animation = "tube-mainframe",
   size_w = 128,
   size_h = 128,
   scale = 0.5,
+  inputs = { "automation-science-pack", "logistic-science-pack" },
   ingredients = {
     M.item("steel-plate", 20),
     M.item("vacuum-tube", 30),
@@ -103,13 +108,14 @@ make_lab({
   order = "c[mainframe-cluster]",
   speed = 1.75,
   power = "600kW",
-  modules = 4,
+  modules = 0,
   craft_time = 15,
   enabled = false,
   custom_animation = "mainframe-cluster",
   size_w = 128,
   size_h = 128,
   scale = 0.5,
+  inputs = { "automation-science-pack", "logistic-science-pack", "military-science-pack" },
   ingredients = {
     M.item("steel-plate", 40),
     M.item("discrete-transistor", 20),
@@ -123,13 +129,14 @@ make_lab({
   order = "d[datacenter-lab]",
   speed = 2.5,
   power = "1.5MW",
-  modules = 6,
+  modules = 0,
   craft_time = 30,
   enabled = false,
   custom_animation = "datacenter-lab",
   size_w = 128,
   size_h = 128,
   scale = 0.5,
+  inputs = { "automation-science-pack", "logistic-science-pack", "military-science-pack", "chemical-science-pack" },
   ingredients = {
     M.item("server-rack", 4),
     M.item("system-on-chip", 8),
@@ -144,13 +151,14 @@ make_lab({
   order = "e[cryostat]",
   speed = 4.0,
   power = "3MW",
-  modules = 8,
+  modules = 0,
   craft_time = 45,
   enabled = false,
   custom_animation = "cryostat",
   size_w = 128,
   size_h = 128,
   scale = 0.5,
+  inputs = { "automation-science-pack", "logistic-science-pack", "military-science-pack", "chemical-science-pack", "production-science-pack", "utility-science-pack", "chiptorio-optical-science-pack", "chiptorio-hbm-science-pack", "chiptorio-quantum-science-pack", "microprocessor" },
   ingredients = {
     M.item("datacenter-lab", 1),
     M.item("cooling-unit", 8),
@@ -160,48 +168,9 @@ make_lab({
   },
 })
 
--- Extra lab inputs. The three custom workloads are ordinary item prototypes,
--- so every generation can read them. `microprocessor` is only used by The
--- Question, but it must be in every lab's input list or that technology can
--- load and never be researched. This is the same anti-deadlock rule as for the
--- vanilla packs: the Cryostat is faster and more module-hungry, not the only
--- machine that accepts a given input.
---
--- `microprocessor` is a module prototype, so the existence check must look in
--- `data.raw.module` too; a plain `data.raw.item` lookup would reject it.
-local EXTRA_INPUTS = {
-  "chiptorio-optical-science-pack",
-  "chiptorio-hbm-science-pack",
-  "chiptorio-quantum-science-pack",
-  "microprocessor",
-}
-for _, extra in ipairs(EXTRA_INPUTS) do
-  if not M.item_exists(extra) then
-    error("chiptorio: lab input item '" .. extra .. "' is missing")
-  end
-end
-
-for _, name in ipairs({
-  "analytical-engine",
-  "tube-mainframe",
-  "mainframe-cluster",
-  "datacenter-lab",
-  "cryostat",
-}) do
-  local lab = data.raw.lab[name]
-  if not lab then
-    error("chiptorio: research computer '" .. name .. "' missing")
-  end
-  lab.inputs = lab.inputs or {}
-  for _, extra in ipairs(EXTRA_INPUTS) do
-    local present = false
-    for _, input in ipairs(lab.inputs) do
-      if input == extra then
-        present = true
-      end
-    end
-    if not present then
-      table.insert(lab.inputs, extra)
-    end
-  end
-end
+-- Lab inputs are set explicitly per generation in make_lab() above.
+-- Analytical Engine: only punch cards.
+-- Tube Mainframe: punch cards, punched tapes, vacuum tubes.
+-- Mainframe Cluster: + magnetic tape.
+-- Datacenter Lab: + disk packs.
+-- Cryostat: everything including custom packs and microprocessor.

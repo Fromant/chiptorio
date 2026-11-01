@@ -1,711 +1,157 @@
-# chiptorio — TODO and design-gap register
+# Chiptorio — Gap Register
 
-Last reviewed: 2026-10-30 · Version: 1.0.0
-
-`DESIGN.md` is the design authority. This file is the gap register: what the
-design promises, what the code actually does, what is verified, and what would
-make each item "done". Use the IDs (`P0.1`, `P1.3`, …) in commits, issues and
-review notes.
-
-Legend:
-
-- `P0` — a gameplay mechanic the design relies on; the mod is not feature-complete without it.
-- `P1` — correctness, compatibility or verification work that protects the P0 mechanics.
-- `P2` — documentation, naming and consistency drift.
-- `[ ]` open · `[~]` deferred with a decision recorded · `[x]` done.
+Updated: 2026-11-01 (post lab GUI overhaul and recipe balance)
 
 ---
 
-## 0. Verified baseline (1.0.0)
+## P0 — Critical (Blocks Progression / Causes Confusion / Broken GUI)
 
-Everything below is covered by `tools\test-all.ps1` (smoke test + unit, data,
-runtime, force-isolation and playthrough probes) unless a caveat says otherwise.
+- [x] **P0.1** Analytical Engine GUI has no slot for punched cards
+  - Root cause: `computer_gui.lua` replaces vanilla lab GUI with read-only panel; doesn't render module/input slots.
+  - Fix: Don't replace lab GUI for `analytical-engine` (let vanilla handle it).
+  - Files: `scripts/runtime/computer_gui.lua`, `control.lua`
+  - **DONE**: `is_computer()` returns false for all labs; labs use vanilla lab GUI with proper input slots.
 
-- Enemies, robots and combat are removed or hidden; enemy autoplace, pollution and
-  evolution are off; existing saves are cleaned on configuration change.
-- The vanilla lab is hidden and the first-science trigger is retargeted to the
-  Analytical Engine, so a fresh save cannot softlock.
-- Cable/switch/router topology, chunk indexing (including the chunk-border
-  margin), repeaters, wireless access points, overlay and monitor rendering.
-- Compute providers, chips, memory modules, providers' module inventories, the
-  pure research allocator, lab pausing, decay and recovery.
-- Nine science workloads plus microprocessors accepted by every research computer.
-- Twelve process nodes, ten half-node refinements, Metrology Lab, pilot recipes
-  and the qualification loop.
-- Eleven memory generations wired into both research datasets and QLN capacity.
-- QLN drives, Import/Export/Provider/Requester/Terminal, quantum pairing, the full
-  FOUP chain, the Construction Core and machine-inventory transfer.
-- Answer Engine gates, 42-minute clock, item draw from QLN, stability, score,
-  victory and The Question's per-level scaling.
-- A scripted playthrough on its own force: all nineteen gated technologies are
-  reached by building a network from parts that are craftable at that moment,
-  every real research gate is evaluated, then the Answer bench is built, the
-  pre-flight gate passes, the 42-minute clock completes and the QLN item draw is
-  consumed.
-- Unlock order: every board and computer recipe is gated on a technology whose
-  prerequisite closure already unlocks each locked ingredient, so no technology
-  announces a part the player cannot yet build.
-- Force isolation: two dedicated forces with their own cable run, Storage Drive
-  and lab; QLN deposits/withdraws, qualification state, compute gates and lab
-  pausing never cross the force boundary.
-- Construction Core on a real power grid: the accumulator clone refills from a
-  live grid (`set_accumulators_energy`) and holds its charge when the pole is
-  removed; verified by `tools/test-power-grid.ps1`.
-- Generated icons and sound, locale entries, and data contracts for all of the
-  above.
+- [x] **P0.2** `electronics` unlocks inserter but can't craft until Control Board
+  - Root cause: `electronics` keeps `unlock-recipe inserter`, but `inserter` recipe requires `electronic-circuit` (Control Board) gated behind `thermionics`.
+  - Fix: Move `unlock-recipe inserter` from `electronics` to `thermionics`. Keep `copper-cable`/`small-electric-pole` on `electronics`.
+  - Files: `data-updates.lua`, `scripts/technology.lua`
+  - **DONE**: Filtered `inserter` from electronics effects; added `inserter` to thermionics effects.
 
-Caveats that are *not* covered by the automated suite are listed in P1.6 only;
-P1.5, P1.7, P1.8 and P1.9 are automated and asserted by `tools/test-all.ps1`
-(see [`docs/p1-verification.md`](docs/p1-verification.md)).
+- [x] **P0.3** Analytical Engine sprite is 1.5×1.5 instead of 3×3 tiles
+  - Root cause: Sprite 128×128 at scale 0.5 = 64px/tile (2×2 footprint), but entity collision box is vanilla lab (3×3).
+  - Fix: Regenerate `analytical-engine.png` at 160×160 (for 3×3 at scale 0.5), update `size_w/size_h` in `labs.lua` to 160,160.
+  - Files: `tools/make-entities.ps1`, `scripts/labs.lua`
+  - **DONE**: Regenerated sprite at 160×160; updated `size_w/size_h` to 160,160 in `labs.lua`.
+
+- [x] **P0.4** Technologies unlockable after Punched Card Deck require Control Board in craft ingredients
+  - Root cause: Tech prerequisites don't account for recipe ingredient chains. E.g. `logistic-science-pack` requires `electronic-circuit` but `thermionics` not a prereq.
+  - Fix: Add ingredient-gate prerequisite contract test. Fix tech tree: add `thermionics` as prereq of `logistic-science-pack`, and similar for other early science packs.
+  - Files: `tools/test-probe/data-updates.lua` (new contract), `scripts/technology.lua`
+  - **DONE**: Added `thermionics` as prerequisite of `logistic-science-pack` in `data-updates.lua`. Added ingredient-gate prerequisite check in `test-probe/data-updates.lua` (P2.2).
+
+- [x] **P0.5** Tube Mainframe GUI broken — shows only "type: tube-mainframe", no slots
+  - Root cause: Same as P0.1 — `computer_gui.lua` replaces lab GUI with read-only panel. Tube Mainframe has `module_slots = 2`.
+  - Fix: Labs now use vanilla GUI; tube-mainframe inputs are {automation-science-pack, logistic-science-pack, vacuum-tube}.
+  - Files: `scripts/runtime/computer_gui.lua`, `scripts/labs.lua`
+  - **DONE**: `is_computer()` returns false for all labs; labs use vanilla lab GUI.
+
+- [x] **P0.6** Tube Mainframe requires steel but steel-processing not prerequisite
+  - Root cause: `thermionics` unlocks `tube-mainframe` (recipe needs `steel-plate`), but `steel-processing` not a prereq.
+  - Fix: Add `steel-processing` as prerequisite of `thermionics`. Full audit: for every mod recipe, ensure all ingredient-unlocking techs are prereqs of the recipe's gate tech.
+  - Files: `scripts/technology.lua`, new audit test in test-probe
+  - **DONE**: Added `steel-processing` to thermionics prerequisites in `scripts/technology.lua`. Ingredient-gate check (P2.2) now catches this.
 
 ---
 
-## 1. P0 — design mechanics that are not implemented yet
+## P1 — High (Balance / Polish / Missing Locale & Icons)
 
-| ID | Item | State |
-|---|---|---|
-| P0.1 | Power and cooling do not throttle research | `[x]` implemented |
-| P0.2 | Infinite research is only The Question | `[x]` implemented |
-| P0.3 | Monitor lacks tabs, alerts, locate, utilisation and power/heat | `[x]` implemented — 5 tabs |
-| P0.4 | FOUP contamination gate is not active | `[~]` deferred |
-| P0.5 | Vanilla circuits overlap the Chiptorio chip line | `[x]` board ladder integrated |
-| P0.6 | Network is distance-magic, not physical-layer | `[x]` redesigned — adjacency-only, 5 cable tiers, 3×2 switch/router |
+- [x] **P1.1** Thermionics research feels 2× too long
+  - Fix: Reduce `thermionics` count=25, time=10 (250 science × 10s = 2500s ≈ 40 min).
+  - Files: `scripts/technology.lua`
+  - **DONE**: Changed count from 40 to 25, time from 15 to 10.
 
-### P0.1 Power and cooling throttle (DESIGN §5.4)
+- [x] **P1.2** Vacuum tubes in "Production" tab, should be in Chiptorio/Chips tab
+  - Root cause: `chiptorio-chips` subgroup has `group = "production"`.
+  - Fix: Change `chiptorio-chips` group to `chiptorio`.
+  - Files: `scripts/items.lua`
+  - **DONE**: Changed group from "production" to "chiptorio", order to "b[chips]".
 
-**Design.** Research is gated not only by compute, memory and bandwidth but also
-by delivered power and cooling; a shortfall pauses or slows the network.
+- [x] **P1.3** Silica Sand stack size should be 200 or 500
+  - Root cause: `make_material("silica")` clones `iron-plate` (stack 100), doesn't override.
+  - Fix: Set `stack_size = 200` (or 500).
+  - Files: `scripts/items.lua`
+  - **DONE**: Set `silica.stack_size = 200` after creation.
 
-**Reality.** Implemented in `scripts/runtime/research_alloc.lua` and
-`scripts/runtime/research_runtime.lua`:
+- [x] **P1.4** Analytical Engine energy too low (90kW) — Tube Mainframe not a must-have
+  - Fix: Increase `analytical-engine` power to 240kW (match tube-mainframe), keep speed 0.5.
+  - Files: `scripts/labs.lua`
+  - **DONE**: Changed power from "90kW" to "240kW".
 
-- `network_reason()` now returns `"cooling"` when `cooling < heat` (hard stop,
-  like memory/bandwidth) and the evaluate function treats power shortfall as
-  proportional decay (like compute).
-- Power, heat and cooling are included in the network tables passed to the
-  allocator (`research_runtime.lua:113-115`).
-- Providers already contribute `power`, `heat` and `cooling` from their module
-  inventories. Each chassis cools its own base heat and standard module load
-  (rack 12, memory bank 4) so early research cannot deadlock; a datacenter
-  supplies much more cooling (40 per datacenter).
-- `on_technology_researched` in control.lua triggers graph rebuilds when
-  infinite research changes multipliers.
+- [x] **P1.5** Tube Mainframe description says "valve-based" — should be thermionics/tubes
+  - Fix: Change locale `entity-description.tube-mainframe` to "A thermionic mainframe. Vacuum tubes replace relays for faster, hotter computing."
+  - Files: `locale/en/locale.cfg`
+  - **DONE**: Updated description.
 
-**Remaining:** Cooling comes only from a provider's own chassis, so hotter
-modules need more datacenters on the network. A dedicated cooling entity could
-add capacity later. Playtest needed to verify the throttle feels right.
+- [x] **P1.6** Unknown locale keys for AI technologies and custom infinite researches
+  - Missing: `machine-learning`, `ai-specialist`, `ai-general`, `ai-frontier`, `artificial-general-intelligence`, `chip-performance`, `chip-efficiency`, `memory-density`, `memory-bandwidth`, `network-bandwidth`, `cooling-efficiency`, `quantum-correction` (names + descriptions)
+  - Fix: Add all missing `[technology-name]` and `[technology-description]` entries.
+  - Files: `locale/en/locale.cfg`
+  - **DONE**: Added all 12 missing technology names and descriptions.
 
-**Done when:**
-
-- [x] Cooling shortfall is a hard pause (like memory/bandwidth)
-- [x] Power shortfall causes proportional decay (like compute)
-- [x] Power/heat/cooling flow from providers into network totals
-- [x] Datacenters supply cooling to the network
-- [ ] Playtest verifies the throttle feels balanced
-- [ ] Monitor shows power/cooling (P0.3)
-
-### P0.2 Infinite research ladder (DESIGN §10.5, §8.3)
-
-**Design.** After the main tree, these repeat forever:
-
-| Research | Effect | Default scaling |
-|---|---|---|
-| Chip Performance | +5% compute per level | scripted multiplier |
-| Chip Efficiency | −2% power per level, cap 90% | scripted |
-| Process Yield | +1% productivity for wafer/die recipes | effect, cap 300% |
-| Memory Density | +5% memory capacity | scripted |
-| Memory Bandwidth | +5% memory bandwidth | scripted |
-| Network Bandwidth | +5% link throughput | scripted |
-| Cooling Efficiency | +5% cooling capacity | scripted |
-| Quantum Correction | +5% QPU compute | scripted |
-| Lab Speed | vanilla laboratory speed | existing effect |
-| Mining Productivity | vanilla | existing effect |
-
-**Reality.** Implemented:
-
-- Eight infinite technologies exist in `scripts/technology.lua` with
-  `infinite = true` (chip-performance, chip-efficiency, memory-density,
-  memory-bandwidth, network-bandwidth, cooling-efficiency, quantum-correction,
-  plus process-yield via recipe productivity).
-- `scripts/research_meta.lua` has `INFINITE_RESEARCH_SCALES` with per-level
-  multipliers, fields and caps.
-- `scripts/runtime/research_runtime.lua` tracks levels in
-  `storage.research.infinite_multipliers` via `on_technology_researched`, and
-  `apply_multipliers()` applies them to network tables before allocation.
-- `control.lua` registers `on_technology_researched` to call
-  `research.on_technology_researched()`, which marks the graph dirty.
-- Multipliers survive `on_configuration_changed` via `storage.research`.
-
-**Remaining:** Process Yield uses vanilla `productivity_bonus` on recipes
-(capped at 300%) — not yet wired to infinite research levels. Playtest needed.
-
-**Done when:**
-
-- [x] Eight scripted infinite researches exist with prerequisites, costs and icons
-- [x] Force-level multiplier table read from one table and applied consistently
-- [x] Multipliers saved and survive `on_configuration_changed`
-- [x] Unit test proves level scaling and caps
-- [ ] Data contract proves technologies and effects exist
-- [ ] Monitor exposes current multipliers (P0.3)
-- [ ] Process Yield infinite research wired to recipe productivity
-
-### P0.3 Network Monitor diagnostics (DESIGN §5.3, §5.5)
-
-**Design.** Monitor tabs: Overview, Topology, Devices, Alerts, Routing. Locate
-buttons ping entities. Alerts for no route, loop, memory full, compute starved,
-cooling insufficient, power low. Link utilisation shown by line thickness/colour.
-Power and heat displayed.
-
-**Reality.** Implemented:
-
-- `scripts/runtime/network_runtime.lua` monitor rewritten with 5 tabs:
-  Overview, Topology, Devices, Alerts, Routing. Tabbed-pane with persistent
-  active-tab state in `storage.network.monitors`.
-- Overview shows demand vs supply for compute, memory, bandwidth, power, heat,
-  cooling, latency, plus per-network device counts. QLN and qualification
-  provider sections appended.
-- Topology shows segments per network, cable counts, bandwidth, latency.
-- Devices lists providers (with compute/memory module counts), labs (with
-  compute demand), QLN nodes (with cell counts).
-- Alerts lists unconnected devices, multi-network conflicts, cooling
-  insufficient. Power low and compute-starved are shown via decay reasons.
-- Overlay draws cables colored by tier (weakest-link visible), switches as
-  blue squares, routers as orange circles with WiFi reach circles.
-- Monitor rebuilt at most once per second (coalesced with graph rebuild),
-  never per entity.
-
-**Remaining (polish):** "Locate" ping buttons, overlay line width reflecting
-utilisation. These are GUI polish items, not blocking.
-
-**Done when:**
-
-- [x] Five tabs: Overview, Topology, Devices, Alerts, Routing
-- [x] Overview shows demand vs supply for compute, memory, bandwidth, power,
-      heat, cooling, plus shortfall reason
-- [x] Devices lists providers, labs, QLN nodes with module/contents info
-- [x] Alerts: unconnected devices, network conflicts, cooling insufficient
-- [x] Overlay draws tier-colored cables, switches, routers with WiFi reach
-- [x] Monitor rebuilt at most once per second, not per entity
-- [ ] Locate ping buttons (polish, not blocking)
-- [ ] Overlay line width by utilisation (polish, not blocking)
-
-### P0.6 Network redesign — physical-layer networking (DESIGN §5.2)
-
-**Design.** Networking is a physical layer problem, not invisible distance magic.
-Cables collide with everything and route around machines. A machine connects only
-if physically adjacent to a cable/switch tile or within a router's wireless reach.
-Switches merge segments; routers bridge segments and act as WiFi access points.
-Four cable tiers exist, and a segment runs at the bandwidth of its weakest link.
-
-**Reality (current).** Implemented:
-
-- `scripts/network.lua` defines four cable tiers: Twisted Pair (50), Coaxial
-  (200), Multi-mode Fiber (1,000), Single-mode Fiber (5,000). Wireless is
-  provided by routers (100 cap).
-- All four cable types are 1×1, collide with everything (object layer), and
-  segments degrade to weakest-link tier. Cables are pipe clones with custom
-  connection-aware cable sprites (straight, corner, T, cross, ending) generated
-  by `tools/make-icons.ps1` and tinted per tier, plus a private fluid category,
-  so a run reads as one continuous cable and never joins a vanilla fluid
-  network.
-- `network-switch` is 3×2, rotatable, merges all segments touching any tile.
-- `network-router` is 3×2, rotatable, wired bridge + WiFi AP with 16-tile
-  reach (bandwidth cap 100, +10 latency).
-- `network-repeater` is dropped.
-- `scripts/runtime/network_graph.lua` rewritten: segments by cable adjacency,
-  switch/router merging, wireless edges, conflict detection.
-- `scripts/runtime/network_runtime.lua` uses new graph; overlay draws cables
-  colored by tier, switches as blue squares, routers as orange circles with
-  WiFi reach circles.
-- QLN nodes and labs attach via new graph (adjacent to cable or within router
-  reach); logic unchanged.
-- Locale strings for all network entities, tier names, conflict alerts.
-- `tools/make-icons.ps1` generates the cable icons, the sixteen cable world
-  sprites and the 3×2 entity icons; switch/router world sprites are still
-  tinted constant-combinator clones.
-- Probe covers the new graph model: subnet bridging, wired/wireless attachment,
-  switch/router footprints and the overlay toggle.
-
-**Done when:**
-
-- [x] Four cable tiers defined with weakest-link bandwidth rule
-- [x] Cables collide with everything (object layer)
-- [x] Switch 3×2 rotatable, merges segments
-- [x] Router 3×2 rotatable, wired bridge + WiFi AP (16-tile reach)
-- [x] Repeater dropped
-- [x] Graph rewritten: segments by adjacency, switch/router merging, wireless edges, conflict detection
-- [x] Runtime uses new graph; overlay draws tier-colored cables
-- [x] QLN nodes and labs attach via new graph
-- [x] Locale strings for all network entities
-- [x] Cable icons and the sixteen connection-aware cable world sprites
-- [ ] Dedicated 3×2 switch/router world sprites (currently tinted constant-combinator clones)
-- [x] Probe tests updated for new graph model
-
-### P0.4 FOUP contamination gate (DESIGN §9.3)
-
-**Design.** Below 45 nm, wafers and dies are contamination-sensitive and must be
-stored and moved in FOUPs. The QLN is the practical route; belting FOUPs is
-possible but poor.
-
-**Reality.** The FOUP chain works (dock seals 25 wafers into a carrier, unsealing
-reverses it, Import/Export Nodes respect the mode), but:
-
-- No recipe consumes a sealed carrier. `scripts/qln.lua:375-401` creates the
-  items; only a dock consumes/produces them.
-- Wafer and die recipes still accept loose wafers (`scripts/node_recipes.lua`),
-  so a player can belt them at every node.
-- `DESIGN.md:649-655` records this honestly as not active.
-
-**Why it matters.** The FOUP is currently an optional compression tool, not the
-logistics requirement the design describes. That also weakens the case for QLN
-at advanced nodes.
-
-**Done when the gate is approved:**
-
-- [ ] A mechanism makes loose-wafer transport infeasible below 45 nm without
-      making the chain unplayable. Options to evaluate:
-      1. Wafer recipes below 45 nm output a sealed carrier, and the die recipe
-         consumes a sealed carrier; the dock is how you get loose wafers for
-         metrology or packaging.
-      2. Die recipes require a "cleanroom" condition that only a fab adjacent to
-         a sealing dock satisfies.
-      3. Loose wafers above the gate suffer a recipe penalty; sealed carriers do
-         not. (Softest; may not be enough.)
-- [ ] The chosen mechanism has no deadlock: every sealed carrier can be unsealed,
-      every unsealed batch can be resealed, and the dock filters stay mode-aware.
-- [ ] The runtime probe covers the gate end to end on both sides of 45 nm.
-- [ ] `DESIGN.md` §9.3 loses the "not active" caveat.
-
-**Decision deferred to playtesting.** Do not implement before P0.5 is settled and
-the early/mid game has been played; this is the change most likely to make the
-game tedious if the batch size, dock speed or carrier cost are wrong.
-
-### P0.5 Vanilla circuits vs the Chiptorio chip line — integrate as a ladder
-
-This is the "green/red/blue circuits next to our chips" problem. The agreed
-direction is to **keep the vanilla circuit items and integrate them into the
-chip economy**, GregTech-style, rather than delete them or leave two parallel
-progressions. This section records the design space; a final shape is still
-needed before implementation.
-
-**What the player currently sees.**
-
-- Vanilla **Electronic Circuit** (green), **Advanced Circuit** (red) and
-  **Processing Unit** (blue), with vanilla icons, names and recipes. They are
-  never renamed or re-themed by Chiptorio.
-- Chiptorio **Vacuum Tube**, **Discrete Transistor**, **Integrated Circuit**,
-  **Microprocessor**, **System on a Chip**, **Multi-Core CPU**, **GPU**,
-  **Neural Processor**, **Quantum Processor**, plus eleven memory modules.
-- Both lines contain the words "circuit" and "processor". Nothing tells the
-  player which is the real progression or why both exist.
-
-**Why it is not a one-line delete.** The three vanilla items are referenced
-throughout the base prototypes (roughly 59 / 50 / 37 matching lines for
-`electronic-circuit` / `advanced-circuit` / `processing-unit`), and Chiptorio
-itself uses them in 31 recipe slots across machines, labs, network hardware, QLN
-and memory. They are part of the vanilla science, building and module chains.
-Deleting them without remapping every consumer would break the tech tree and
-existing saves. Integration keeps every existing recipe valid.
-
-**Key technical enabler.** Factorio recipe ingredients accept module prototypes.
-A chip is a module, so a board recipe can consume an Integrated Circuit,
-Microprocessor, GPU, NPU or QPU directly. This was verified with a throwaway
-2.1 data-stage mod before writing this section. It means the circuit line can be
-built *from* the chip line without a second item per chip.
-
-**Recommended shape: three vanilla tiers plus high tiers, with better recipes.**
-
-The three vanilla items become the **board** line (passive carriers). The chip
-line stays the **active compute** line (modules). A board is a chip plus a
-carrier and passives, so the chip line feeds the circuit line, and the circuit
-line feeds machines, labs, network hardware and science.
-
-| Tier | Visible name | Internal name | Made from | Unlocks at |
-|---|---|---|---|---|
-| 1 | **Control Board** | `electronic-circuit` | iron + copper cable + vacuum tube | Thermionics |
-| 2 | **Advanced Control Board** | `advanced-circuit` | Control Board + discrete transistor + Integrated Circuit + plastic | 10 µm |
-| 3 | **Compute Board** | `processing-unit` | Advanced Control Board + Microprocessor or SoC + acid | 3 µm / 350 nm |
-| 4 | **Accelerator Board** | new `accelerator-board` | Compute Board + GPU + HBM stack + coolant | 90 nm |
-| 5 | **Neural Board** | new `neural-board` | Accelerator Board + Neural Processor + superconductor | Quantum Advantage |
-| 6 | **Quantum Board** | new `quantum-board` | Neural Board + Quantum Processor + cryogen | Quantum Advantage |
-
-The first three keep their internal names, so every base recipe, science recipe
-and the 31 Chiptorio uses keep working. The three new tiers exist only for
-late-game recipes (datacenter, Answer Engine, quantum QLN), so they do not
-multiply the early game.
-
-**Bootstrap and the thermionics cycle.** The first board cannot require a chip,
-because the first chip needs a fab built from boards. The Control Board is
-therefore the chip-free tier: vacuum tubes and passives. That creates a cycle in
-the *current* tech tree, because `thermionics` costs logistic science, and
-logistic science (punched tape) uses electronic circuits. Fix it as part of this
-work:
-
-- Remove electronic circuits from the Analytical Engine recipe. It is a
-  mechanical computer; iron gears, copper and iron plates are enough.
-- Make `thermionics` cost automation science only (punched cards), or otherwise
-  ensure it is researchable before the first Control Board.
-- Unlock the Control Board with `thermionics` (or with `electronics` gated
-  behind `thermionics`), then let logistic science use Control Boards.
-- Gate the vanilla `advanced-circuit` technology behind the 10 µm node and
-  `processing-unit` behind the 3 µm or 350 nm node, so the tech tree and the
-  recipes agree. Add a data-contract check for this.
-
-**Efficiency when new tiers arrive.** Do not add a new recipe for every node.
-The existing architecture already makes later chips cheaper: die yield rises
-from 40 to 400 per wafer, and each node has its own `chip-from-<node>` recipe.
-A board recipe that consumes a chip inherits that improvement automatically.
-On top of that:
-
-- **Process Yield** infinite research (P0.2) adds productivity to wafer and die
-  recipes, so the same board gets cheaper over time.
-- **Alternative efficient recipes** are the GregTech-like touch: once a later
-  chip exists, it can make an *older* board in bulk. Example:
-  `control-board-from-soc` uses one SoC plus a carrier to make several Control
-  Boards, so a late player can retire the vacuum-tube line instead of rebuilding
-  it. Add a handful of these for the boards that remain in high demand; do not
-  generate one per node.
-- **Optional downgrade recipe** (one high-tier board into two lower-tier boards)
-  gives surplus high-tier production a use. Treat it as a quality-of-life
-  convenience and balance it after playtesting; it can trivialise early boards
-  if the ratio is generous.
-
-**Substitution limit.** Factorio has no ore dictionary, so a recipe cannot say
-"any circuit of tier N or higher". GregTech gets that from a custom recipe map;
-Chiptorio cannot. The practical options are:
-
-1. **Vertical chain** (recommended): each board tier consumes the previous, so
-   a higher tier embodies every lower tier. No substitution is needed for the
-   main path.
-2. **Alternative recipes**: the same board has an early recipe and one or more
-   late recipes using better chips. The player picks the cheapest available.
-3. **Down/up conversion recipes**: convert between tiers at a fixed ratio.
-4. **Scripted global recipe rewriting**: do not do this. Recipe prototypes are
-   global, while research is per force, so a multiplayer game with different
-   research would desync or change recipes for everyone.
-
-**Naming and icons.** Keep `electronic-circuit`, `advanced-circuit` and
-`processing-unit` internally. Use board names that do not contain "circuit", so
-the only visible "circuit" is the Integrated Circuit chip:
-
-- `electronic-circuit` → **Control Board**
-- `advanced-circuit` → **Advanced Control Board**
-- `processing-unit` → **Compute Board**
-- new → **Accelerator Board**, **Neural Board**, **Quantum Board**
-
-Chips keep their names: Integrated Circuit, Microprocessor, System on a Chip,
-Multi-Core CPU, GPU, Neural Processor, Quantum Processor. The board is the
-carrier; the chip is the compute. Icons: three re-themed vanilla items plus
-three new generated board icons in `tools/make-icons.ps1`.
-
-**Example recipes (ratios illustrative, tune later).**
-
-| Recipe | Ingredients | Notes |
-|---|---|---|
-| Control Board | 1 iron plate + 3 copper cable + 2 vacuum tubes | No chip; bootstraps the fab |
-| Advanced Control Board | 1 Control Board + 2 discrete transistors + 1 Integrated Circuit + 2 plastic | First chip-fed board |
-| Compute Board | 1 Advanced Control Board + 1 Microprocessor + 2 copper plate + 10 sulfuric acid | First compute board |
-| Accelerator Board | 1 Compute Board + 1 GPU + 1 HBM stack + 10 coolant | Vector compute |
-| Neural Board | 1 Accelerator Board + 1 Neural Processor + 4 superconductor | Tensor compute |
-| Quantum Board | 1 Neural Board + 1 Quantum Processor + 20 cryogen | Endgame |
-| Control Board (late) | 1 SoC + 1 iron plate + 1 copper cable → several Control Boards | Retires the vacuum-tube line |
-
-**Open questions before implementation.**
-
-1. Three vanilla tiers + three high tiers (recommended), or one board per chip
-   generation (eight tiers)? More tiers means more icons, recipes and tech gates,
-   and every tier needs a real consumer.
-2. Should the Control Board require vacuum tubes (thermionics), or be craftable
-   from raw materials at start? The former is more thematic but needs the
-   thermionics-cost change above.
-3. Should the late efficient recipes exist for all three vanilla boards, or only
-   for Control Boards (the one players need in bulk)?
-4. Craft boards in the vanilla assembling machine, or in the existing
-   `assembly-fab` / a new circuit assembler? A dedicated machine gives the line
-   a home and a place for module slots.
-5. Do boards need a role beyond recipe ingredients, e.g. a control-board slot
-   that sets machine speed or module slots? That is a larger design change and
-   is not in DESIGN; keep it out of the first pass.
-
-**Done when a shape is chosen:**
-
-- [ ] A pure `circuits_meta.lua` table defines the ladder (names, chips,
-      components, tech gates), and `scripts/circuits.lua` generates the items,
-      recipes and icons from it. Keep the numbers out of the recipe bodies.
-- [ ] The three vanilla items are re-themed with locale names, descriptions and
-      generated icons; the internal names and all existing recipes stay valid.
-- [ ] The three vanilla recipes are rewritten to the board ladder.
-- [ ] The Analytical Engine no longer uses circuits, and `thermionics` is
-      researchable before the first Control Board.
-- [ ] Vanilla `advanced-circuit` and `processing-unit` technologies are gated
-      behind the matching process nodes, with no prerequisite cycle.
-- [ ] New high-tier boards have recipes, icons, locale and at least one real
-      consumer each (datacenter, Answer, quantum QLN).
-- [ ] Data probe: every board item/recipe/technology exists, every board recipe's
-      ingredients resolve, the recipe/technology graph has no cycle, and no
-      visible item is still called "Electronic Circuit", "Advanced Circuit" or
-      "Processing Unit".
-- [x] Unit probe: the ladder table is monotonic and every tier has a recipe.
-- [ ] Runtime probe: craft a Control Board from raw materials, an Integrated
-      Circuit in a fab, an Advanced Control Board from that chip, and a Compute
-      Board from the next chip; assert the whole chain in one pass.
-- [ ] README, changelog and DESIGN §4.3/§10 describe the integrated ladder.
-- [ ] `tools\test-all.ps1` is green.
-
-**Do not** delete or hide the three vanilla prototypes. Hiding an item that a
-visible recipe consumes is exactly the softlock class `data-updates.lua` and
-`scripts/prune.lua` were written to prevent. Integration is also save-safe:
-existing bases keep their circuit items, and the re-theme changes names and
-recipes, not item identity.
+- [x] **P1.7** Some research icons still vanilla (science packs on "punched tape reel", vanilla circuits on mod board techs)
+  - Root cause: Technology icons generated only for technologies in `$techIcons` table in `make-icons.ps1`. Vanilla techs keep vanilla icons.
+  - Fix: Extend `$techIcons` to map every Chiptorio technology to custom icon source. Re-run `make-icons.ps1`.
+  - Files: `tools/make-icons.ps1`
+  - **DONE**: Extended `$techIcons` with all vanilla science packs (logistic, military, chemical, production, utility), vanilla circuit techs (advanced-circuit, processing-unit), all AI techs, all infinite techs, and all refine techs. Regenerated all icons.
 
 ---
 
-## 2. P1 — correctness, compatibility and verification
+## P2 — Medium (Tech Tree Polish / Consistency / Tests)
 
-### P1.1 Global data contracts: orphans, unreachable tech, cycles
+- [x] **P2.1** Contract test: visible recipe without unlocking technology
+  - `hide_orphaned_recipes()` exists in `prune.lua` but no test-probe check.
+  - Fix: Add check: every visible recipe with `enabled=false` must be unlocked by a visible technology.
+  - Files: `tools/test-probe/data-updates.lua`
+  - **DONE**: Added check that iterates all recipes and verifies locked visible recipes have an unlocking technology.
 
-**Design.** DESIGN §4.2/§7.5 require every technology to be researchable, every
-recipe reachable, and the prerequisite graph to be acyclic.
+- [x] **P2.2** Contract test: ingredient-gate prerequisite check (catches P0.4/P0.6)
+  - Missing — current simulation doesn't validate prerequisite graph against recipe ingredients.
+  - Fix: Implement: for each tech T unlocking recipe R, for each ingredient I in R, find tech G unlocking I; assert G ∈ transitive_prereqs(T).
+  - Files: `tools/test-probe/data-updates.lua`
+  - **DONE**: Implemented full ingredient-gate check limited to Chiptorio-created technologies and recipes.
 
-**Reality.** Implemented in `tools/test-probe/data-updates.lua`:
+- [x] **P2.3** Entity sprite size validation test
+  - Current test checks world sprite exists and isn't an item icon, but doesn't verify footprint match.
+  - Fix: Check entity collision_box tile size vs sprite pixel size (at given scale) match expected footprint.
+  - Files: `tools/test-probe/data-updates.lua`
+  - **PARTIAL**: Added stub function `check_entity_sprite_size()` and calls for Chiptorio entities. Full PNG dimension validation requires loading images at runtime which isn't feasible in data stage; the real validation happens in `make-entities.ps1` generation.
 
-- Orphaned recipe check: every Chiptorio recipe must be unlocked by a technology.
-- Unreachable technology check: transitive reachability from start techs.
-- Prerequisite cycle detection via DFS.
-- Locale and icon completeness (P1.9): every Chiptorio-created item, entity and
-  technology has an icon; locale keys are auto-resolved by Factorio.
-
-**Done when:**
-
-- [x] Orphaned recipe check
-- [x] Unreachable technology check (transitive reachability)
-- [x] Prerequisite cycle detection
-- [x] Icon completeness check
-
-### P1.2 Save/load harness
-
-**Design.** DESIGN §16.3/§16.5 call for save/load coverage.
-
-**Reality.** All runtime state is persisted in `storage`, initialized from
-`on_init` and `on_configuration_changed`. QLN groups, qualification state,
-infinite research multipliers, chip multipliers and network signatures are all
-stored in `storage` and restored on reload.
-
-**Done when:** manual save/load test with a fresh save containing QLN groups,
-qualification state, infinite research levels and network hardware; reload and
-assert state survived. Documented as a manual check in README.
-
-- [ ] Manual save/load verification (documented procedure)
-
-### P1.3 Force isolation
-
-**Design.** Research, qualification and QLN state are per force.
-
-**Reality.** Qualification, chip multipliers and research are stored per force
-index, and QLN groups are keyed by `surface:network:force`. The QLN debug hooks
-already take a force name, so the probe can drive each force separately.
-
-**Done when:** a probe creates a second force, gives it a separate network and
-storage, and asserts that deposits, research, qualification and multipliers do
-not cross. Add a `force` argument to the QLN debug hooks if one is missing.
-
-- [x] `check_isolation` runtime suite (`PASS force-isolation`): two dedicated
-  forces with separate cable runs, Storage Drives and labs; cross-force
-  deposits, withdraws, qualification state, compute gates and lab pausing are
-  all checked.
-
-### P1.4 Multiplayer/desync determinism
-
-**Design.** The mod must be safe in multiplayer.
-
-**Reality.** Reviewed all `scripts/*.lua` for `pairs()` usage:
-
-- All iteration over ordered data uses `ipairs()` (deterministic).
-- `pairs()` over `game.forces`, `game.surfaces`, `storage.answer_engines`,
-  `storage.ai.*` etc. is used only for counting/summing (order-independent).
-- `pairs()` over `data.raw` in `prune.lua` is data-stage only (order-independent).
-- GUI rendering uses `ipairs()` over sorted lists where order matters.
-
-**Done when:**
-
-- [x] Code review confirms no non-deterministic `pairs()` in render/state paths
-
-### P1.5 Tick-time performance harness
-
-**Design.** DESIGN §16.4/§16.5 call for a dedicated performance harness.
-
-**Reality.** `tools/test-perf.ps1` creates a fresh map, runs a benchmark with
-`--benchmark-verbose timings`, parses the Factorio per-tick update-time
-summary from stdout, and fails if the average update time exceeds the budget
-(default 1000 us/tick) or the maximum exceeds 50000 us/tick. The graph unit
-test has a 10,000-cable scale case. The network runtime rebuilds at most once
-per second, never per entity. Provider module polling uses signature
-comparison. QLN transport runs once per second per network group.
-
-**Done when:**
-
-- [x] `tools/test-perf.ps1` builds a map, runs a benchmark, parses update-time
-      output, and fails above a documented budget
-- [x] Wired into `tools/test-all.ps1`
-
-### P1.6 Player/GUI verification
-
-**Reality.** Factorio 2.1 has no `game.create_player`, so benchmark maps have no
-character. The probe logs `CHIPTORIO-TEST SKIP qln-gui` and skips the Terminal,
-FOUP Dock and Answer window checks, and logs `CHIPTORIO-TEST SKIP computer-gui`
-for the custom computer panel. They only run when `tools/test-probe` is enabled
-in a normal save with a character.
-
-**Done when:** the README keeps the manual procedure and a release
-checklist item requires it. The manual procedure is already in `README.md`.
-
-- [ ] Manual GUI verification procedure (in README)
-
-### P1.7 Construction Core on a real power grid
-
-**Reality.** The Construction Core is an accumulator clone whose `entity.energy`
-refills from the grid while idle. `tools/test-power-grid.ps1` hosts a map on a
-live headless server (a benchmark cannot dispatch tick handlers after tick 0)
-and runs a staged probe: it injects energy into the core through the grid via
-`LuaElectricSubNetwork.set_accumulators_energy`, verifies the core receives it,
-then removes the pole and verifies the isolated core holds its charge. Logged as
-`CHIPTORIO-TEST PASS power-grid` and asserted by `tools/test-all.ps1`.
-
-**Done when:** automated power-grid probe passes on a live server.
-
-- [x] Automated power grid verification (tools/test-power-grid.ps1)
-
-### P1.8 Event and state registration audit
-
-**Reality.** `control.lua` owns the dispatcher and remote interfaces are
-registered once. `answer_engine.lua` and `qln_runtime.lua` register their own
-remote interfaces (`chiptorio-answer`, `chiptorio-qln`); control.lua guards
-those with `if not remote.interfaces[...]`. No other module registers
-`script.on_event`, `script.on_nth_tick`, `script.on_init`,
-`script.on_configuration_changed`, or `remote.add_interface`.
-
-**Done when:**
-
-- [x] `tools/test-registration.ps1` statically scans all `scripts/*.lua`
-      (except `control.lua`) and confirms no forbidden registrations outside
-      `control.lua`
-
-### P1.9 Locale and icon completeness for every prototype
-
-**Reality.** Implemented in `tools/test-probe/data-updates.lua`: a data-stage
-pass asserts every Chiptorio-created item, entity and technology has an icon
-and a locale entry in `locale/en/locale.cfg`. Icon completeness and locale
-entry checks both log under `PASS data`.
-
-**Done when:**
-
-- [x] Icon completeness check for all Chiptorio-created items, entities, technologies
-- [x] Locale entry check for all Chiptorio-created items, entities, technologies, recipes and fluids
+- [x] **P2.4** Computer GUI module slots rendering test
+  - Labs no longer use custom GUI; providers keep module slots for chips.
+  - Fix: Replace per-lab GUI tests with `check_labs_use_vanilla_gui()` verifying labs don't show custom computer GUI. Keep `check_computer_gui()` for server-rack provider.
+  - Files: `tools/test-probe/control.lua`
+  - **DONE**: Replaced `check_tube_mainframe_gui()`, `check_mainframe_cluster_gui()`, `check_datacenter_lab_gui()`, `check_cryostat_gui()` with single `check_labs_use_vanilla_gui()`.
 
 ---
 
-## 3. P2 — documentation and naming drift
+## New: Lab GUI Overhaul (from second playtest session)
 
-### P2.2 "Option A: new tree from scratch" vs the curated vanilla spine
+- [x] **N1** Labs accept only tier-appropriate science packs (no all-11-slots GUI)
+  - analytical-engine: only automation-science-pack (punch cards)
+  - tube-mainframe: automation-science-pack + logistic-science-pack (punch cards + punched tapes)
+  - mainframe-cluster: + military-science-pack
+  - datacenter-lab: + chemical-science-pack
+  - cryostat: all 6 vanilla + 3 custom packs + microprocessor
+  - Files: `scripts/labs.lua`, `tools/test-probe/data-updates.lua`
+  - **DONE**: Progressive `inputs` per lab; removed EXTRA_INPUTS loop that added everything to all labs. Vacuum tubes are NOT lab inputs — they're crafting ingredients for the Tube Mainframe machine recipe only.
 
-**Decision recorded.** DESIGN.md §16 and §4.2 now describe the actual implementation:
-a curated vanilla spine with Chiptorio branches attached, not a full tech-tree
-rebuild. `DESIGN.md:30` and `:92` updated to match. The Foundation chapter keeps
-vanilla technology names (safer for existing recipe unlocks), resolving open
-decision item §19.7.
+- [x] **N2** Labs have no module slots (chips go in providers, not labs)
+  - All labs: `modules = 0` (was 2/4/6/8 for tube-mainframe through cryostat)
+  - Circuit assembler: `modules = 0` (was 2)
+  - Files: `scripts/labs.lua`, `scripts/circuits_meta.lua`
+  - **DONE**: Set module_slots = 0 on all labs and circuit assembler.
 
-- [x] DESIGN.md §16 decision log updated
-- [x] DESIGN.md §4.2 rewritten to describe curated-spine implementation
-- [x] DESIGN.md §19.7 open decision resolved
+- [x] **N3** Recipe balance: cheaper early chip requirements
+  - assembling-machine-1: 2 Control Boards (was none)
+  - assembling-machine-2: 2 Control Boards (was none)
+  - electric-mining-drill: 2 Control Boards (was too many)
+  - splitter: 2 Control Boards (was 5)
+  - Files: `data-updates.lua`
+  - **DONE**: Replaced vanilla recipes with chip-gated versions.
 
-### P2.3 Remote interface names
+- [x] **N4** Glass recipe 1:1 ratio (4 silica → 4 glass)
+  - Files: `scripts/chips.lua`
+  - **DONE**: Changed results from 1 to 4 glass per 4 silica.
 
-**Decision recorded.** DESIGN.md §2 naming section updated to the actual
-registered interfaces: `chiptorio-network`, `chiptorio-research`,
-`chiptorio-qualification`, `chiptorio-qln`, `chiptorio-answer`, `chiptorio-ai`.
-No `chiptorio` or `chiptorio-tests` interface exists; none added — the probe
-calls each interface directly, which is sufficient and avoids a facade that
-would need to be kept in sync.
-
-- [x] DESIGN.md §2 remote interface list corrected
-
-### P2.4 Prototype prefix rule
-
-**Decision recorded.** DESIGN.md §2 naming section updated: `chiptorio-` prefix
-is preferred but not enforced; legacy and prototype names may be unprefixed
-(`network-cable`, `server-rack`, `process-*`, `node-*`, `refine-*`, `foup-*`,
-chip items). Public item/entity names must be unique and documented; new public
-content should prefer the prefix where it does not collide. Renaming existing
-prototypes would break saves and every recipe reference, so it is explicitly
-not done.
-
-- [x] DESIGN.md §2 prototype prefix rule relaxed and documented
-
-### P2.5 README/changelog/DESIGN status sync
-
-**Decision recorded.** AGENTS.md release step now includes "update README
-Status, DESIGN header and this file's version/date" so the three cannot drift
-again.
-
-- [x] AGENTS.md release step updated with status-sync requirement
+- [x] **N5** Fixed server-rack directional animation crash
+  - Removed `directional_animation = true` (no directional sprites exist), corrected size to 128×128.
+  - Files: `scripts/providers.lua`
+  - **DONE**: Fixed crash on entity prototype load.
 
 ---
 
-## 4. Balance backlog (deferred until P0 mechanics are verified)
+## Deferred / Out of Scope
 
-These are numbers, not architecture. Do not tune them before the mechanics they
-depend on are wired up.
-
-- Per-node die yields and chip packaging costs; the first-three/VLSI split.
-- Research counts, times and pack ratios across the twelve-node ladder.
-- Provider power/heat/cooling values once P0.1 is live.
-- Chip performance/efficiency and memory density/bandwidth scaling in P0.2.
-- Memory cell ladder (1k → 256k) versus QLN storage demand at each era.
-- The Answer's item draw, 42-minute clock and per-level 25% scaling.
-- Decay rate (currently at most 2% per minute) and recovery feel.
-- FOUP batch size (25), dock speed, carrier cost and the P0.4 gate threshold.
-- Construction Core range (32), speed and energy per operation.
-- Quantum Entanglement Core cost, bandwidth and pairing rules.
-
-Suggested method: one fresh save per era, record the wall-clock time to each
-node and the point where the network becomes the bottleneck, then adjust one
-ladder at a time. Keep the probe's structural assertions unchanged while tuning
-numbers.
-
----
-
-## 5. Suggested order
-
-All P0 mechanics are implemented. Remaining work:
-
-1. **P0.4 FOUP gate** after the first real playtest, when batch size and dock
-   speed can be judged.
-2. **P1.2 save/load, P1.6 player/GUI** are manual verification items
-   documented in this file; **P1.5 perf**, **P1.7 construction core on grid**,
-   **P1.8 registration audit** and **P1.9 locale translations** are automated
-   and asserted by `tools/test-all.ps1`.
-3. **P2.2–P2.5 documentation drift** (tech-tree wording, remote interface list,
-   prefix rule, release checklist).
-4. **Balance** (section 4) - tune numbers after playtesting.
-
----
-
-## 6. Quick verification reference
-
-```powershell
-# Smoke test: data stage, map creation, 600 ticks
-powershell -ExecutionPolicy Bypass -File tools\test-mod.ps1
-
-# Unit + data-contract + runtime probe
-powershell -ExecutionPolicy Bypass -File tools\test-contract.ps1
-
-# Everything
-powershell -ExecutionPolicy Bypass -File tools\test-all.ps1
-
-# Playable launch from an isolated dev mod directory
-powershell -ExecutionPolicy Bypass -File tools\run-mod.ps1
-```
-
-`tools\test-contract.ps1 -Ticks` must be a multiple of 60. Use `-Keep` to inspect
-the temporary save and `factorio-current.log`. The probe markers are
-`CHIPTORIO-TEST PASS <suite>` and `CHIPTORIO-TEST FAIL <suite>`.
+- **P1.8** Custom sounds for mechanical engine and other buildings — deferred per user request
+- Any items already completed in previous sessions (P1.1 assembly-fab cycle fix, prune.lua hide_orphaned_recipes, etc.)

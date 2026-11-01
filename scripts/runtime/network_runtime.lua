@@ -36,7 +36,8 @@ local ANSWER = "answer-engine"
 local AI_TRAINING = "training-cluster"
 local AI_INFERENCE = "inference-lab"
 
-local PROVIDER_NAMES = { "server-rack", "memory-bank", "datacenter" }
+local PROVIDER_NAMES = { "memory-bank", "datacenter" }
+for _, name in ipairs(meta.RACK_VARIANTS) do PROVIDER_NAMES[#PROVIDER_NAMES + 1] = name end
 
 local LAB_NAMES = {}
 for name in pairs(meta.LAB_DEMAND) do
@@ -269,7 +270,7 @@ end
 -- first `computer_slots` computers and `memory_slots` memory modules count;
 -- extra modules are stored but ignored, so the physical slot count is the limit.
 local function provider_descriptor(entity)
-  local profile = meta.PROVIDERS[entity.name]
+  local profile = meta.PROVIDERS[meta.provider_name(entity.name)]
   if not profile then
     return nil
   end
@@ -1266,6 +1267,36 @@ local TAB_RENDERERS = {
   render_routing,
 }
 
+local function tab_count(tabbed)
+  local tabs = tabbed.tabs
+  return tabs and #tabs or 0
+end
+
+local function tab_content(tabbed, index)
+  local tabs = tabbed.tabs
+  local entry = tabs and tabs[index]
+  local content = entry and entry.content
+  if content and content.valid then
+    return content
+  end
+  return nil
+end
+
+-- A tabbed pane shows nothing until each tab is paired with its content via
+-- add_tab. The content of the monitor tabs is a scroll pane, which the
+-- renderers fill.
+local function add_monitor_tabs(tabbed)
+  for index, caption in ipairs(TAB_CAPTIONS) do
+    local tab = tabbed.add({ type = "tab", caption = caption })
+    local pane = tabbed.add({
+      type = "scroll-pane",
+      name = MONITOR_GUI .. "-pane-" .. index,
+      direction = "vertical",
+    })
+    tabbed.add_tab(tab, pane)
+  end
+end
+
 local function rebuild_monitor(player)
   local frame = player.gui.screen[MONITOR_GUI]
   if not (frame and frame.valid) then
@@ -1281,52 +1312,37 @@ local function rebuild_monitor(player)
     return
   end
 
-  -- Get active tab from the tabbed pane (Factorio manages this on clicks)
-  local active_tab = tabbed.active_tab_index or 1
-  active_tab = math.min(math.max(active_tab, 1), #TAB_CAPTIONS)
-
-  -- Rebuild tabs if needed (network count changed)
-  local current_count = #tabbed.tabs
-  local needed_count = #graph.networks > 0 and #TAB_CAPTIONS or 0
-
-  if current_count ~= needed_count then
+  -- Repair a pane left without its five tabs.
+  if tab_count(tabbed) ~= #TAB_CAPTIONS then
     tabbed.clear()
-    if needed_count > 0 then
-      for _, caption in ipairs(TAB_CAPTIONS) do
-        tabbed.add({ type = "tab", caption = caption })
-      end
-    end
-    active_tab = 1
+    add_monitor_tabs(tabbed)
+    tabbed.selected_tab_index = 1
   end
 
-  if needed_count == 0 then
-    -- No networks: show empty state on the first tab
-    local pane = tabbed[1]
-    if pane and pane.valid then
-      pane.clear()
-      pane.add({ type = "label", caption = { "chiptorio.network-empty" } })
-    end
-    tabbed.active_tab_index = 1
-    return
-  end
-
-  -- Set active tab
-  tabbed.active_tab_index = active_tab
+  -- Factorio manages the selected index on clicks; clamp it in case the tab
+  -- set was rebuilt or a save carries a stale value.
+  local active_tab = tabbed.selected_tab_index or 1
+  active_tab = math.min(math.max(active_tab, 1), #TAB_CAPTIONS)
+  tabbed.selected_tab_index = active_tab
 
   -- Get the active tab's content pane
-  local pane = tabbed[active_tab]
-  if not (pane and pane.valid) then
+  local pane = tab_content(tabbed, active_tab)
+  if not pane then
     return
   end
 
   -- Clear and render the active tab
   pane.clear()
-  local renderer = TAB_RENDERERS[active_tab]
-  if renderer then
-    if active_tab == TAB_OVERVIEW then
-      renderer(pane, graph, player)
-    else
-      renderer(pane, graph)
+  if #graph.networks == 0 then
+    pane.add({ type = "label", caption = { "chiptorio.network-empty" } })
+  else
+    local renderer = TAB_RENDERERS[active_tab]
+    if renderer then
+      if active_tab == TAB_OVERVIEW then
+        renderer(pane, graph, player)
+      else
+        renderer(pane, graph)
+      end
     end
   end
 
@@ -1374,10 +1390,7 @@ local function create_monitor(player)
     type = "tabbed-pane",
     name = MONITOR_GUI .. "-tabs",
   })
-  for _, caption in ipairs(TAB_CAPTIONS) do
-    local tab = tabbed.add({ type = "tab", caption = caption })
-    tab.add({ type = "scroll-pane", name = MONITOR_GUI .. "-pane", direction = "vertical" })
-  end
+  add_monitor_tabs(tabbed)
 
   -- Store initial tab state
   storage.network.monitors[player.index] = { tab = 1 }
@@ -1391,10 +1404,16 @@ local function create_monitor(player)
   rebuild_monitor(player)
 end
 
-function M.open_monitor(player)
-  if player then
-    create_monitor(player)
+--- Open the monitor for a player index. `on_lua_shortcut` cannot be raised
+--- from script, so the shortcut handler and the remote debug hook share this
+--- entry point.
+function M.open_monitor(player_index)
+  local player = game.players[player_index]
+  if not player then
+    return false
   end
+  create_monitor(player)
+  return true
 end
 
 function M.on_gui_opened(event)
@@ -1444,18 +1463,23 @@ function M.on_gui_click(event)
     rebuild_monitor(player)
   elseif element.name == MONITOR_GUI .. "-close" then
     destroy_monitor(player)
-  elseif element.name == MONITOR_GUI .. "-tabs" then
-    -- User switched tabs; rebuild to render the newly active tab's content.
+  end
+end
+
+function M.on_gui_selected_tab_changed(event)
+  local player = game.players[event.player_index]
+  if not player then
+    return
+  end
+  local element = event.element
+  if element and element.valid and element.name == MONITOR_GUI .. "-tabs" then
     rebuild_monitor(player)
   end
 end
 
 function M.on_lua_shortcut(event)
   if event.prototype_name == "chiptorio-network-monitor" then
-    local player = game.players[event.player_index]
-    if player then
-      open_monitor(player)
-    end
+    M.open_monitor(event.player_index)
   end
 end
 

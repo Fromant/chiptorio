@@ -40,17 +40,18 @@ local techs = {
   {
     name = "thermionics",
     order = "a[chiptorio]-b",
-    count = 40,
-    time = 15,
+    count = 25,
+    time = 10,
     cost = {
       ["automation-science-pack"] = 1,
     },
-    prerequisites = { "electromechanics" },
+    prerequisites = { "electromechanics", "steel-processing" },
     effects = {
       "silica",
       "glass",
       "vacuum-tube",
       "tube-mainframe",
+      "inserter",
     },
   },
   {
@@ -146,9 +147,11 @@ local techs = {
     },
     prerequisites = { "microarchitecture" },
     effects = {
-      -- The internet is also the first compute tier: the packaging machine,
-      -- the first provider and the first memory module all arrive together.
-      "assembly-fab",
+      -- The internet is the first compute tier: the first provider and the
+      -- first memory module arrive together. The Assembly Fab is not here:
+      -- production science packs are crafted in it, and the technology tree
+      -- needs production packs before it reaches the internet. It is unlocked
+      -- with the first process node instead, where the first chip exists.
       "server-rack",
       "memory-bank",
       "sram-module",
@@ -574,6 +577,10 @@ local NODE_TECHS = {
     count = 150,
     time = 30,
     prerequisites = { "photolithography" },
+    -- The Assembly Fab packages the first die. It has to arrive here, not at
+    -- the internet: production science packs are assembled in it, and
+    -- process-3um costs those packs, while the internet itself is behind them.
+    extra_effects = { "assembly-fab" },
   },
   ["3um"] = {
     order = "a[chiptorio]-g1",

@@ -12,6 +12,11 @@
 local M = require("scripts.util")
 local meta = require("scripts.research_meta")
 
+data:extend({
+  { type="custom-input", name="chiptorio-rack-rotate", key_sequence="", linked_game_control="rotate", consuming="none" },
+  { type="custom-input", name="chiptorio-rack-rotate-reverse", key_sequence="", linked_game_control="reverse-rotate", consuming="none" },
+})
+
 local function make_provider(spec)
   local base = data.raw.lab["lab"]
   if not base then
@@ -52,7 +57,51 @@ local function make_provider(spec)
   entity.allowed_effects = nil
 
   M.set_entity_icon(entity, spec.name)
-  if spec.custom_animation then
+  if spec.blender_sprite then
+    local art = require("graphics.entity.server-rack.sprite-def")
+    for direction, graphic in pairs(art) do
+      local animation = M.copy(graphic.layers[1])
+      animation.type = "animation"
+      animation.name = "chiptorio-rack-" .. direction
+      data:extend({ animation })
+    end
+    local function sprite(direction)
+      assert(art[direction], "chiptorio: missing generated rack animation: " .. direction)
+      local still = M.copy(art[direction])
+      -- A provider never researches. Its lab animation clock can remain stopped;
+      -- the decorative loop is played independently by rack_runtime instead.
+      still.layers[1].frame_count = 1
+      for _, layer in ipairs(still.layers) do layer.repeat_count = 1 end
+      return still
+    end
+    entity.on_animation = sprite("north")
+    entity.off_animation = M.copy(entity.on_animation)
+    entity.collision_box = { { -1.4, -1.4 }, { 1.4, 1.4 } }
+    entity.selection_box = { { -1.5, -1.5 }, { 1.5, 1.5 } }
+    entity.drawing_box_vertical_extension = 2.5
+    entity.tile_width = 3
+    entity.tile_height = 3
+    for i, direction in ipairs({ "east", "south", "west" }) do
+      local variant = M.copy(entity)
+      variant.name = "server-rack-" .. direction
+      variant.localised_name = { "entity-name.server-rack" }
+      variant.localised_description = { "entity-description.server-rack" }
+      variant.hidden = true
+      variant.hidden_in_factoriopedia = true
+      variant.on_animation = sprite(direction)
+      variant.off_animation = M.copy(variant.on_animation)
+      data:extend({ variant })
+      local variant_item = M.copy(data.raw.item.lab)
+      variant_item.name = variant.name
+      variant_item.localised_name = { "item-name.server-rack" }
+      variant_item.place_result = variant.name
+      variant_item.hidden = true
+      variant_item.hidden_in_factoriopedia = true
+      variant_item.subgroup = "chiptorio-providers"
+      M.set_icon(variant_item, "server-rack")
+      data:extend({ variant_item })
+    end
+  elseif spec.custom_animation then
     M.set_custom_animation(entity, spec.custom_animation or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
   elseif spec.tint then
     M.tint_animation(entity.on_animation, spec.tint)
@@ -85,10 +134,7 @@ make_provider({
   name = "server-rack",
   order = "a[server-rack]",
   craft_time = 12,
-  custom_animation = "server-rack",
-  size_w = 128,
-  size_h = 128,
-  scale = 0.5,
+  blender_sprite = true,
   ingredients = {
     M.item("steel-plate", 20),
     M.item("electronic-circuit", 10),   -- Control Board

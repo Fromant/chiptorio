@@ -219,7 +219,24 @@ local function check_network()
       check(player.gui.screen["chiptorio-network-monitor"], "monitor window did not open")
       player.opened = nil
       check(not player.gui.screen["chiptorio-network-monitor"], "monitor window did not close")
+      -- The lua shortcut cannot be raised from script, so exercise its
+      -- player-index entry point through the remote hook. This is the path
+      -- that crashed when the handler called a non-existent global.
+      local shortcut_ok, shortcut_err = pcall(function()
+        check(remote.call("chiptorio-network", "monitor", player.index) == true, "monitor shortcut returned false")
+        check(player.gui.screen["chiptorio-network-monitor"], "monitor window did not open from shortcut")
+      end)
+      check(shortcut_ok, "monitor shortcut failed: " .. tostring(shortcut_err))
+      player.opened = nil
+      check(not player.gui.screen["chiptorio-network-monitor"], "monitor window did not close after shortcut")
     end
+    -- `on_lua_shortcut` cannot be raised from script, so on a playerless map
+    -- only the shared player-index entry point is covered. It must return
+    -- false instead of erroring when no player exists.
+    check(
+      remote.call("chiptorio-network", "monitor", 1) == false,
+      "monitor with no player did not return false"
+    )
     -- The monitor has to go even without a player, or it stays on the map as
     -- an unconnected device and pollutes every later topology count.
     raise(defines.events.script_raised_destroy, monitor)
@@ -1765,6 +1782,321 @@ local function check_computer_gui()
   destroy_all(created)
 end
 
+-- Test that labs use vanilla GUI (no custom computer GUI with module slots).
+-- Labs accept science packs via vanilla lab input slots, not modules.
+local function check_labs_use_vanilla_gui()
+  local player = probe_player()
+  if not player then
+    log("CHIPTORIO-TEST SKIP lab-vanilla-gui: the benchmark map has no player")
+    return
+  end
+
+  local surface = game.surfaces[1]
+  local force = player.force
+  local created = {}
+  clear_area(surface, { { 146, 64 }, { 160, 72 } })
+
+  for _, lab_name in ipairs({ "tube-mainframe", "mainframe-cluster", "datacenter-lab", "cryostat" }) do
+    local lab = place(surface, force, created, lab_name, 151.5, 67.5)
+    if not lab then
+      destroy_all(created)
+      return
+    end
+    raise_built(created)
+
+    local raised, err = pcall(function()
+      script.raise_event(defines.events.on_gui_opened, {
+        player_index = player.index,
+        entity = lab,
+      })
+    end)
+    if not raised then
+      log("CHIPTORIO-TEST SKIP lab-vanilla-gui: on_gui_opened cannot be raised: " .. tostring(err))
+      destroy_all(created)
+      return
+    end
+
+    -- Labs must NOT show the custom computer GUI
+    local custom_frame = player.gui.screen["chiptorio-computer-gui"]
+    check(not (custom_frame and custom_frame.valid),
+      lab_name .. " must not show custom computer GUI (uses vanilla lab GUI)")
+
+    -- Close any GUI that opened
+    player.opened = nil
+    destroy_all(created)
+    created = {}
+    clear_area(surface, { { 146, 64 }, { 160, 72 } })
+  end
+end
+
+-- Test Network Monitor GUI
+local function check_network_monitor_gui()
+  local player = probe_player()
+  if not player then
+    log("CHIPTORIO-TEST SKIP network-monitor-gui: the benchmark map has no player")
+    return
+  end
+
+  local surface = game.surfaces[1]
+  local force = player.force
+  local created = {}
+  clear_area(surface, { { 146, 64 }, { 160, 72 } })
+  local monitor = place(surface, force, created, "network-monitor", 151.5, 67.5)
+  if not monitor then
+    destroy_all(created)
+    return
+  end
+  raise_built(created)
+
+  local raised, err = pcall(function()
+    script.raise_event(defines.events.on_gui_opened, {
+      player_index = player.index,
+      entity = monitor,
+    })
+  end)
+  if not raised then
+    log("CHIPTORIO-TEST SKIP network-monitor-gui: on_gui_opened cannot be raised: " .. tostring(err))
+    destroy_all(created)
+    return
+  end
+
+  local frame = player.gui.screen["chiptorio-network-monitor"]
+  check(frame and frame.valid, "the network monitor GUI did not open")
+  if not (frame and frame.valid) then
+    destroy_all(created)
+    return
+  end
+
+  -- Check for expected sections
+  local body = find_gui(frame, "chiptorio-network-monitor-body")
+  check(body, "the network monitor GUI has no body")
+
+  local found_networks = false
+  local function find_networks_label(gui_element)
+    if not gui_element or not gui_element.valid then return end
+    if gui_element.type == "label" and gui_element.caption then
+      if string.find(gui_element.caption, "Networks", 1, true) then
+        found_networks = true
+        return
+      end
+    end
+    for _, child in pairs(gui_element.children or {}) do
+      find_networks_label(child)
+    end
+  end
+  find_networks_label(body)
+  check(found_networks, "network monitor GUI missing Networks section")
+
+  -- Close GUI
+  local close = find_gui(frame, "chiptorio-network-monitor-close")
+  if close then
+    script.raise_event(defines.events.on_gui_click, {
+      player_index = player.index,
+      element = close,
+      button = defines.mouse_button_type.left,
+    })
+  end
+
+  destroy_all(created)
+end
+
+-- Test QLN Terminal GUI
+local function check_qln_terminal_gui()
+  local player = probe_player()
+  if not player then
+    log("CHIPTORIO-TEST SKIP qln-terminal-gui: the benchmark map has no player")
+    return
+  end
+
+  local surface = game.surfaces[1]
+  local force = player.force
+  local created = {}
+  clear_area(surface, { { 146, 64 }, { 160, 72 } })
+  local terminal = place(surface, force, created, "qln-terminal", 151.5, 67.5)
+  if not terminal then
+    destroy_all(created)
+    return
+  end
+  -- Add a storage drive to make the terminal functional
+  local drive = place(surface, force, created, "qln-storage-drive", 154.5, 67.5)
+  if drive then
+    drive.get_module_inventory().insert({ name = "sram-module", count = 4 })
+  end
+  raise_built(created)
+
+  local raised, err = pcall(function()
+    script.raise_event(defines.events.on_gui_opened, {
+      player_index = player.index,
+      entity = terminal,
+    })
+  end)
+  if not raised then
+    log("CHIPTORIO-TEST SKIP qln-terminal-gui: on_gui_opened cannot be raised: " .. tostring(err))
+    destroy_all(created)
+    return
+  end
+
+  local frame = player.gui.screen["chiptorio-qln-terminal"]
+  check(frame and frame.valid, "the QLN terminal GUI did not open")
+  if not (frame and frame.valid) then
+    destroy_all(created)
+    return
+  end
+
+  local body = find_gui(frame, "chiptorio-qln-terminal-body")
+  check(body, "the QLN terminal GUI has no body")
+
+  -- Check for expected sections
+  local found_capacity = false
+  local function find_capacity_label(gui_element)
+    if not gui_element or not gui_element.valid then return end
+    if gui_element.type == "label" and gui_element.caption then
+      if string.find(gui_element.caption, "Stored", 1, true) or string.find(gui_element.caption, "capacity", 1, true) then
+        found_capacity = true
+        return
+      end
+    end
+    for _, child in pairs(gui_element.children or {}) do
+      find_capacity_label(child)
+    end
+  end
+  find_capacity_label(body)
+  check(found_capacity, "QLN terminal GUI missing capacity section")
+
+  -- Close GUI
+  local close = find_gui(frame, "chiptorio-qln-terminal-close")
+  if close then
+    script.raise_event(defines.events.on_gui_click, {
+      player_index = player.index,
+      element = close,
+      button = defines.mouse_button_type.left,
+    })
+  end
+
+  destroy_all(created)
+end
+
+-- Test Answer Engine GUI
+local function check_answer_engine_gui()
+  local player = probe_player()
+  if not player then
+    log("CHIPTORIO-TEST SKIP answer-engine-gui: the benchmark map has no player")
+    return
+  end
+
+  local surface = game.surfaces[1]
+  local force = player.force
+  local created = {}
+  clear_area(surface, { { 146, 64 }, { 160, 72 } })
+  local engine = place(surface, force, created, "answer-engine", 151.5, 67.5)
+  if not engine then
+    destroy_all(created)
+    return
+  end
+  raise_built(created)
+
+  local raised, err = pcall(function()
+    script.raise_event(defines.events.on_gui_opened, {
+      player_index = player.index,
+      entity = engine,
+    })
+  end)
+  if not raised then
+    log("CHIPTORIO-TEST SKIP answer-engine-gui: on_gui_opened cannot be raised: " .. tostring(err))
+    destroy_all(created)
+    return
+  end
+
+  -- Answer Engine uses relative GUI (player.gui.relative with lab_gui type)
+  -- Check relative GUI
+  local relative = player.gui.relative
+  check(relative and relative.valid, "player.gui.relative not available")
+  if relative and relative.valid then
+    -- The answer engine creates a frame in relative GUI
+    local found = false
+    for _, child in pairs(relative.children or {}) do
+      if child.name and string.find(child.name, "answer-engine", 1, true) then
+        found = true
+        break
+      end
+    end
+    check(found, "the Answer Engine GUI did not open in relative GUI")
+  end
+
+  destroy_all(created)
+end
+
+-- Test QLN FOUP Dock GUI
+local function check_foup_dock_gui()
+  local player = probe_player()
+  if not player then
+    log("CHIPTORIO-TEST SKIP foup-dock-gui: the benchmark map has no player")
+    return
+  end
+
+  local surface = game.surfaces[1]
+  local force = player.force
+  local created = {}
+  clear_area(surface, { { 146, 64 }, { 160, 72 } })
+  local dock = place(surface, force, created, "foup-dock", 151.5, 67.5)
+  if not dock then
+    destroy_all(created)
+    return
+  end
+  raise_built(created)
+
+  local raised, err = pcall(function()
+    script.raise_event(defines.events.on_gui_opened, {
+      player_index = player.index,
+      entity = dock,
+    })
+  end)
+  if not raised then
+    log("CHIPTORIO-TEST SKIP foup-dock-gui: on_gui_opened cannot be raised: " .. tostring(err))
+    destroy_all(created)
+    return
+  end
+
+  local frame = player.gui.screen["chiptorio-foup-gui"]
+  check(frame and frame.valid, "the FOUP Dock GUI did not open")
+  if not (frame and frame.valid) then
+    destroy_all(created)
+    return
+  end
+
+  local body = find_gui(frame, "chiptorio-foup-gui-body")
+  check(body, "the FOUP Dock GUI has no body")
+
+  -- Check for expected sections (seal/unseal buttons)
+  local found_mode = false
+  local function find_mode_label(gui_element)
+    if not gui_element or not gui_element.valid then return end
+    if gui_element.type == "label" and gui_element.caption then
+      if string.find(gui_element.caption, "Mode", 1, true) or string.find(gui_element.caption, "Seal", 1, true) then
+        found_mode = true
+        return
+      end
+    end
+    for _, child in pairs(gui_element.children or {}) do
+      find_mode_label(child)
+    end
+  end
+  find_mode_label(body)
+  check(found_mode, "FOUP Dock GUI missing mode/seal section")
+
+  -- Close GUI
+  local close = find_gui(frame, "chiptorio-foup-gui-close")
+  if close then
+    script.raise_event(defines.events.on_gui_click, {
+      player_index = player.index,
+      element = close,
+      button = defines.mouse_button_type.left,
+    })
+  end
+
+  destroy_all(created)
+end
+
 -- ---------------------------------------------------------------------------
 -- Playthrough probe
 -- ---------------------------------------------------------------------------
@@ -2682,6 +3014,42 @@ local function power_grid_advance()
 end
 
 script.on_init(function()
+  -- Real lab variants preserve modules and swap collision footprints under R.
+  local rack_surface = game.create_surface("rack-rotation-contract", {width=32, height=32})
+  local rack_tiles = {}
+  for x=-4,4 do for y=-4,4 do rack_tiles[#rack_tiles+1]={name="refined-concrete",position={x,y}} end end
+  rack_surface.set_tiles(rack_tiles)
+  local rack = rack_surface.create_entity{name="server-rack", position={0,0.5}, force="player",raise_built=true}
+  check(rack ~= nil, "could not create rack rotation fixture")
+  if rack then
+    local animation = remote.call("chiptorio-rack", "animation_status", rack)
+    check(animation and animation.speed > 0, "rack decorative animation is not running while idle")
+    check(rack.get_module_inventory().insert{name="microcomputer",count=2} == 2,
+      "could not install rack rotation modules")
+    for step=1,4 do
+      local original = rack
+      local position = rack.position
+      local replacement = remote.call("chiptorio-rack", "rotate", rack)
+      check(replacement and replacement.valid, "rack rotation refused at quarter turn " .. step)
+      if not replacement then break end
+      rack = replacement
+      animation = remote.call("chiptorio-rack", "animation_status", rack)
+      check(animation and animation.speed > 0, "rack rotation lost its decorative animation")
+      check(not original.valid, "rack rotation left the old entity behind")
+      check(rack.position.x == position.x and rack.position.y == position.y,
+        "rack rotation moved the ground origin")
+      check(rack.get_module_inventory().get_item_count("microcomputer") == 2,
+        "rack rotation lost modules at quarter turn " .. step)
+      local box = rack.bounding_box
+      local width = box.right_bottom.x - box.left_top.x
+      local height = box.right_bottom.y - box.left_top.y
+      check(math.abs(width - height) < 0.01,
+        "rack 3x3 footprint changed at quarter turn " .. step)
+    end
+    check(rack.name == "server-rack", "rack did not return to original view")
+    rack.destroy()
+  end
+  game.delete_surface(rack_surface)
   local map = game.map_settings
   check(map.enemy_evolution and map.enemy_evolution.enabled == false, "enemy evolution is enabled")
   check(map.enemy_expansion and map.enemy_expansion.enabled == false, "enemy expansion is enabled")
@@ -2776,6 +3144,11 @@ script.on_nth_tick(120, function()
   check_answer()
   check_ai()
   check_computer_gui()
+  check_labs_use_vanilla_gui()
+  check_network_monitor_gui()
+  check_qln_terminal_gui()
+  check_foup_dock_gui()
+  check_answer_engine_gui()
   check_playthrough()
   finish("runtime")
 end)

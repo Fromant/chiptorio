@@ -87,6 +87,16 @@ for _, w in ipairs(workloads) do
   item.localised_description = { "item-description." .. w.label }
   M.set_icon(item, w.label)
 
+  -- The vanilla technologies are named after the pack they unlock. Since the
+  -- pack is now a storage medium, point the technology at the same locale key
+  -- as the item: "Punched Card Deck", "Magnetic Tape Reel", and so on. Using
+  -- the item key also bypasses the base-game translations, which would
+  -- otherwise win over this mod's technology-name entries.
+  local tech = data.raw.technology[w.name]
+  if tech then
+    tech.localised_name = { "item-name." .. w.label }
+  end
+
   if w.category then
     recipe.categories = { w.category }
   end

@@ -18,17 +18,20 @@ local function is_computer(entity)
   if not (entity and entity.valid) then
     return false
   end
+  -- All research labs use vanilla lab GUI so science-pack input slots work
+  -- correctly per generation. The network allocator manages research via
+  -- disabled_by_script.
+  if meta.LAB_DEMAND[entity.name] then
+    return false
+  end
   if not COMPUTER_NAME_SET then
     COMPUTER_NAME_SET = {}
-    for name in pairs(meta.LAB_DEMAND) do
-      COMPUTER_NAME_SET[name] = true
-    end
     for _, name in ipairs({ "server-rack", "memory-bank", "datacenter" }) do
       COMPUTER_NAME_SET[name] = true
     end
     COMPUTER_NAME_SET["metrology-lab"] = true
   end
-  return COMPUTER_NAME_SET[entity.name] == true
+  return COMPUTER_NAME_SET[meta.provider_name(entity.name)] == true
 end
 
 --- Find the cached device for an entity and the graph it lives in.
@@ -152,6 +155,32 @@ local function rebuild_gui(player, entity)
         end
       end
       body.add({ type = "label", caption = { "chiptorio.computer-labs-active", active } })
+    end
+
+    -- Show module slots for labs that have them (Tube Mainframe, Mainframe Cluster, etc.)
+    local module_slots = entity.prototype and entity.prototype.module_inventory_size or 0
+    if device.kind == "lab" and module_slots > 0 then
+      local module_header = body.add({ type = "label", caption = { "chiptorio.computer-module-slots" } })
+      module_header.style.font = "default-bold"
+      module_header.style.top_margin = 4
+
+      local module_inv = entity.get_module_inventory()
+      if module_inv then
+        for i = 1, module_slots do
+          local slot = module_inv[i]
+          local slot_flow = body.add({ type = "flow", direction = "horizontal" })
+          slot_flow.style.vertical_align = "center"
+          local slot_label = slot_flow.add({ type = "label", caption = "Slot " .. i .. ":" })
+          slot_label.style.minimal_width = 60
+          if slot and slot.valid_for_read then
+            slot_flow.add({ type = "sprite", sprite = "item/" .. slot.name, tooltip = slot.prototype.localised_name })
+            slot_flow.add({ type = "label", caption = " x" .. slot.count })
+          else
+            slot_flow.add({ type = "label", caption = { "chiptorio.computer-module-empty" } }).style.font_color = {0.6, 0.6, 0.6}
+          end
+        end
+      end
+      body.add({ type = "line" })
     end
   end
 

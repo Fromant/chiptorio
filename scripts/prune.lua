@@ -304,6 +304,29 @@ local function prune_technologies()
   end
 end
 
+local function hide_orphaned_recipes()
+  -- A recipe that starts locked must be unlocked by a visible technology.
+  -- Removing robot and combat technologies can orphan an otherwise innocent
+  -- recipe: the flying robot frame and the storage chest have no gate other
+  -- than robotics, so without this pass they stay in Factoriopedia forever,
+  -- unlocked by nothing. That is dead content, not a hidden prototype.
+  local unlocked = {}
+  for name, tech in pairs(data.raw.technology) do
+    if not hidden_techs[name] and not tech.hidden then
+      for _, effect in ipairs(tech.effects or {}) do
+        if effect.type == "unlock-recipe" then
+          unlocked[effect.recipe] = true
+        end
+      end
+    end
+  end
+  for name, recipe in pairs(data.raw.recipe) do
+    if not recipe.hidden and recipe.enabled == false and not unlocked[name] then
+      hide_recipe(name)
+    end
+  end
+end
+
 function M.apply()
   remove_enemy_autoplace()
 
@@ -326,6 +349,7 @@ function M.apply()
   hide_recipes_for_hidden_items()
   scrub_hidden_ingredients()
   prune_technologies()
+  hide_orphaned_recipes()
 
   return {
     hidden_items = hidden_items,

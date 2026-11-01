@@ -1,2 +1,5 @@
 # Local machine configuration (Factorio path, etc.)
 .env
+
+# Blender review renders and intermediate frames (shipped sprites live in graphics/)
+tools/graphics/blender/renders/

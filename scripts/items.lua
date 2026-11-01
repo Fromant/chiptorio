@@ -58,12 +58,12 @@ data:extend({
     group = "intermediate-products",
     order = "zzz[chiptorio-materials]",
   },
-  -- Chips live in the vanilla Production tab.
+  -- Chips live in the Chiptorio tab.
   {
     type = "item-subgroup",
     name = "chiptorio-chips",
-    group = "production",
-    order = "zzz[chiptorio-chips]",
+    group = "chiptorio",
+    order = "b[chips]",
   },
   {
     type = "item-subgroup",
@@ -129,7 +129,8 @@ end
 
 -- Feedstock -------------------------------------------------------------
 
-make_material("silica", "a[silica]")
+local silica = make_material("silica", "a[silica]")
+silica.stack_size = 200
 make_material("glass", "b[glass]")
 make_material("metallurgical-silicon", "c[mg-si]")
 make_material("polysilicon", "d[poly-si]")

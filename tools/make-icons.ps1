@@ -1492,6 +1492,11 @@ New-Item -ItemType Directory -Force -Path $techDir | Out-Null
 
 $techIcons = @{
   "automation-science-pack" = "punched-card"
+  "logistic-science-pack"   = "punched-tape"
+  "military-science-pack"   = "magnetic-tape"
+  "chemical-science-pack"   = "disk-pack"
+  "production-science-pack" = "solid-state-drive"
+  "utility-science-pack"    = "mainframe-module"
   "electromechanics"      = "analytical-engine"
   "thermionics"           = "vacuum-tube"
   "semiconductor-physics" = "polysilicon"
@@ -1544,6 +1549,9 @@ $techIcons = @{
   "refine-10nm"                = "qualification-wafer"
   "refine-5nm"                 = "qualification-wafer"
   "refine-2nm"                 = "qualification-wafer"
+  # Vanilla circuit technologies re-themed
+  "advanced-circuit"     = "advanced-circuit"
+  "processing-unit"      = "processing-unit"
 }
 
 foreach ($tech in $techIcons.Keys) {

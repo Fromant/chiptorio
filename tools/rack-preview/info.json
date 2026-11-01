@@ -1,0 +1,8 @@
+﻿{
+  "name": "chiptorio-rack-preview",
+  "version": "0.0.1",
+  "title": "Chiptorio server rack art preview",
+  "author": "Chiptorio",
+  "factorio_version": "2.1",
+  "dependencies": ["base >= 2.1.0", "chiptorio"]
+}

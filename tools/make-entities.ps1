@@ -412,21 +412,7 @@ Write-Host "machine entity sprites done."
 # COMPUTE PROVIDERS & LABS (lab clones)
 # =========================================================================
 
-# --- server-rack (2x2): rack with 4 bays, blinking LEDs ---
-$b, $g = New-Canvas 128 128
-RoundRect $g 14 14 100 100 8 $panel
-Rect $g 14 14 100 2 $line
-for ($y = 30; $y -le 94; $y += 22) {
-  Rect $g 24 $y 24 12 $ink
-  Rect $g 28 ($y + 2) 4 4 $red
-  Rect $g 40 ($y + 2) 4 4 $green
-  Rect $g 80 $y 24 12 $ink
-  Rect $g 84 ($y + 2) 4 4 $red
-  Rect $g 96 ($y + 2) 4 4 $green
-}
-# cable entry bottom
-Rect $g 54 108 20 4 $steel
-Save-Entity $b "server-rack"
+# Server rack is built/rendered by tools/graphics/blender/render-entity.ps1.
 
 # --- memory-bank (2x2): rack with 4 vertical memory slots ---
 $b, $g = New-Canvas 128 128
@@ -460,24 +446,24 @@ Rect $g 142 60 4 24 $slate
 Rect $g 144 64 2 16 $cream
 Save-Entity $b "datacenter"
 
-# --- analytical-engine (2x2): Victorian brass computer, gears, crank ---
-$b, $g = New-Canvas 128 128
-RoundRect $g 14 14 100 100 8 $panel
-Rect $g 14 14 100 2 $line
+# --- analytical-engine (3x3): Victorian brass computer, gears, crank ---
+$b, $g = New-Canvas 160 160
+RoundRect $g 10 10 140 140 10 $panel
+Rect $g 10 10 140 2 $line
 # brass body
-Rect $g 24 30 80 50 $orange
+Rect $g 30 40 100 70 $orange
 # gears
-Disc $g 38 56 10 $burnt
-Disc $g 90 56 10 $burnt
-Line $g 38 56 38 46 $ink 1
-Line $g 90 56 90 46 $ink 1
+Disc $g 55 75 14 $burnt
+Disc $g 125 75 14 $burnt
+Line $g 55 75 55 61 $ink 1
+Line $g 125 75 125 61 $ink 1
 # card reader slot
-Rect $g 42 18 44 6 $ink
+Rect $g 55 22 50 8 $ink
 # output tray
-Rect $g 40 90 48 8 $panel
+Rect $g 50 118 60 10 $panel
 # side crank
-Rect $g 8 48 6 16 $steel
-Disc $g 2 56 4 $steel
+Rect $g 8 68 8 24 $steel
+Disc $g 0 80 6 $steel
 Save-Entity $b "analytical-engine"
 
 # --- tube-mainframe (2x2): rack of vacuum tubes, orange filaments ---

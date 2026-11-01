@@ -135,10 +135,14 @@ make_machine({
   size_h = 240,
   scale = 0.5,
   ingredients = {
+    -- The first packaging machine must be buildable before it can package a
+    -- single chip. Do not consume integrated circuits or other compute-category
+    -- results here: that is the bootstrap deadlock this recipe used to have.
     M.item("steel-plate", 30),
-    M.item("advanced-circuit", 20),
-    M.item("integrated-circuit", 10),
-    M.item("electronic-circuit", 10),
+    M.item("electronic-circuit", 20),
+    M.item("discrete-transistor", 10),
+    M.item("copper-plate", 20),
+    M.item("iron-gear-wheel", 10),
   },
 })
 

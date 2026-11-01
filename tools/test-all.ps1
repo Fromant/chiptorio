@@ -68,7 +68,10 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host ""
 Write-Host "=== Chiptorio power-grid probe ===" -ForegroundColor Cyan
-& $powerGrid @common
+$powerGridArgs = @{}
+if ($Factorio) { $powerGridArgs["Factorio"] = $Factorio }
+if ($Keep) { $powerGridArgs["Keep"] = $true }
+& $powerGrid @powerGridArgs
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }

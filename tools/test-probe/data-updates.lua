@@ -18,6 +18,27 @@ local function check(condition, message)
   end
 end
 
+-- Chiptorio-created prototype detection (moved up for use in early tests)
+local chiptorio_prefixes = {
+  "chiptorio-", "network-", "qln-", "foup-", "node-", "refine-",
+}
+
+local function is_chiptorio_created(name)
+  -- Chiptorio-created prototypes use these prefixes.
+  for _, prefix in ipairs(chiptorio_prefixes) do
+    if name:sub(1, #prefix) == prefix then
+      return true
+    end
+  end
+  -- Also cover vanilla-internal names that Chiptorio re-themes and explicitly
+  -- sets locale/icons on (circuits.lua, labs.lua, etc.).
+  if name == "electronic-circuit" or name == "advanced-circuit" or name == "processing-unit"
+     or name == "analytical-engine" then
+    return true
+  end
+  return false
+end
+
 local ITEM_TYPES = {
   "item",
   "ammo",
@@ -250,6 +271,132 @@ check(
   "the first-science trigger must point at analytical-engine"
 )
 
+-- Bootstrap power and cable. The Analytical Engine needs a pole to run, and
+-- Punched Cards need copper cable. Both recipes come from `electronics`, the
+-- vanilla "craft copper plates" trigger, so that technology must stay
+-- reachable without research. Gating it behind Thermionics deadlocks the game:
+-- Electromechanics costs punched cards, which need the cable it unlocks.
+local electronics = data.raw.technology["electronics"]
+check(electronics, "missing electronics technology")
+if electronics then
+  check(
+    not electronics.prerequisites or #electronics.prerequisites == 0,
+    "electronics must be an early trigger technology, not a research-gated one"
+  )
+  check(
+    electronics.research_trigger and electronics.research_trigger.item == "copper-plate",
+    "electronics must still be triggered by crafting copper plates"
+  )
+  local electronics_effects = {}
+  for _, effect in ipairs(electronics.effects or {}) do
+    if effect.type == "unlock-recipe" then
+      electronics_effects[effect.recipe] = true
+    end
+  end
+  check(electronics_effects["copper-cable"], "electronics must unlock copper-cable for the bootstrap")
+  check(
+    electronics_effects["small-electric-pole"],
+    "electronics must unlock small-electric-pole so the Analytical Engine can be powered"
+  )
+  check(
+    not electronics_effects["electronic-circuit"],
+    "electronics must not unlock the Control Board before Thermionics"
+  )
+  for _, name in ipairs({ "copper-cable", "small-electric-pole" }) do
+    local recipe = data.raw.recipe[name]
+    check(recipe and not recipe.hidden, name .. " must be a visible recipe")
+  end
+end
+
+-- Everything the starter science pack requires must itself be reachable
+-- without research. Otherwise the first technology has a cost deadlock: the
+-- trigger technology is waiting on the first research it is supposed to pay for.
+local starter_tech = data.raw.technology["automation-science-pack"]
+if starter_tech then
+  local unlocks_starter = false
+  for _, effect in ipairs(starter_tech.effects or {}) do
+    if effect.type == "unlock-recipe" and effect.recipe == "automation-science-pack" then
+      unlocks_starter = true
+    end
+  end
+  check(unlocks_starter, "the starter technology must unlock the Punched Cards recipe")
+  local starter_recipe = data.raw.recipe["automation-science-pack"]
+  check(starter_recipe and not starter_recipe.hidden, "Punched Cards must be a visible recipe")
+  for _, prereq in ipairs(starter_tech.prerequisites or {}) do
+    local tech = data.raw.technology[prereq]
+    check(tech, "automation-science-pack has missing prerequisite " .. prereq)
+    if tech then
+      check(
+        tech.research_trigger ~= nil
+          and (not tech.prerequisites or #tech.prerequisites == 0),
+        "starter prerequisite " .. prereq .. " must be reachable without research"
+      )
+    end
+  end
+end
+
+local thermionics = data.raw.technology["thermionics"]
+check(thermionics, "missing thermionics technology")
+if thermionics then
+  local unlocks_control_board = false
+  for _, effect in ipairs(thermionics.effects or {}) do
+    if effect.type == "unlock-recipe" and effect.recipe == "electronic-circuit" then
+      unlocks_control_board = true
+    end
+  end
+  check(unlocks_control_board, "thermionics must unlock electronic-circuit (Control Board)")
+end
+
+-- The workload technologies are named after the medium they unlock. The
+-- prototype-level localised_name must point at the item key, not the vanilla
+-- technology key: the base game ships translations for the latter, and they
+-- take precedence over this mod's technology-name entries.
+local WORKLOAD_TECH_NAMES = {
+  { "automation-science-pack", "punched-card" },
+  { "logistic-science-pack", "punched-tape" },
+  { "military-science-pack", "magnetic-tape" },
+  { "chemical-science-pack", "disk-pack" },
+  { "production-science-pack", "solid-state-drive" },
+  { "utility-science-pack", "mainframe-module" },
+}
+for _, entry in ipairs(WORKLOAD_TECH_NAMES) do
+  local name, label = entry[1], entry[2]
+  local tech = data.raw.technology[name]
+  check(tech, "missing workload technology " .. name)
+  if tech then
+    local localised_name = tech.localised_name
+    check(
+      type(localised_name) == "table" and localised_name[1] == "item-name." .. label,
+      name .. " must be named after item-name." .. label
+    )
+  end
+end
+
+-- Vanilla gates the military pack behind combat technologies, which
+-- scripts/prune.lua removes. It must stay gated on the two workloads that
+-- precede it instead, or it would be researchable from a fresh save.
+local military = data.raw.technology["military-science-pack"]
+check(military, "missing military-science-pack technology")
+if military then
+  check(not military.hidden, "military-science-pack must remain visible after pruning")
+  local prerequisites = {}
+  for _, prereq in ipairs(military.prerequisites or {}) do
+    prerequisites[prereq] = true
+  end
+  check(
+    prerequisites["automation-science-pack"],
+    "military-science-pack must require automation-science-pack (punched cards)"
+  )
+  check(
+    prerequisites["logistic-science-pack"],
+    "military-science-pack must require logistic-science-pack (punched tape)"
+  )
+  for _, prereq in ipairs({ "automation-science-pack", "logistic-science-pack" }) do
+    local tech = data.raw.technology[prereq]
+    check(tech and not tech.hidden, prereq .. " must remain visible so it can gate military-science-pack")
+  end
+end
+
 -- No enemy production on new maps.
 for _, name in ipairs({
   "biter-spawner",
@@ -361,32 +508,71 @@ for name, recipe in pairs(data.raw.recipe) do
   end
 end
 
--- Every research computer must accept every workload. A pack that one lab
--- cannot read silently deadlocks the vanilla technology tree. The Answer
--- Engine is a lab clone with no inputs by design and is deliberately excluded.
-local WORKLOADS = {
-  "automation-science-pack",
-  "logistic-science-pack",
-  "military-science-pack",
-  "chemical-science-pack",
-  "production-science-pack",
-  "utility-science-pack",
-  "chiptorio-optical-science-pack",
-  "chiptorio-hbm-science-pack",
-  "chiptorio-quantum-science-pack",
-  "microprocessor",
+-- Helper: check if input is in the expected list
+local function expected_input(input, expected_list)
+  for _, w in ipairs(expected_list) do
+    if w == input then
+      return true
+    end
+  end
+  return false
+end
+
+-- Every research computer accepts only the workloads up to its tier.
+-- Gating packs by lab prevents deadlocks and keeps the GUI clean.
+-- The Answer Engine is a lab clone with no inputs by design and is deliberately excluded.
+local EXPECTED_LAB_INPUTS = {
+  ["analytical-engine"] = {
+    "automation-science-pack",
+  },
+  ["tube-mainframe"] = {
+    "automation-science-pack",
+    "logistic-science-pack",
+  },
+  ["mainframe-cluster"] = {
+    "automation-science-pack",
+    "logistic-science-pack",
+    "military-science-pack",
+  },
+  ["datacenter-lab"] = {
+    "automation-science-pack",
+    "logistic-science-pack",
+    "military-science-pack",
+    "chemical-science-pack",
+  },
+  ["cryostat"] = {
+    "automation-science-pack",
+    "logistic-science-pack",
+    "military-science-pack",
+    "chemical-science-pack",
+    "production-science-pack",
+    "utility-science-pack",
+    "chiptorio-optical-science-pack",
+    "chiptorio-hbm-science-pack",
+    "chiptorio-quantum-science-pack",
+    "microprocessor",
+  },
 }
 for _, name in ipairs(LABS) do
   local lab = data.raw.lab[name]
   check(lab, "missing research computer " .. name)
   if lab then
     check(not lab.hidden, "research computer is hidden: " .. name)
-    local inputs = {}
-    for _, input in ipairs(lab.inputs or {}) do
-      inputs[input] = true
-    end
-    for _, workload in ipairs(WORKLOADS) do
-      check(inputs[workload], "lab " .. name .. " does not accept " .. workload)
+    local expected = EXPECTED_LAB_INPUTS[name]
+    check(expected, "no expected inputs defined for lab " .. name)
+    if expected then
+      local actual = {}
+      for _, input in ipairs(lab.inputs or {}) do
+        actual[input] = true
+      end
+      -- Check every expected input is present
+      for _, workload in ipairs(expected) do
+        check(actual[workload], "lab " .. name .. " does not accept " .. workload)
+      end
+      -- Check no unexpected inputs are present
+      for input in pairs(actual) do
+        check(expected_input(input, expected), "lab " .. name .. " accepts unexpected input " .. input)
+      end
     end
   end
 end
@@ -724,7 +910,10 @@ if internet then
   check(unlocked["server-rack"], "internet does not unlock the server-rack provider")
   check(unlocked["memory-bank"], "internet does not unlock the memory bank")
   check(unlocked["sram-module"], "internet does not unlock SRAM")
-  check(unlocked["assembly-fab"], "internet does not unlock the assembly fab")
+  -- Production science packs are assembled in the Assembly Fab, and the
+  -- technology tree needs them before it can reach the internet. Gating the
+  -- fab on the internet closes a research cycle, so it must NOT be here.
+  check(not unlocked["assembly-fab"], "internet unlocks the assembly fab and deadlocks production science")
 end
 
 local datacenter_tech = data.raw.technology["datacenter"]
@@ -793,6 +982,11 @@ for _, node in ipairs(nodes.NODES) do
   local unlocked = unlocked_recipes(tech_name)
   for _, name in ipairs({ names.mask, names.wafer, names.die }) do
     check(unlocked[name], tech_name .. " does not unlock " .. name)
+  end
+  if node.key == "10um" then
+    -- The Assembly Fab packages the first die. It belongs with the first
+    -- process node, not with the internet (see the internet block above).
+    check(unlocked["assembly-fab"], "process-10um does not unlock the assembly fab")
   end
   check(#node.chips > 0, "process node " .. node.key .. " packages no architecture")
   for _, chip in ipairs(node.chips) do
@@ -1380,12 +1574,10 @@ for _, tech in pairs(data.raw.technology) do
   end
 end
 
--- Only the late gates are checked here. Early vanilla intermediates (copper
--- cable) are unlocked by vanilla technologies that the freeplay scenario also
--- force-enables at start, so a missing prerequisite in the data stage is not
--- proof of a gap there. The playthrough probe covers the early ladder in the
--- live game; these two gates are where an ingredient can silently arrive one
--- technology late.
+-- Only the late gates are checked here. The early bootstrap (copper cable,
+-- small electric poles, the Analytical Engine and Punched Cards) has its own
+-- contract above. These two gates are where an ingredient can silently arrive
+-- one technology late.
 local LATE_GATES = {
   ["quantum-advantage"] = true,
   ["process-7nm"] = true,
@@ -1467,6 +1659,111 @@ if answer_recipe then
     "the-question does not unlock the answer engine")
 end
 
+-- ---------------------------------------------------------------------------
+-- P2.1 Visible recipe without unlocking technology
+-- ---------------------------------------------------------------------------
+-- Every visible recipe with enabled=false must be unlocked by at least one
+-- visible technology. This catches recipes that are locked but have no gate.
+local unlocked_by_visible_tech = {}
+for _, tech in pairs(data.raw.technology) do
+  if not tech.hidden then
+    for _, effect in ipairs(tech.effects or {}) do
+      if effect.type == "unlock-recipe" and effect.recipe then
+        unlocked_by_visible_tech[effect.recipe] = true
+      end
+    end
+  end
+end
+for name, recipe in pairs(data.raw.recipe) do
+  if not recipe.hidden and recipe.enabled == false then
+    check(unlocked_by_visible_tech[name],
+      "visible recipe " .. name .. " is locked but not unlocked by any visible technology")
+  end
+end
+
+-- ---------------------------------------------------------------------------
+-- P2.2 Ingredient-gate prerequisite check (Chiptorio technologies only)
+-- ---------------------------------------------------------------------------
+-- For each Chiptorio technology T that unlocks recipe R, each ingredient I in R
+-- must have its unlocking technology G as a (transitive) prerequisite of T.
+-- This prevents unlocking recipes whose ingredients aren't craftable yet.
+-- Only applies to Chiptorio-created technologies and recipes.
+
+-- Build map: recipe -> set of technologies that unlock it (Chiptorio only)
+local recipe_gates = {}
+for _, tech in pairs(data.raw.technology) do
+  if not tech.hidden and is_chiptorio_created(tech.name) then
+    for _, effect in ipairs(tech.effects or {}) do
+      if effect.type == "unlock-recipe" and effect.recipe then
+        recipe_gates[effect.recipe] = recipe_gates[effect.recipe] or {}
+        recipe_gates[effect.recipe][tech.name] = true
+      end
+    end
+  end
+end
+
+-- Build transitive prerequisite closure for each Chiptorio technology
+local tech_prereqs = {}
+for _, tech in pairs(data.raw.technology) do
+  if not tech.hidden and is_chiptorio_created(tech.name) then
+    local closure = {}
+    local function add_prereqs(tname)
+      local t = data.raw.technology[tname]
+      if t and t.prerequisites then
+        for _, p in ipairs(t.prerequisites) do
+          if not closure[p] then
+            closure[p] = true
+            add_prereqs(p)
+          end
+        end
+      end
+    end
+    add_prereqs(tech.name)
+    tech_prereqs[tech.name] = closure
+  end
+end
+
+-- Check each Chiptorio technology's unlocked recipes
+for _, tech in pairs(data.raw.technology) do
+  if not tech.hidden and is_chiptorio_created(tech.name) then
+    for _, effect in ipairs(tech.effects or {}) do
+      if effect.type == "unlock-recipe" and effect.recipe then
+        local recipe = data.raw.recipe[effect.recipe]
+        if recipe and not recipe.hidden and is_chiptorio_created(effect.recipe) then
+          for _, ingredient in ipairs(recipe.ingredients or {}) do
+            local iname = ingredient.name or ingredient[1]
+            -- Find a Chiptorio technology that unlocks this ingredient
+            local gates = recipe_gates[iname]
+            if gates then
+              local ok = false
+              for gname in pairs(gates) do
+                if tech_prereqs[tech.name] and tech_prereqs[tech.name][gname] then
+                  ok = true
+                  break
+                end
+                -- Also allow if the gate IS the technology itself (self-unlock)
+                if gname == tech.name then
+                  ok = true
+                  break
+                end
+              end
+              if not ok then
+                local gate_list = {}
+                for k in pairs(gates) do gate_list[#gate_list+1] = k end
+                check(false,
+                  "technology " .. tech.name .. " unlocks recipe " .. effect.recipe ..
+                  " which needs ingredient " .. iname ..
+                  " unlocked by " .. table.concat(gate_list, ", ") ..
+                  " but none are prerequisites")
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+
 if #failures > 0 then
   error("CHIPTORIO-TEST FAIL data: " .. table.concat(failures, "; "))
 end
@@ -1534,26 +1831,32 @@ if #orphaned_recipes > 0 then
   table.insert(failures, "orphaned recipes (no technology unlocks them): " .. table.concat(orphaned_recipes, ", "))
 end
 
--- Every visible Chiptorio item, entity, fluid and technology should have a
--- locale name and an icon that resolves to a Chiptorio-generated path.
-local chiptorio_prefixes = {
-  "chiptorio-", "network-", "qln-", "foup-", "node-", "refine-",
-}
-
-local function is_chiptorio_created(name)
-  -- Chiptorio-created prototypes use these prefixes.
-  for _, prefix in ipairs(chiptorio_prefixes) do
-    if name:sub(1, #prefix) == prefix then
-      return true
+-- The same rule for vanilla recipes: a visible recipe that starts locked but
+-- has no visible unlocking technology is dead content. Removing robot
+-- technologies used to orphan the flying robot frame and the storage chest,
+-- which then sat in Factoriopedia unlocked by nothing.
+local visible_recipe_gates = {}
+for _, tech in pairs(data.raw.technology) do
+  if not tech.hidden then
+    for _, effect in ipairs(tech.effects or {}) do
+      if effect.type == "unlock-recipe" then
+        visible_recipe_gates[effect.recipe] = true
+      end
     end
   end
-  -- Also cover vanilla-internal names that Chiptorio re-themes and explicitly
-  -- sets locale/icons on (circuits.lua, labs.lua, etc.).
-  if name == "electronic-circuit" or name == "advanced-circuit" or name == "processing-unit"
-     or name == "analytical-engine" then
-    return true
+end
+local orphaned_visible_recipes = {}
+for name, recipe in pairs(data.raw.recipe) do
+  if not recipe.hidden and recipe.enabled == false and not visible_recipe_gates[name] then
+    orphaned_visible_recipes[#orphaned_visible_recipes + 1] = name
   end
-  return false
+end
+table.sort(orphaned_visible_recipes)
+if #orphaned_visible_recipes > 0 then
+  table.insert(
+    failures,
+    "visible recipes with no unlocking technology: " .. table.concat(orphaned_visible_recipes, ", ")
+  )
 end
 
 -- Check every Chiptorio technology has a path from a start tech (no unreachable islands).
@@ -1641,6 +1944,244 @@ if #infinite_prereqs > 0 then
   table.insert(
     failures,
     "technologies gated on infinite research (unreachable): " .. table.concat(infinite_prereqs, ", ")
+  )
+end
+
+-- ---------------------------------------------------------------------------
+-- P1.1b Progression reachability, not just prerequisite reachability
+-- ---------------------------------------------------------------------------
+--
+-- A technology tree can be acyclic and still be unresearchable: if a science
+-- pack is made in a machine that the same science pack unlocks, the first pack
+-- can never be crafted. The Assembly Fab had exactly this bug (production
+-- science -> Assembly Fab -> production science). The checks below simulate the
+-- real progression: seed the items that have no producer (ore, water, crude
+-- oil), then close over recipes that are unlocked, whose machine item is
+-- available, and whose ingredients are available. Unbarreling is ignored as a
+-- source: an empty barrel only exists after the fluid did, so counting it as a
+-- producer makes every fluid look manufactured and hides real deadlocks.
+
+local sim_producers = {}
+local sim_results = {}
+for name, recipe in pairs(data.raw.recipe) do
+  local results = {}
+  if recipe.result then
+    results[#results + 1] = recipe.result
+  end
+  for _, result in ipairs(recipe.results or {}) do
+    local kind = result.type or "item"
+    local result_name = result.name or result[1]
+    if (kind == "item" or kind == "fluid") and result_name then
+      results[#results + 1] = result_name
+    end
+  end
+  sim_results[name] = results
+  local unbarreling = name:match("^empty%-") ~= nil and name:match("%-barrel$") ~= nil
+  if not unbarreling then
+    for _, result_name in ipairs(results) do
+      sim_producers[result_name] = sim_producers[result_name] or {}
+      table.insert(sim_producers[result_name], name)
+    end
+  end
+end
+
+local sim_gates = {}
+for _, tech in pairs(data.raw.technology) do
+  for _, effect in ipairs(tech.effects or {}) do
+    if effect.type == "unlock-recipe" and effect.recipe then
+      sim_gates[effect.recipe] = sim_gates[effect.recipe] or {}
+      sim_gates[effect.recipe][tech.name] = true
+    end
+  end
+end
+
+local sim_raw = {}
+for name in pairs(data.raw.item or {}) do
+  if not sim_producers[name] then
+    sim_raw[name] = true
+  end
+end
+for name in pairs(data.raw.fluid or {}) do
+  if not sim_producers[name] then
+    sim_raw[name] = true
+  end
+end
+
+local function simulate_items(researched)
+  local items = {}
+  for name in pairs(sim_raw) do
+    items[name] = true
+  end
+  local craftable = {}
+  local changed = true
+  while changed do
+    changed = false
+    for name, recipe in pairs(data.raw.recipe) do
+      if not recipe.hidden and not craftable[name] then
+        local unlocked = recipe.enabled ~= false
+        if not unlocked then
+          for tech in pairs(sim_gates[name] or {}) do
+            if researched[tech] then
+              unlocked = true
+              break
+            end
+          end
+        end
+        if unlocked then
+          local ok = true
+          for category in pairs(categories_of(recipe)) do
+            local machine = CUSTOM_CATEGORY_MACHINES[category]
+            if machine and not items[machine] then
+              ok = false
+              break
+            end
+          end
+          if ok then
+            for _, ingredient in ipairs(recipe.ingredients or {}) do
+              if not items[ingredient.name] then
+                ok = false
+                break
+              end
+            end
+          end
+          if ok then
+            craftable[name] = true
+            changed = true
+            for _, result_name in ipairs(sim_results[name] or {}) do
+              items[result_name] = true
+            end
+          end
+        end
+      end
+    end
+  end
+  return items
+end
+
+-- A machine that performs category C must be buildable without an item that
+-- only category C produces: otherwise the machine needs itself to exist.
+local bootstrap_failures = {}
+for category, machine_name in pairs(CUSTOM_CATEGORY_MACHINES) do
+  local build = data.raw.recipe[machine_name]
+  if build then
+    for _, ingredient in ipairs(build.ingredients or {}) do
+      local visible_producers = {}
+      for _, producer in ipairs(sim_producers[ingredient.name] or {}) do
+        local proto = data.raw.recipe[producer]
+        if proto and not proto.hidden then
+          visible_producers[#visible_producers + 1] = producer
+        end
+      end
+      if #visible_producers > 0 then
+        local self_only = true
+        for _, producer in ipairs(visible_producers) do
+          if not categories_of(data.raw.recipe[producer])[category] then
+            self_only = false
+            break
+          end
+        end
+        if self_only then
+          bootstrap_failures[#bootstrap_failures + 1] = machine_name
+            .. " needs "
+            .. ingredient.name
+            .. ", produced only by "
+            .. category
+        end
+      end
+    end
+  end
+end
+if #bootstrap_failures > 0 then
+  table.insert(failures, "self-locked machine recipes: " .. table.concat(bootstrap_failures, "; "))
+end
+
+-- Close the research tree over what the factory can actually build.
+local sim_researched = {}
+local sim_changed = true
+while sim_changed do
+  sim_changed = false
+  local items = simulate_items(sim_researched)
+  for name, tech in pairs(data.raw.technology) do
+    if not tech.hidden and not sim_researched[name] then
+      local prereqs_ok = true
+      for _, prereq in ipairs(tech.prerequisites or {}) do
+        if not sim_researched[prereq] then
+          prereqs_ok = false
+          break
+        end
+      end
+      if prereqs_ok then
+        local available = true
+        local trigger = tech.research_trigger
+        if trigger then
+          if trigger.type == "craft-item" and trigger.item then
+            available = items[trigger.item] == true
+          elseif trigger.type == "craft-fluid" and trigger.fluid then
+            available = data.raw.fluid[trigger.fluid] ~= nil
+          elseif trigger.type == "mine-entity" then
+            -- The resource entity exists; mining it is a player action.
+            available = true
+          elseif trigger.type == "send-item-to-orbit" and trigger.item then
+            available = items[trigger.item] == true
+          else
+            -- kill / capture-spawner / build-entity: content Chiptorio removes.
+            available = false
+          end
+        else
+          for _, ingredient in ipairs((tech.unit or {}).ingredients or {}) do
+            local pack = ingredient.name or ingredient[1]
+            if not items[pack] then
+              available = false
+              break
+            end
+          end
+        end
+        if available then
+          sim_researched[name] = true
+          sim_changed = true
+        end
+      end
+    end
+  end
+end
+
+local sim_frontier = {}
+for name, tech in pairs(data.raw.technology) do
+  if not tech.hidden and not sim_researched[name] then
+    local prereqs_ok = true
+    for _, prereq in ipairs(tech.prerequisites or {}) do
+      if not sim_researched[prereq] then
+        prereqs_ok = false
+        break
+      end
+    end
+    if prereqs_ok then
+      local items = simulate_items(sim_researched)
+      local missing = {}
+      if tech.research_trigger then
+        local trigger = tech.research_trigger
+        if trigger.type == "craft-item" and trigger.item and not items[trigger.item] then
+          missing[#missing + 1] = "trigger " .. trigger.item
+        elseif trigger.type == "send-item-to-orbit" and trigger.item and not items[trigger.item] then
+          missing[#missing + 1] = "trigger " .. trigger.item
+        end
+      else
+        for _, ingredient in ipairs((tech.unit or {}).ingredients or {}) do
+          local pack = ingredient.name or ingredient[1]
+          if not items[pack] then
+            missing[#missing + 1] = pack
+          end
+        end
+      end
+      sim_frontier[#sim_frontier + 1] = name .. " (" .. table.concat(missing, ", ") .. ")"
+    end
+  end
+end
+table.sort(sim_frontier)
+if #sim_frontier > 0 then
+  table.insert(
+    failures,
+    "research deadlock, no first technology is affordable: " .. table.concat(sim_frontier, "; ")
   )
 end
 

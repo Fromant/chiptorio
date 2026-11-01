@@ -148,7 +148,7 @@ function Get-FactorioCandidates {
     $candidates.Add((Join-Path $library "steamapps\common\Factorio\bin\x64\factorio.exe"))
   }
 
-  foreach ($base in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, "C:\Games", "D:\Games")) {
+  foreach ($base in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, "C:\Games")) {
     if ($base) {
       $candidates.Add((Join-Path $base "Factorio\bin\x64\factorio.exe"))
     }

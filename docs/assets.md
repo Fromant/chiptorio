@@ -33,3 +33,13 @@ prototype has a locale entry.
 
 Bump `info.json` `version` and add a dated `changelog.txt` entry under
 Features/Balance/Bugfixes, newest first.
+
+## Blender entity sprites
+
+The server enclosure uses the standalone pipeline in
+[`tools/graphics/blender/README.md`](../tools/graphics/blender/README.md).
+`render-entity.ps1 -Build -Animate -Install` rebuilds the model, renders and
+packs its optional animation, and installs the generated sprite definition.
+Omit `-Animate` for a static export. `-Angles` chooses directions independently;
+`-Device hip -GpuName 9070` selects the AMD Radeon RX 9070 XT. The legacy
+PowerShell entity generator skips the server rack so it cannot overwrite it.

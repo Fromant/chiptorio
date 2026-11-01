@@ -10,7 +10,7 @@ M.recipe({
   category = "smelting",
   energy_required = 4,
   ingredients = { M.item("silica", 4) },
-  results = { M.item("glass", 1) },
+  results = { M.item("glass", 4) },
 })
 
 -- The first "logic device": a thermionic valve.
