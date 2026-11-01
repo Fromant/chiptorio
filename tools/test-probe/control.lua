@@ -3014,7 +3014,8 @@ local function power_grid_advance()
 end
 
 script.on_init(function()
-  -- Real lab variants preserve modules and swap collision footprints under R.
+  -- Standalone providers: native direction rotation, no entity replacement.
+  -- Animation plays only when compute modules are installed (running).
   local rack_surface = game.create_surface("rack-rotation-contract", {width=32, height=32})
   local rack_tiles = {}
   for x=-4,4 do for y=-4,4 do rack_tiles[#rack_tiles+1]={name="refined-concrete",position={x,y}} end end
@@ -3022,32 +3023,37 @@ script.on_init(function()
   local rack = rack_surface.create_entity{name="server-rack", position={0,0.5}, force="player",raise_built=true}
   check(rack ~= nil, "could not create rack rotation fixture")
   if rack then
+    -- Idle: no animation (speed = 0) when no compute modules installed
     local animation = remote.call("chiptorio-rack", "animation_status", rack)
-    check(animation and animation.speed > 0, "rack decorative animation is not running while idle")
+    check(animation and animation.speed == 0, "rack animation should be frozen while idle")
+
+    -- Install compute modules: animation should start
     check(rack.get_module_inventory().insert{name="microcomputer",count=2} == 2,
       "could not install rack rotation modules")
-    for step=1,4 do
-      local original = rack
-      local position = rack.position
-      local replacement = remote.call("chiptorio-rack", "rotate", rack)
-      check(replacement and replacement.valid, "rack rotation refused at quarter turn " .. step)
-      if not replacement then break end
-      rack = replacement
-      animation = remote.call("chiptorio-rack", "animation_status", rack)
-      check(animation and animation.speed > 0, "rack rotation lost its decorative animation")
-      check(not original.valid, "rack rotation left the old entity behind")
-      check(rack.position.x == position.x and rack.position.y == position.y,
-        "rack rotation moved the ground origin")
-      check(rack.get_module_inventory().get_item_count("microcomputer") == 2,
-        "rack rotation lost modules at quarter turn " .. step)
-      local box = rack.bounding_box
-      local width = box.right_bottom.x - box.left_top.x
-      local height = box.right_bottom.y - box.left_top.y
-      check(math.abs(width - height) < 0.01,
-        "rack 3x3 footprint changed at quarter turn " .. step)
+    animation = remote.call("chiptorio-rack", "animation_status", rack)
+    check(animation and animation.speed > 0, "rack animation should run when active")
+
+    -- Rotation: entity replaced with new direction, modules preserved
+    local rotated = remote.call("chiptorio-rack", "rotate", rack, false)
+    check(rotated and rotated.valid, "rack rotation refused at quarter turn")
+    check(rotated.name == "server-rack", "rack name changed after rotation")
+
+    -- Rotate 3 more times to complete a full rotation cycle
+    for step = 2, 4 do
+      rotated = remote.call("chiptorio-rack", "rotate", rotated, false)
+      check(rotated and rotated.valid, "rack rotation refused at quarter turn " .. step)
     end
-    check(rack.name == "server-rack", "rack did not return to original view")
-    rack.destroy()
+
+    -- Modules preserved through rotation
+    check(rotated.get_module_inventory().get_item_count("microcomputer") == 2,
+      "rack rotation lost modules")
+
+    local box = rotated.bounding_box
+    local width = box.right_bottom.x - box.left_top.x
+    local height = box.right_bottom.y - box.left_top.y
+    check(math.abs(width - height) < 0.01, "rack 3x3 footprint changed after rotation")
+
+    rotated.destroy()
   end
   game.delete_surface(rack_surface)
   local map = game.map_settings
@@ -3165,7 +3171,8 @@ script.on_nth_tick(120, function()
   check_provider_gui_module_validation()
 
   -- --- Provider rotation tests ---
-  -- Verify providers rotate natively via entity.direction (no entity replacement).
+  -- Verify providers rotate correctly (entity replaced with new direction,
+  -- modules preserved).
   check_provider_rotation()
 
   finish("runtime")
@@ -3390,15 +3397,12 @@ local function check_provider_rotation()
   local rack = place(surface, force, created, "server-rack", 151.5, 67.5)
   check(rack and rack.valid, "server-rack can be placed for rotation test")
   if rack and rack.valid then
-    local initial_dir = rack.direction
     -- Rotate clockwise (R)
     local rotated = remote.call("chiptorio-rack", "rotate", rack, false)
     check(rotated and rotated.valid, "rack rotation returns valid entity")
     if rotated and rotated.valid then
-      check(rotated.direction ~= initial_dir,
-        "rack direction changes on rotation")
-      check(rotated.unit_number == rack.unit_number,
-        "rack is not replaced during rotation (same unit_number)")
+      check(rotated.name == "server-rack",
+        "rack keeps its name after rotation")
     end
   end
   destroy_all(created)

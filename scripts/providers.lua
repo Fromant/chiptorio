@@ -64,15 +64,22 @@ local function make_provider(spec)
     local art = require("graphics.entity.server-rack.sprite-def")
     local gs = { animation = {} }
     for direction, graphic in pairs(art) do
+      -- Base animation is frozen to a single frame; rack_runtime.lua plays
+      -- the full working loop via rendering.draw_animation with a named
+      -- animation prototype registered below.
       local frozen = M.copy(graphic)
-      -- Freeze the base animation to a single frame; the rendering overlay
-      -- in rack_runtime.lua plays the working loop only when active.
       for _, layer in ipairs(frozen.layers) do
         layer.frame_count = 1
         layer.animation_speed = 0.001
         layer.repeat_count = 1
       end
       gs.animation[direction] = frozen
+      -- Register the full animation as a named prototype so rack_runtime can
+      -- play it via rendering.draw_animation.
+      local anim = M.copy(graphic)
+      anim.type = "animation"
+      anim.name = "chiptorio-rack-" .. direction
+      data:extend({ anim })
     end
     entity.graphics_set = gs
     entity.collision_box = { { -1.4, -1.4 }, { 1.4, 1.4 } }
