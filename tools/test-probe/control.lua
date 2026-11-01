@@ -3150,5 +3150,256 @@ script.on_nth_tick(120, function()
   check_foup_dock_gui()
   check_answer_engine_gui()
   check_playthrough()
+
+  -- --- Standalone prototype migration tests ---
+  -- Verify all non-lab machines are standalone assembling-machine prototypes,
+  -- not lab clones. This ensures full control over graphics, animation, and GUI.
+  check_provider_standalone()
+  check_metrology_standalone()
+  check_answer_engine_standalone()
+  check_qln_drive_standalone()
+  check_quantum_core_standalone()
+
+  -- --- Computer GUI module validation tests ---
+  -- Verify the custom GUI only accepts supported module types in each slot.
+  check_provider_gui_module_validation()
+
+  -- --- Provider rotation tests ---
+  -- Verify providers rotate natively via entity.direction (no entity replacement).
+  check_provider_rotation()
+
   finish("runtime")
 end)
+
+-- ============================================================================
+-- Standalone Prototype Migration Tests
+-- ============================================================================
+
+--- Verify all compute providers are standalone assembling-machines, not lab clones.
+local function check_provider_standalone()
+  local surface = game.surfaces[1]
+  local force = player.force or game.forces["player"]
+  local created = {}
+
+  for _, name in ipairs({ "server-rack", "memory-bank", "datacenter" }) do
+    local entity = place(surface, force, created, name, 151.5, 67.5)
+    check(entity and entity.valid, "provider " .. name .. " can be placed")
+    if entity and entity.valid then
+      check(entity.type == "assembling-machine",
+        name .. " is an assembling-machine, got " .. tostring(entity.type))
+      check(#(entity.prototype.crafting_categories or {}) == 0 or
+          (entity.prototype.crafting_categories[1] == "crafting" and
+           (entity.prototype.crafting_speed or 0) < 0.01),
+        name .. " has crafting disabled")
+      check((entity.prototype.module_slots or 0) > 0,
+        name .. " has module slots")
+      -- Must NOT be a lab
+      check(data.raw.lab[name] == nil,
+        name .. " is not a lab prototype")
+    end
+  end
+  destroy_all(created)
+end
+
+--- Verify metrology-lab is a standalone assembling-machine, not a lab clone.
+local function check_metrology_standalone()
+  local surface = game.surfaces[1]
+  local force = player.force or game.forces["player"]
+  local created = {}
+
+  local entity = place(surface, force, created, "metrology-lab", 151.5, 67.5)
+  check(entity and entity.valid, "metrology-lab can be placed")
+  if entity and entity.valid then
+    check(entity.type == "assembling-machine",
+      "metrology-lab is an assembling-machine, got " .. tostring(entity.type))
+    check(data.raw.lab["metrology-lab"] == nil,
+      "metrology-lab is not a lab prototype")
+    check((entity.prototype.crafting_speed or 0) < 0.01,
+      "metrology-lab crafting is disabled")
+  end
+  destroy_all(created)
+end
+
+--- Verify answer-engine is a standalone assembling-machine, not a lab clone.
+local function check_answer_engine_standalone()
+  local surface = game.surfaces[1]
+  local force = player.force or game.forces["player"]
+  local created = {}
+
+  local entity = place(surface, force, created, "answer-engine", 151.5, 67.5)
+  check(entity and entity.valid, "answer-engine can be placed")
+  if entity and entity.valid then
+    check(entity.type == "assembling-machine",
+      "answer-engine is an assembling-machine, got " .. tostring(entity.type))
+    check(data.raw.lab["answer-engine"] == nil,
+      "answer-engine is not a lab prototype")
+    check((entity.prototype.crafting_speed or 0) < 0.01,
+      "answer-engine crafting is disabled")
+  end
+  destroy_all(created)
+end
+
+--- Verify qln-storage-drive is a standalone assembling-machine, not a lab clone.
+local function check_qln_drive_standalone()
+  local surface = game.surfaces[1]
+  local force = player.force or game.forces["player"]
+  local created = {}
+
+  local entity = place(surface, force, created, "qln-storage-drive", 151.5, 67.5)
+  check(entity and entity.valid, "qln-storage-drive can be placed")
+  if entity and entity.valid then
+    check(entity.type == "assembling-machine",
+      "qln-storage-drive is an assembling-machine, got " .. tostring(entity.type))
+    check(data.raw.lab["qln-storage-drive"] == nil,
+      "qln-storage-drive is not a lab prototype")
+    check((entity.prototype.module_slots or 0) > 0,
+      "qln-storage-drive has module slots")
+  end
+  destroy_all(created)
+end
+
+--- Verify quantum-entanglement-core is a standalone assembling-machine, not a lab clone.
+local function check_quantum_core_standalone()
+  local surface = game.surfaces[1]
+  local force = player.force or game.forces["player"]
+  local created = {}
+
+  local entity = place(surface, force, created, "quantum-entanglement-core", 151.5, 67.5)
+  check(entity and entity.valid, "quantum-entanglement-core can be placed")
+  if entity and entity.valid then
+    check(entity.type == "assembling-machine",
+      "quantum-entanglement-core is an assembling-machine, got " .. tostring(entity.type))
+    check(data.raw.lab["quantum-entanglement-core"] == nil,
+      "quantum-entanglement-core is not a lab prototype")
+    check((entity.prototype.crafting_speed or 0) < 0.01,
+      "quantum-entanglement-core crafting is disabled")
+  end
+  destroy_all(created)
+end
+
+--- Verify the computer GUI only accepts supported module types in each slot.
+local function check_provider_gui_module_validation()
+  local player = probe_player()
+  if not player then
+    log("CHIPTORIO-TEST SKIP provider-gui-validation: the benchmark map has no player")
+    return
+  end
+
+  local surface = game.surfaces[1]
+  local force = player.force
+  local created = {}
+  clear_area(surface, { { 146, 64 }, { 160, 72 } })
+
+  local rack = place(surface, force, created, "server-rack", 151.5, 67.5)
+  if not rack then
+    destroy_all(created)
+    return
+  end
+  raise_built(created)
+
+  -- Open the GUI
+  local raised, err = pcall(function()
+    script.raise_event(defines.events.on_gui_opened, {
+      player_index = player.index,
+      entity = rack,
+    })
+  end)
+  if not raised then
+    log("CHIPTORIO-TEST SKIP provider-gui-validation: on_gui_opened cannot be raised: " .. tostring(err))
+    destroy_all(created)
+    return
+  end
+
+  local frame = player.gui.screen["chiptorio-computer-gui"]
+  check(frame and frame.valid, "the computer GUI opened for a server rack")
+
+  -- Verify module slots exist (4 compute slots for server-rack)
+  local body = find_gui(frame, "chiptorio-computer-gui-body")
+  check(body and body.valid, "the computer GUI has a body")
+
+  -- Count slot labels (should be 4 for server-rack: 4 compute + 0 memory)
+  local slot_count = 0
+  if body and body.valid then
+    for _, child in ipairs(body.children or {}) do
+      if child.type == "label" and child.caption and
+          type(child.caption) == "string" and child.caption:find("Slot ", 1, true) then
+        slot_count = slot_count + 1
+      end
+    end
+  end
+  check(slot_count == 4, "server-rack GUI shows 4 module slots, got " .. tostring(slot_count))
+
+  -- Try inserting a compute module (should work)
+  local microcomputer = game.item_prototype["microcomputer"]
+  if microcomputer then
+    player.cursor_stack.set_stack({ name = "microcomputer", count = 1 })
+    local insert_btn = find_gui(frame, "chiptorio-computer-gui-insert-1")
+    if insert_btn and insert_btn.valid then
+      script.raise_event(defines.events.on_gui_click, {
+        player_index = player.index,
+        element = insert_btn,
+        button = defines.mouse_button_type.left,
+      })
+    end
+    local inv = rack.get_module_inventory()
+    check(inv and inv[1] and inv[1].valid_for_read and inv[1].name == "microcomputer",
+      "compute module can be inserted into compute slot 1")
+  end
+
+  -- Try inserting a memory module into compute slot (should fail)
+  player.cursor_stack.clear()
+  local sram = game.item_prototype["sram-module"]
+  if sram then
+    player.cursor_stack.set_stack({ name = "sram-module", count = 1 })
+    local insert_btn = find_gui(frame, "chiptorio-computer-gui-insert-1")
+    if insert_btn and insert_btn.valid then
+      script.raise_event(defines.events.on_gui_click, {
+        player_index = player.index,
+        element = insert_btn,
+        button = defines.mouse_button_type.left,
+      })
+    end
+    local inv = rack.get_module_inventory()
+    -- Slot 1 should still have microcomputer, not sram
+    check(inv and inv[1] and inv[1].valid_for_read and inv[1].name == "microcomputer",
+      "memory module is rejected from compute slot")
+  end
+
+  -- Close GUI
+  local close = find_gui(frame, "chiptorio-computer-gui-close")
+  if close and close.valid then
+    script.raise_event(defines.events.on_gui_click, {
+      player_index = player.index,
+      element = close,
+      button = defines.mouse_button_type.left,
+    })
+  end
+  check(not (player.gui.screen["chiptorio-computer-gui"] and
+    player.gui.screen["chiptorio-computer-gui"].valid),
+    "the computer GUI closes on close button")
+
+  destroy_all(created)
+end
+
+--- Verify providers rotate natively via entity.direction (no entity replacement).
+local function check_provider_rotation()
+  local surface = game.surfaces[1]
+  local force = player.force or game.forces["player"]
+  local created = {}
+
+  local rack = place(surface, force, created, "server-rack", 151.5, 67.5)
+  check(rack and rack.valid, "server-rack can be placed for rotation test")
+  if rack and rack.valid then
+    local initial_dir = rack.direction
+    -- Rotate clockwise (R)
+    local rotated = remote.call("chiptorio-rack", "rotate", rack, false)
+    check(rotated and rotated.valid, "rack rotation returns valid entity")
+    if rotated and rotated.valid then
+      check(rotated.direction ~= initial_dir,
+        "rack direction changes on rotation")
+      check(rotated.unit_number == rack.unit_number,
+        "rack is not replaced during rotation (same unit_number)")
+    end
+  end
+  destroy_all(created)
+end

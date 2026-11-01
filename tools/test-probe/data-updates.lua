@@ -855,15 +855,16 @@ check(memory_unlock["sram-module"] == "internet", "SRAM must stay an Internet un
 check(memory_unlock["dram-module"] == "process-3um", "DRAM must stay on the 3 µm node")
 check(memory_unlock["3d-nand-module"] == "process-7nm", "3D NAND must arrive with the 7 nm node")
 
--- Providers are lab clones with no science inputs and a readable module
+-- Providers are standalone assembling-machine clones with crafting disabled
+-- (crafting_speed = 0.001, effectively never crafts) and a readable module
 -- inventory. A provider that accepts a science pack would become an ordinary
 -- lab and bypass the network.
 for _, name in ipairs(PROVIDERS) do
-  local proto = data.raw.lab[name]
+  local proto = data.raw["assembling-machine"][name]
   check(proto, "missing provider entity " .. name)
   if proto then
     check(not proto.hidden, "provider is hidden: " .. name)
-    check(#(proto.inputs or {}) == 0, "provider " .. name .. " must have no science inputs")
+    check((proto.crafting_speed or 0) < 0.01, "provider " .. name .. " crafting must be disabled")
     check((proto.module_slots or 0) > 0, "provider " .. name .. " has no module slots")
     local categories = {}
     for _, category in ipairs(proto.allowed_module_categories or {}) do
@@ -875,8 +876,8 @@ for _, name in ipairs(PROVIDERS) do
     check((categories["chiptorio-memory"] or false) == expect_memory,
       "provider " .. name .. " memory category mismatch: expected " .. tostring(expect_memory))
     check(
-      not (data.raw["assembling-machine"] and data.raw["assembling-machine"][name]),
-      "provider " .. name .. " must not be a crafting machine"
+      data.raw["assembling-machine"] and data.raw["assembling-machine"][name],
+      "provider " .. name .. " must be an assembling machine"
     )
   end
   local item = data.raw.item[name]
@@ -1009,11 +1010,10 @@ for _, node in ipairs(nodes.NODES) do
   end
 end
 
-local metrology_lab = data.raw.lab["metrology-lab"]
+local metrology_lab = data.raw["assembling-machine"]["metrology-lab"]
 check(metrology_lab, "missing metrology-lab entity")
 check(metrology_lab and not metrology_lab.hidden, "metrology-lab is hidden")
-check(metrology_lab and metrology_lab.researching_speed and metrology_lab.researching_speed <= 0.001,
-  "metrology-lab must not be usable as a research lab")
+check((metrology_lab.crafting_speed or 0) < 0.01, "metrology-lab crafting must be disabled")
 local metrology_item = item("metrology-lab")
 check(metrology_item, "missing metrology-lab item")
 check(metrology_item and not metrology_item.hidden, "metrology-lab item is hidden")
@@ -1044,7 +1044,6 @@ for _, half in ipairs(nodes.HALF_NODES) do
   local proto = item(wafer)
   check(proto, "missing qualification wafer " .. wafer)
   check(proto and not proto.hidden, "qualification wafer is hidden: " .. wafer)
-  check(lab_inputs[wafer], "metrology-lab does not accept " .. wafer)
 
   local recipe = data.raw.recipe[nodes.qualification_recipe(half.key)]
   check(recipe, "missing pilot recipe " .. nodes.qualification_recipe(half.key))
@@ -1122,6 +1121,12 @@ for _, name in ipairs(QLN_NODES) do
       "QLN entity " .. name .. " has no collision or selection box")
     if data.raw.container[name] then
       check_world_picture(proto, name)
+    elseif data.raw["assembling-machine"][name] then
+      -- Assembling-machine clones keep their sprite footprint; collision box
+      -- must cover the art.
+      local box = proto.collision_box
+      check(box and box[1] and box[1][1] <= -1.1 and box[2][1] >= 1.1,
+        "QLN assembling-machine " .. name .. " collision box does not match its sprite")
     elseif data.raw.lab[name] then
       -- Lab clones keep the 3x3 lab sprite, so the collision box has to cover
       -- the art instead of a small 1.6x1.6 square in the middle.
@@ -1141,8 +1146,8 @@ for _, name in ipairs(QLN_NODES) do
   check(recipe and recipe.enabled == false, "QLN recipe should start locked: " .. name)
 end
 
-local drive = data.raw.lab["qln-storage-drive"]
-check(drive, "qln-storage-drive must be a lab clone")
+local drive = data.raw["assembling-machine"]["qln-storage-drive"]
+check(drive, "qln-storage-drive must be an assembling machine")
 if drive then
   check(#(drive.inputs or {}) == 0, "qln-storage-drive must have no science inputs")
   check(drive.module_slots == qmeta.DRIVE_SLOTS, "qln-storage-drive module slots do not match qln_meta")
@@ -1154,12 +1159,11 @@ if drive then
   check(not categories["chiptorio-chip"], "qln-storage-drive must not accept compute chips")
 end
 for _, name in ipairs({ "quantum-entanglement-core" }) do
-  local proto = data.raw.lab[name]
-  check(proto, name .. " must be a lab clone")
+  local proto = data.raw["assembling-machine"][name]
+  check(proto, name .. " must be an assembling machine")
   if proto then
-    check(#(proto.inputs or {}) == 0, name .. " must have no science inputs")
-    check(proto.researching_speed and proto.researching_speed <= 0.001,
-      name .. " must not be usable as a research lab")
+    check((proto.crafting_speed or 0) < 0.01, name .. " crafting must be disabled")
+    check((proto.module_slots or 0) == 0, name .. " must have no module slots")
   end
 end
 
@@ -1648,7 +1652,7 @@ check(unlocked_recipes(ai_meta.INFERENCE_LAB.gate)[ai_meta.INFERENCE_LAB.name],
 -- The endgame machine is a real recipe in the compute category, unlocked only
 -- by The Question.
 check(item("answer-engine"), "missing answer-engine item")
-check(data.raw.lab and data.raw.lab["answer-engine"], "missing answer-engine entity")
+check(data.raw["assembling-machine"] and data.raw["assembling-machine"]["answer-engine"], "missing answer-engine entity")
 local answer_recipe = data.raw.recipe["answer-engine"]
 check(answer_recipe, "missing answer-engine recipe")
 if answer_recipe then

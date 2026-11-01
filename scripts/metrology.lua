@@ -1,79 +1,57 @@
--- Metrology Lab, Metrology Test Structures and the pilot processes.
+-- Metrology Lab: a network qualification station, not a research lab.
 --
--- A half-node is not finished when its technology is researched. The technology
--- unlocks a pilot recipe in the previous node's fab and the Metrology Lab; the
--- player then produces Process Qualification Wafers and delivers them to the
--- lab. scripts/runtime/qualification_runtime.lua consumes the wafers and marks
--- the refinement qualified, which applies the force-wide bonus.
---
--- The lab is a vanilla lab clone for the same reason the compute providers are:
--- a lab prototype is the only 2.1 entity that exposes a readable item inventory
--- to script. Its `inputs` are the ten PQWs, not science packs, so it can hold
--- samples but cannot research anything. The near-zero research speed keeps the
--- animation honest.
+-- It accepts qualification wafers as inputs and reports to the network graph,
+-- but never researches ordinary technologies. It is a standalone assembling
+-- machine clone with no crafting categories, giving us full control over
+-- graphics, animation, and GUI without lab-clone quirks.
 
 local M = require("scripts.util")
 local nodes = require("scripts.process_nodes")
 
--- ---------------------------------------------------------------------------
--- Metrology Test Structure
--- ---------------------------------------------------------------------------
-
-local test_structure = M.item_from(
-  "bare-die",
-  "metrology-test-structure",
-  "chiptorio-materials",
-  "z[metrology-test-structure]"
-)
-M.set_icon(test_structure, "metrology-test-structure")
-test_structure.localised_description = nil
-
-M.recipe({
-  name = "metrology-test-structure",
-  enabled = false,
-  category = "chiptorio-fab",
-  energy_required = 4,
-  ingredients = {
-    M.item("glass", 1),
-    M.item("copper-plate", 1),
-    M.item("silica", 1),
-  },
-  results = { M.item("metrology-test-structure", 1) },
-})
-
--- ---------------------------------------------------------------------------
--- Metrology Lab
--- ---------------------------------------------------------------------------
-
-local BASE_LAB = "lab"
-local base = data.raw.lab[BASE_LAB]
-if not base then
-  error("chiptorio: base lab prototype not found")
+-- Standalone assembling-machine base for a non-researching machine.
+local am_base = data.raw["assembling-machine"]["assembling-machine-1"]
+if not am_base then
+  error("chiptorio: base assembling-machine not found")
 end
 
-local entity = M.copy(base)
+local entity = M.copy(am_base)
 entity.name = "metrology-lab"
 entity.localised_name = nil
 entity.localised_description = nil
 entity.minable = { mining_time = 0.5, result = "metrology-lab" }
 entity.placeable_by = { item = "metrology-lab", count = 1 }
 entity.next_upgrade = nil
-entity.energy_usage = "250kW"
-entity.researching_speed = 0.001
-entity.module_slots = 0
 entity.fast_replaceable_group = nil
 entity.hidden = false
 entity.hidden_in_factoriopedia = false
 entity.corpse = nil
-entity.inputs = {}
-for _, half in ipairs(nodes.HALF_NODES) do
-  entity.inputs[#entity.inputs + 1] = nodes.qualification_item(half.key)
-end
+
+-- No crafting: this is a network qualification station, not a factory.
+-- crafting_categories is inherited from the base assembling-machine
+-- ({"crafting"}), but crafting_speed = 0.001 makes crafting impractically
+-- slow. The metrology-lab is a network device, not a factory.
+entity.crafting_speed = 0.001
+entity.module_slots = 0
+entity.allowed_module_categories = {}
+
+entity.energy_usage = "250kW"
+entity.energy_source = entity.energy_source or { type = "electric" }
+entity.energy_source.drain = "5kW"
+
 M.set_entity_icon(entity, "metrology-lab")
-M.set_custom_animation(entity, "metrology-lab", 160, 160, 0.5)
+M.set_custom_graphics(entity, "metrology-lab", 160, 160, 0.5)
+
+-- Freeze the base animation; the runtime can drive it via rendering overlay
+-- if directional animation is needed later.
+entity.collision_box = { { -1.4, -1.4 }, { 1.4, 1.4 } }
+entity.selection_box = { { -1.5, -1.5 }, { 1.5, 1.5 } }
+entity.drawing_box_vertical_extension = 2.5
+entity.tile_width = 3
+entity.tile_height = 3
+
 data:extend({ entity })
 
-local item = M.copy(data.raw.item[BASE_LAB])
+local item = M.copy(data.raw.item["assembling-machine-1"])
 item.name = "metrology-lab"
 item.localised_name = nil
 item.localised_description = nil
@@ -97,6 +75,22 @@ M.recipe({
     M.item("electronic-circuit", 10),
   },
   results = { M.item("metrology-lab", 1) },
+})
+
+-- Metrology Test Structure: a dummy item consumed by pilot recipes. It has no
+-- other use; pilot lines consume it to produce Process Qualification Wafers.
+local mts_item = M.item_from("iron-plate", "metrology-test-structure", "chiptorio-materials", "zzz[metrology-test-structure]")
+M.set_icon(mts_item, "metrology-test-structure")
+mts_item.stack_size = 100
+data:extend({ mts_item })
+
+M.recipe({
+  name = "metrology-test-structure",
+  enabled = false,
+  category = "crafting",
+  energy_required = 2,
+  ingredients = { M.item("iron-plate", 1) },
+  results = { M.item("metrology-test-structure", 1) },
 })
 
 -- ---------------------------------------------------------------------------

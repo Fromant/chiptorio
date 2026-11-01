@@ -1,10 +1,12 @@
 -- Compute providers: the machines that turn chips into network compute.
 --
--- A provider is a lab clone with no science inputs and a near-zero research
--- speed. That is deliberate: a lab prototype is the only 2.1 entity that
--- exposes a readable module inventory to script, and cloning it keeps the
--- module-slot GUI, power connection, minimap behaviour and animation plumbing
--- valid without shipping entity art.
+-- A provider is a standalone assembling-machine clone with a dummy crafting
+-- category (no recipes) so it can never craft anything. That keeps the module
+-- inventory, power connection, minimap behaviour and directional graphics valid
+-- without cloning the lab prototype. The lab prototype carries research inputs,
+-- researching_speed, and a research animation clock we never use;
+-- assembling-machine gives us module slots + electric power + working/idle
+-- animation without any of that.
 --
 -- The prototype numbers live in scripts/research_meta.lua so the data stage and
 -- the runtime cannot drift apart.
@@ -12,15 +14,14 @@
 local M = require("scripts.util")
 local meta = require("scripts.research_meta")
 
-data:extend({
-  { type="custom-input", name="chiptorio-rack-rotate", key_sequence="", linked_game_control="rotate", consuming="none" },
-  { type="custom-input", name="chiptorio-rack-rotate-reverse", key_sequence="", linked_game_control="reverse-rotate", consuming="none" },
-})
+local entities = {}
+local items = {}
+local recipes = {}
 
 local function make_provider(spec)
-  local base = data.raw.lab["lab"]
+  local base = data.raw["assembling-machine"]["assembling-machine-1"]
   if not base then
-    error("chiptorio: base lab prototype not found")
+    error("chiptorio: base assembling-machine not found")
   end
 
   local profile = meta.PROVIDERS[spec.name]
@@ -40,76 +41,54 @@ local function make_provider(spec)
   entity.hidden_in_factoriopedia = false
   entity.corpse = nil
 
-  -- No science inputs and no meaningful research speed: this machine must
-  -- never be usable as an ordinary lab.
-  entity.inputs = {}
-  entity.researching_speed = 0.001
-  entity.energy_usage = profile.power .. "kW"
-  entity.energy_source = entity.energy_source or { type = "electric" }
-  entity.energy_source.drain = profile.drain
+  -- No crafting: this machine is a compute provider, not a factory.
+  -- Inherits crafting_categories = {"crafting"} from the base assembling-machine,
+  -- but crafting_speed = 0.001 makes crafting impractically slow (~1000x
+  -- slower than a normal assembler). Providers are network devices, not
+  -- factories; the custom GUI never shows crafting tabs.
+  entity.crafting_speed = 0.001
+  entity.module_slots = profile.computer_slots + profile.memory_slots
   local module_categories = { "chiptorio-computer" }
   if profile.memory_slots and profile.memory_slots > 0 then
     module_categories[#module_categories + 1] = "chiptorio-memory"
   end
-  entity.module_slots = profile.computer_slots + profile.memory_slots
   entity.allowed_module_categories = module_categories
-  -- Chips have an empty effect, so the inherited lab effect limits are fine.
-  entity.allowed_effects = nil
+
+  entity.energy_usage = profile.power .. "kW"
+  entity.energy_source = entity.energy_source or { type = "electric" }
+  entity.energy_source.drain = profile.drain
 
   M.set_entity_icon(entity, spec.name)
+
   if spec.blender_sprite then
     local art = require("graphics.entity.server-rack.sprite-def")
+    local gs = { animation = {} }
     for direction, graphic in pairs(art) do
-      local animation = M.copy(graphic.layers[1])
-      animation.type = "animation"
-      animation.name = "chiptorio-rack-" .. direction
-      data:extend({ animation })
+      local frozen = M.copy(graphic)
+      -- Freeze the base animation to a single frame; the rendering overlay
+      -- in rack_runtime.lua plays the working loop only when active.
+      for _, layer in ipairs(frozen.layers) do
+        layer.frame_count = 1
+        layer.animation_speed = 0.001
+        layer.repeat_count = 1
+      end
+      gs.animation[direction] = frozen
     end
-    local function sprite(direction)
-      assert(art[direction], "chiptorio: missing generated rack animation: " .. direction)
-      local still = M.copy(art[direction])
-      -- A provider never researches. Its lab animation clock can remain stopped;
-      -- the decorative loop is played independently by rack_runtime instead.
-      still.layers[1].frame_count = 1
-      for _, layer in ipairs(still.layers) do layer.repeat_count = 1 end
-      return still
-    end
-    entity.on_animation = sprite("north")
-    entity.off_animation = M.copy(entity.on_animation)
+    entity.graphics_set = gs
     entity.collision_box = { { -1.4, -1.4 }, { 1.4, 1.4 } }
     entity.selection_box = { { -1.5, -1.5 }, { 1.5, 1.5 } }
     entity.drawing_box_vertical_extension = 2.5
     entity.tile_width = 3
     entity.tile_height = 3
-    for i, direction in ipairs({ "east", "south", "west" }) do
-      local variant = M.copy(entity)
-      variant.name = "server-rack-" .. direction
-      variant.localised_name = { "entity-name.server-rack" }
-      variant.localised_description = { "entity-description.server-rack" }
-      variant.hidden = true
-      variant.hidden_in_factoriopedia = true
-      variant.on_animation = sprite(direction)
-      variant.off_animation = M.copy(variant.on_animation)
-      data:extend({ variant })
-      local variant_item = M.copy(data.raw.item.lab)
-      variant_item.name = variant.name
-      variant_item.localised_name = { "item-name.server-rack" }
-      variant_item.place_result = variant.name
-      variant_item.hidden = true
-      variant_item.hidden_in_factoriopedia = true
-      variant_item.subgroup = "chiptorio-providers"
-      M.set_icon(variant_item, "server-rack")
-      data:extend({ variant_item })
-    end
   elseif spec.custom_animation then
-    M.set_custom_animation(entity, spec.custom_animation or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
+    M.set_custom_graphics(entity, spec.custom_animation or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
   elseif spec.tint then
-    M.tint_animation(entity.on_animation, spec.tint)
-    M.tint_animation(entity.off_animation, spec.tint)
+    M.tint_entity(entity, spec.tint)
   end
-  data:extend({ entity })
 
-  local item = M.copy(data.raw.item["lab"])
+  entities[#entities + 1] = entity
+
+  local item = M.copy(data.raw.item["assembling-machine-1"])
   item.name = spec.name
   item.localised_name = nil
   item.localised_description = nil
@@ -119,16 +98,23 @@ local function make_provider(spec)
   item.hidden = false
   item.hidden_in_factoriopedia = false
   M.set_icon(item, spec.name)
-  data:extend({ item })
+  items[#items + 1] = item
 
-  M.recipe({
+  recipes[#recipes + 1] = {
+    type = "recipe",
     name = spec.name,
     enabled = false,
     energy_required = spec.craft_time,
     ingredients = spec.ingredients,
     results = { M.item(spec.name, 1) },
-  })
+  }
 end
+
+-- Custom inputs first.
+data:extend({
+  { type = "custom-input", name = "chiptorio-rack-rotate", key_sequence = "", linked_game_control = "rotate", consuming = "none" },
+  { type = "custom-input", name = "chiptorio-rack-rotate-reverse", key_sequence = "", linked_game_control = "reverse-rotate", consuming = "none" },
+})
 
 make_provider({
   name = "server-rack",
@@ -172,3 +158,11 @@ make_provider({
     M.item("electronic-circuit", 30),   -- Control Board
   },
 })
+
+-- Register entities and items. crafting_categories is empty so providers can
+-- never craft anything.
+local all = {}
+for _, e in ipairs(entities) do all[#all + 1] = e end
+for _, i in ipairs(items) do all[#all + 1] = i end
+for _, r in ipairs(recipes) do all[#all + 1] = r end
+data:extend(all)

@@ -1,9 +1,10 @@
 -- The Answer Engine: the final 5x5 machine.
 --
--- It is a lab clone with no inputs, so it cannot be used to research ordinary
--- technologies. Its only job is to run the scripted 42-minute computation in
--- scripts/answer_engine.lua. Cloning the lab keeps the GUI, power connection,
--- minimap behaviour and animation plumbing valid without shipping entity art.
+-- It is a standalone assembling-machine prototype with no crafting categories,
+-- so it cannot be used to research ordinary technologies. Its only job is to
+-- run the scripted 42-minute computation in scripts/answer_engine.lua.
+-- Cloning the assembling-machine gives us module-free, research-free behaviour
+-- with full control over graphics and animation.
 
 local M = require("scripts.util")
 
@@ -15,8 +16,6 @@ local function scale_shift(shift)
   if not shift then
     return nil
   end
-  -- Vector can be either {x = , y = } or the positional {x, y} form that
-  -- util.by_pixel produces in the base prototypes.
   local x = shift.x or shift[1] or 0
   local y = shift.y or shift[2] or 0
   return { x * SCALE_FACTOR, y * SCALE_FACTOR }
@@ -53,12 +52,13 @@ for _, name in ipairs(ingredient_names) do
   end
 end
 
-local base_entity = data.raw.lab["lab"]
-if not base_entity then
-  error("chiptorio: base lab missing; cannot build the answer engine")
+-- Standalone assembling-machine base.
+local am_base = data.raw["assembling-machine"]["assembling-machine-1"]
+if not am_base then
+  error("chiptorio: base assembling-machine not found")
 end
 
-local entity = M.copy(base_entity)
+local entity = M.copy(am_base)
 entity.name = "answer-engine"
 entity.localised_name = nil
 entity.localised_description = nil
@@ -74,24 +74,26 @@ entity.selection_box = { { -2.5, -2.5 }, { 2.5, 2.5 } }
 entity.hidden = false
 entity.hidden_in_factoriopedia = false
 
--- No science packs, no module slots, no ordinary research. The runtime owns
--- the countdown; the lab GUI is only used as a place to anchor our controls.
-entity.inputs = {}
+-- No crafting, no modules, no ordinary research.
+-- crafting_categories is inherited from the base assembling-machine
+-- ({"crafting"}), but crafting_speed = 0.001 makes crafting impractically
+-- slow. The answer-engine is a scripted computation device, not a factory.
+entity.crafting_speed = 0.001
 entity.module_slots = 0
-entity.researching_speed = 0.001
+entity.allowed_module_categories = {}
+
 entity.energy_usage = "10MW"
+entity.energy_source = entity.energy_source or { type = "electric" }
 entity.energy_source.drain = "2MW"
 entity.working_sound = nil
 entity.water_reflection = nil
 entity.icons_positioning = nil
 
-scale_animation(entity.on_animation)
-scale_animation(entity.off_animation)
-M.set_custom_animation(entity, "answer-engine", 240, 240, 0.5)
+M.set_custom_graphics(entity, "answer-engine", 240, 240, 0.5)
 M.set_entity_icon(entity, "answer-engine")
 data:extend({ entity })
 
-local item = M.copy(data.raw.item["lab"])
+local item = M.copy(data.raw.item["assembling-machine-1"])
 item.name = "answer-engine"
 item.localised_name = nil
 item.localised_description = nil
@@ -119,8 +121,8 @@ M.recipe({
     M.item("cryostat", 2),
     M.item("multi-core-cpu", 16),
     M.item("quantum-processor", 8),
-    M.item("advanced-circuit", 100),
-    M.item("steel-plate", 200),
+    M.item("advanced-circuit", 40),
+    M.item("steel-plate", 60),
   },
   results = { M.item("answer-engine", 1) },
 })

@@ -1,10 +1,11 @@
 -- Runtime: custom GUI for Chiptorio computer buildings.
 --
--- All Chiptorio computers are lab clones, so Factorio's default entity GUI
--- shows the vanilla "select research" button. Research is managed by the
--- network allocator, not by the player clicking in individual buildings, so
--- we replace the lab GUI with a custom read-only status panel that shows the
--- entity's network connection and the compute the network produces.
+-- All Chiptorio computers are standalone assembling-machine prototypes with
+-- module slots, so Factorio's default entity GUI would show crafting tabs and
+-- a vanilla module panel. Research is managed by the network allocator, not by
+-- the player clicking in individual buildings, so we replace the entire entity
+-- GUI with a custom panel: read-only status (network, compute, memory,
+-- bandwidth) plus interactive module slots that accept only supported modules.
 
 local meta = require("scripts.research_meta")
 local network = require("scripts.runtime.network_runtime")
@@ -13,14 +14,14 @@ local M = {}
 
 local COMPUTER_GUI = "chiptorio-computer-gui"
 
+-- Per-player: the entity whose custom GUI is currently open.
+local open_entity = {}
+
 local COMPUTER_NAME_SET = nil
 local function is_computer(entity)
   if not (entity and entity.valid) then
     return false
   end
-  -- All research labs use vanilla lab GUI so science-pack input slots work
-  -- correctly per generation. The network allocator manages research via
-  -- disabled_by_script.
   if meta.LAB_DEMAND[entity.name] then
     return false
   end
@@ -32,6 +33,27 @@ local function is_computer(entity)
     COMPUTER_NAME_SET["metrology-lab"] = true
   end
   return COMPUTER_NAME_SET[meta.provider_name(entity.name)] == true
+end
+
+--- Which module categories each slot index accepts, based on the provider
+--- profile. Returns { computer = count, memory = count }.
+local function slot_layout(entity)
+  local profile = meta.PROVIDERS[meta.provider_name(entity.name)]
+  if not profile then
+    return { computer = 0, memory = 0 }
+  end
+  return {
+    computer = profile.computer_slots or 0,
+    memory = profile.memory_slots or 0,
+  }
+end
+
+local function is_compute_module(item_name)
+  return meta.COMPUTER_PROFILES[item_name] ~= nil
+end
+
+local function is_memory_module(item_name)
+  return meta.MEMORY_PROFILES[item_name] ~= nil
 end
 
 --- Find the cached device for an entity and the graph it lives in.
@@ -70,6 +92,78 @@ local function destroy_gui(player)
   if frame and frame.valid then
     frame.destroy()
   end
+  open_entity[player.index] = nil
+end
+
+--- Insert a module from the player cursor into a provider slot. Validates
+--- that the module type matches the slot category (computer vs memory).
+local function try_insert_module(player, entity, slot_index)
+  local stack = player.cursor_stack
+  if not (stack and stack.valid_for_read) then
+    return false
+  end
+  local layout = slot_layout(entity)
+  local is_compute_slot = slot_index <= layout.computer
+  local name = stack.name
+
+  if is_compute_slot then
+    if not is_compute_module(name) then
+      player.print({ "chiptorio.computer_wrong_slot", "compute" })
+      return false
+    end
+  else
+    if not is_memory_module(name) then
+      player.print({ "chiptorio.computer_wrong_slot", "memory" })
+      return false
+    end
+  end
+
+  local inv = entity.get_module_inventory()
+  if not inv then return false end
+  local slot = inv[slot_index]
+  if slot and slot.valid_for_read and slot.name == name then
+    local room = slot.prototype.stack_size - slot.count
+    local to_move = math.min(stack.count, room)
+    if to_move > 0 then
+      slot.count = slot.count + to_move
+      stack.count = stack.count - to_move
+    end
+  elseif not (slot and slot.valid_for_read) then
+    local to_move = math.min(stack.count, stack.prototype.stack_size)
+    slot.set_stack{ name = name, count = to_move, quality = stack.quality }
+    stack.count = stack.count - to_move
+  else
+    player.print({ "chiptorio.computer_slot_occupied" })
+    return false
+  end
+  return true
+end
+
+--- Remove a module from a provider slot into the player cursor.
+local function try_remove_module(player, entity, slot_index)
+  local inv = entity.get_module_inventory()
+  if not inv then return false end
+  local slot = inv[slot_index]
+  if not (slot and slot.valid_for_read) then
+    return false
+  end
+  local stack = player.cursor_stack
+  if stack and stack.valid_for_read then
+    if stack.name == slot.name and stack.count < stack.prototype.stack_size then
+      local room = stack.prototype.stack_size - stack.count
+      local to_move = math.min(slot.count, room)
+      stack.count = stack.count + to_move
+      slot.count = slot.count - to_move
+      if slot.count <= 0 then slot.clear() end
+    else
+      player.print({ "chiptorio.computer_cursor_full" })
+      return false
+    end
+  else
+    stack.set_stack{ name = slot.name, count = slot.count, quality = slot.quality }
+    slot.clear()
+  end
+  return true
 end
 
 local function rebuild_gui(player, entity)
@@ -89,7 +183,7 @@ local function rebuild_gui(player, entity)
     direction = "vertical",
   })
   body.style.maximal_height = 420
-  body.style.minimal_width = 300
+  body.style.minimal_width = 340
 
   local device, graph = find_device(entity)
 
@@ -157,26 +251,80 @@ local function rebuild_gui(player, entity)
       body.add({ type = "label", caption = { "chiptorio.computer-labs-active", active } })
     end
 
-    -- Show module slots for labs that have them (Tube Mainframe, Mainframe Cluster, etc.)
+    -- Module slots: interactive, with category enforcement.
+    -- Providers (server-rack, memory-bank, datacenter) have module slots;
+    -- labs do not (module_slots = 0).
     local module_slots = entity.prototype and entity.prototype.module_inventory_size or 0
-    if device.kind == "lab" and module_slots > 0 then
+    if device.kind == "provider" and module_slots > 0 then
+      local layout = slot_layout(entity)
       local module_header = body.add({ type = "label", caption = { "chiptorio.computer-module-slots" } })
       module_header.style.font = "default-bold"
       module_header.style.top_margin = 4
 
       local module_inv = entity.get_module_inventory()
       if module_inv then
-        for i = 1, module_slots do
-          local slot = module_inv[i]
+        local total = layout.computer + layout.memory
+        for i = 1, total do
+          local is_compute_slot = i <= layout.computer
           local slot_flow = body.add({ type = "flow", direction = "horizontal" })
           slot_flow.style.vertical_align = "center"
+
           local slot_label = slot_flow.add({ type = "label", caption = "Slot " .. i .. ":" })
           slot_label.style.minimal_width = 60
-          if slot and slot.valid_for_read then
-            slot_flow.add({ type = "sprite", sprite = "item/" .. slot.name, tooltip = slot.prototype.localised_name })
-            slot_flow.add({ type = "label", caption = " x" .. slot.count })
+
+          local slot = module_inv[i]
+          local has_module = slot and slot.valid_for_read
+
+          -- Sprite showing what's in the slot (or empty placeholder).
+          local sprite_name = has_module and ("item/" .. slot.name) or "utility/slot"
+          local slot_sprite = slot_flow.add({
+            type = "sprite",
+            sprite = sprite_name,
+          })
+          slot_sprite.style.size = 32
+
+          -- Count label.
+          if has_module then
+            local count_label = slot_flow.add({ type = "label", caption = "x" .. slot.count })
+            count_label.style.minimal_width = 30
+          end
+
+          -- Status text.
+          local status_label = slot_flow.add({ type = "label", caption = "" })
+          status_label.style.minimal_width = 220
+
+          if has_module then
+            local name = slot.name
+            local ok = is_compute_slot and is_compute_module(name) or is_memory_module(name)
+            if ok then
+              status_label.caption = { "chiptorio.computer_module_ok" }
+              status_label.style.font_color = { 0.6, 1, 0.6 }
+            else
+              status_label.caption = { "chiptorio.computer_module_wrong" }
+              status_label.style.font_color = { 1, 0.6, 0.6 }
+            end
           else
-            slot_flow.add({ type = "label", caption = { "chiptorio.computer-module-empty" } }).style.font_color = {0.6, 0.6, 0.6}
+            local hint = is_compute_slot and { "chiptorio.computer_slot_empty_compute" } or { "chiptorio.computer_slot_empty_memory" }
+            status_label.caption = hint
+            status_label.style.font_color = { 0.6, 0.6, 0.6 }
+          end
+
+          -- Insert / eject buttons.
+          local btn_flow = slot_flow.add({ type = "flow", direction = "horizontal" })
+          if has_module then
+            local eject_btn = btn_flow.add({
+              type = "button",
+              name = COMPUTER_GUI .. "-eject-" .. i,
+              caption = { "chiptorio.computer_eject" },
+            })
+            eject_btn.style.minimal_width = 70
+          else
+            local insert_btn = btn_flow.add({
+              type = "button",
+              name = COMPUTER_GUI .. "-insert-" .. i,
+              caption = { "chiptorio.computer_insert" },
+            })
+            insert_btn.style.minimal_width = 70
           end
         end
       end
@@ -192,6 +340,7 @@ local function rebuild_gui(player, entity)
     caption = { "chiptorio.computer-close" },
   })
 
+  open_entity[player.index] = entity
   player.opened = frame
   frame.bring_to_front()
 end
@@ -225,9 +374,32 @@ function M.on_gui_click(event)
   if not (player and element and element.valid) then
     return
   end
+
   if element.name == COMPUTER_GUI .. "-close" then
     destroy_gui(player)
     player.opened = nil
+    return
+  end
+
+  -- Module slot insert / eject.
+  local slot_index = tonumber(element.name:match("^" .. COMPUTER_GUI .. "-insert-(%d+)$"))
+  if slot_index then
+    local entity = open_entity[player.index]
+    if entity and entity.valid then
+      try_insert_module(player, entity, slot_index)
+      rebuild_gui(player, entity)
+    end
+    return
+  end
+
+  slot_index = tonumber(element.name:match("^" .. COMPUTER_GUI .. "-eject-(%d+)$"))
+  if slot_index then
+    local entity = open_entity[player.index]
+    if entity and entity.valid then
+      try_remove_module(player, entity, slot_index)
+      rebuild_gui(player, entity)
+    end
+    return
   end
 end
 

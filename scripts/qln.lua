@@ -73,15 +73,15 @@ local function make_node(spec)
   })
 end
 
--- The QLN is a lab-based storage machine: it needs module slots for memory
--- cells but must never be usable as a research lab.
-local function make_lab_node(spec)
-  local base = data.raw.lab["lab"]
-  if not base then
-    error("chiptorio: base lab missing; cannot build " .. spec.name)
+-- The QLN is a standalone assembling-machine-based storage machine: it needs
+-- module slots for memory cells but must never be usable as a research lab.
+local function make_provider_node(spec)
+  local am_base = data.raw["assembling-machine"]["assembling-machine-1"]
+  if not am_base then
+    error("chiptorio: base assembling-machine missing; cannot build " .. spec.name)
   end
 
-  local entity = Mutil.copy(base)
+  local entity = Mutil.copy(am_base)
   entity.name = spec.name
   entity.localised_name = nil
   entity.localised_description = nil
@@ -92,29 +92,33 @@ local function make_lab_node(spec)
   entity.corpse = nil
   entity.hidden = false
   entity.hidden_in_factoriopedia = false
-  entity.inputs = {}
-  entity.researching_speed = 0.001
+
+  -- No crafting: this is a QLN storage node, not a factory.
+  -- crafting_categories is inherited from the base assembling-machine
+  -- ({"crafting"}), but crafting_speed = 0.001 makes crafting impractically
+  -- slow.
+  entity.crafting_speed = 0.001
   entity.module_slots = spec.module_slots or 0
   entity.allowed_module_categories = spec.allowed_module_categories
-  entity.allowed_effects = nil
+
   entity.energy_usage = spec.energy_usage or "25kW"
   entity.energy_source = entity.energy_source or { type = "electric" }
   entity.energy_source.drain = spec.drain or "5kW"
-  -- The lab sprite is 3x3. Its collision box must match the sprite, or a
-  -- Storage Drive looks like it occupies a 3x3 footprint while only blocking a
-  -- 1.6x1.6 square - belts and players walk into the art.
+
+  -- Collision box must match the sprite footprint, or a Storage Drive looks
+  -- like it occupies a 3x3 area while only blocking a 1.6x1.6 square.
   entity.collision_box = spec.collision_box or { { -1.2, -1.2 }, { 1.2, 1.2 } }
   entity.selection_box = spec.selection_box or { { -1.5, -1.5 }, { 1.5, 1.5 } }
+
   Mutil.set_entity_icon(entity, spec.icon)
   if spec.custom_animation then
-    Mutil.set_custom_animation(entity, spec.custom_animation or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
+    Mutil.set_custom_graphics(entity, spec.custom_animation or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
   elseif spec.tint then
-    Mutil.tint_animation(entity.on_animation, spec.tint)
-    Mutil.tint_animation(entity.off_animation, spec.tint)
+    Mutil.tint_entity(entity, spec.tint)
   end
   data:extend({ entity })
 
-  local item = Mutil.copy(data.raw.item["lab"])
+  local item = Mutil.copy(data.raw.item["assembling-machine-1"])
   item.name = spec.name
   item.localised_name = nil
   item.localised_description = nil
@@ -297,7 +301,7 @@ make_node({
   },
 })
 
-make_lab_node({
+make_provider_node({
   name = "qln-storage-drive",
   icon = "qln-storage-drive",
   order = "f[qln-storage-drive]",
@@ -341,7 +345,7 @@ make_accumulator_node({
 -- Phase 6: quantum QLN, FOUP and wireless
 -- ---------------------------------------------------------------------------
 
-make_lab_node({
+make_provider_node({
   name = "quantum-entanglement-core",
   icon = "quantum-entanglement-core",
   order = "h[quantum-entanglement-core]",

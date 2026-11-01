@@ -36,8 +36,7 @@ local ANSWER = "answer-engine"
 local AI_TRAINING = "training-cluster"
 local AI_INFERENCE = "inference-lab"
 
-local PROVIDER_NAMES = { "memory-bank", "datacenter" }
-for _, name in ipairs(meta.RACK_VARIANTS) do PROVIDER_NAMES[#PROVIDER_NAMES + 1] = name end
+local PROVIDER_NAMES = { "server-rack", "memory-bank", "datacenter" }
 
 local LAB_NAMES = {}
 for name in pairs(meta.LAB_DEMAND) do
