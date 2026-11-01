@@ -58,8 +58,9 @@ M.MEMORY_PROFILES = {
   ["3d-nand-module"] = { capacity = 4096, bandwidth = 16, power = 12, heat = 2 },
 }
 
--- Compute providers. Every provider is a lab clone with no science inputs, so
--- it can expose module slots without being usable as a research lab.
+-- Compute providers. Providers are built from scratch as assembling-machine
+-- prototypes with no crafting (crafting_speed = 0.001) so they can expose
+-- module slots without being usable as research labs.
 -- Providers accept computer modules (`category = chiptorio-computer`) in their
 -- computer slots, and memory modules in their memory slots. A computer bundles
 -- its own compute and memory; memory banks provide additional bulk memory.

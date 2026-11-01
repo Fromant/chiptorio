@@ -3,10 +3,15 @@
   Runs the Chiptorio data-contract and runtime probe.
 
 .DESCRIPTION
-  Copies chiptorio and the test probe into an isolated mod directory, creates a
-  map, runs a short benchmark, and requires the unit, data and runtime probe
+  Copies chiptorio and the test probe into an isolated mod directory, creates
+  a map, runs a short benchmark, and requires the unit, data and runtime probe
   suites to log PASS. The probe is a separate mod so it runs after every
   chiptorio prototype and data-updates mutation.
+
+  Note: Factorio's `--create` with `--mod-directory` does not write a save
+  file in headless Steam environments. We work around this by creating a base
+  save without mods first, then loading it with the mod directory so Factorio
+  auto-registers the chiptorio mods.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File tools\test-contract.ps1
@@ -31,6 +36,7 @@ $mods = Join-Path $work "mods"
 $dest = Join-Path $mods "chiptorio"
 $probeDest = Join-Path $mods "chiptorio-test-probe"
 $save = Join-Path $work "contract.zip"
+$baseSave = Join-Path $work "contract-base.zip"
 $logPath = Join-Path $env:APPDATA "Factorio\factorio-current.log"
 
 if ($Ticks % 60 -ne 0) {
@@ -63,7 +69,7 @@ if ($LASTEXITCODE -ge 8) { throw "probe robocopy failed with code $LASTEXITCODE"
 function Get-LogProblems {
   param([string]$LogPath)
   if (-not (Test-Path $LogPath)) { return @("No Factorio log at $LogPath") }
-  $log = Get-Content $LogPath -Raw
+  $log = Get-Content -LiteralPath $LogPath -Raw
   $found = @()
   $patterns = @(
     "Error while running",
@@ -77,8 +83,6 @@ function Get-LogProblems {
   foreach ($p in $patterns) {
     $m = [regex]::Matches($log, "(?im)^.*$p.*$")
     foreach ($hit in $m) {
-      # Diagnostics deliberately name things like quantum-error-correction, which
-      # would otherwise trip the "chiptorio.*error" pattern.
       if ($hit.Value -match "CHIPTORIO-TEST INFO") { continue }
       $found += $hit.Value.Trim()
     }
@@ -99,37 +103,25 @@ function Show-Failure {
   exit 1
 }
 
-Write-Host "Creating a contract map with mod directory: $mods"
-$create = Start-Process -FilePath $Factorio `
-  -ArgumentList @("--mod-directory", "`"$mods`"", "--create", "`"$save`"") `
+# --- Step 1: Create a base save without mods (--create works without mods) ---
+Write-Host "Creating base save without mods"
+Remove-Item $baseSave -ErrorAction SilentlyContinue
+$createBase = Start-Process -FilePath $Factorio `
+  -ArgumentList @("--create", "`"$baseSave`"") `
   -PassThru -Wait
-
-# Factorio returns exit code 1 when the Steam API requires a restart;
-# the map may not have been created yet. Retry once if save missing.
-if ($create.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $save)) {
-  Write-Host "Map creation exited with code $($create.ExitCode), retrying..." -ForegroundColor Yellow
-  Start-Sleep -Seconds 3
-  $create = Start-Process -FilePath $Factorio `
-    -ArgumentList @("--mod-directory", "`"$mods`"", "--create", "`"$save`"") `
-    -PassThru -Wait
+if ($createBase.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $baseSave)) {
+  throw "Base map creation failed with exit code $($createBase.ExitCode)"
 }
-
-$problems = @()
-if ($create.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $save)) {
-  $logContent = if (Test-Path -LiteralPath $logPath) { Get-Content -LiteralPath $logPath -Raw } else { "" }
-  if ($logContent -match "(?im)Error|Failed|chiptorio.*error|cannot be loaded|Invalid prototype|Unknown prototype") {
-    $problems += "map creation exited with code $($create.ExitCode)"
-  } else {
-    $problems += "map creation produced no save at $save (exit code $($create.ExitCode))"
-  }
+if (-not (Test-Path $baseSave)) {
+  throw "Base map was not created at $baseSave"
 }
-$problems += Get-LogProblems -LogPath $logPath
-if ($problems.Count -gt 0) { Show-Failure -Problems $problems }
+Write-Host "Base save created: $baseSave"
 
-if (-not (Test-Path $save)) {
-  Show-Failure -Problems @("map creation produced no save at $save")
-}
+# --- Step 2: Copy base save to final save name (Factorio will load mods from --mod-directory) ---
+Write-Host "Copying base save to final save path"
+Copy-Item -LiteralPath $baseSave -Destination $save -Force
 
+# --- Step 3: Run the benchmark with mods ---
 Write-Host "Running a $Ticks-tick contract benchmark"
 $bench = Start-Process -FilePath $Factorio `
   -ArgumentList @("--mod-directory", "`"$mods`"", "--benchmark", "`"$save`"", "--benchmark-ticks", "$Ticks") `
@@ -173,4 +165,4 @@ if (-not $Keep) {
   Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-exit 0
+exit 0

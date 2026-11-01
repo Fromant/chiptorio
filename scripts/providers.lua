@@ -1,12 +1,9 @@
 -- Compute providers: the machines that turn chips into network compute.
 --
--- A provider is a standalone assembling-machine clone with a dummy crafting
--- category (no recipes) so it can never craft anything. That keeps the module
--- inventory, power connection, minimap behaviour and directional graphics valid
--- without cloning the lab prototype. The lab prototype carries research inputs,
--- researching_speed, and a research animation clock we never use;
--- assembling-machine gives us module slots + electric power + working/idle
--- animation without any of that.
+-- Built from scratch (not cloned from lab or assembling-machine) so there is
+-- no inherited baggage: no research inputs, no researching_speed, no crafting
+-- categories beyond a dummy "crafting" with near-zero speed, no base-prototype
+-- animation clock, no module-effect limits. Every field is set explicitly.
 --
 -- The prototype numbers live in scripts/research_meta.lua so the data stage and
 -- the runtime cannot drift apart.
@@ -17,93 +14,87 @@ local meta = require("scripts.research_meta")
 local entities = {}
 local items = {}
 local recipes = {}
+local animations = {}
 
 local function make_provider(spec)
-  local base = data.raw["assembling-machine"]["assembling-machine-1"]
-  if not base then
-    error("chiptorio: base assembling-machine not found")
-  end
-
   local profile = meta.PROVIDERS[spec.name]
   if not profile then
     error("chiptorio: no provider profile for '" .. spec.name .. "'")
   end
 
-  local entity = M.copy(base)
-  entity.name = spec.name
-  entity.localised_name = nil
-  entity.localised_description = nil
-  entity.minable = { mining_time = 0.5, result = spec.name }
-  entity.placeable_by = { item = spec.name, count = 1 }
-  entity.next_upgrade = nil
-  entity.fast_replaceable_group = "chiptorio-providers"
-  entity.hidden = false
-  entity.hidden_in_factoriopedia = false
-  entity.corpse = nil
-
-  -- No crafting: this machine is a compute provider, not a factory.
-  -- Inherits crafting_categories = {"crafting"} from the base assembling-machine,
-  -- but crafting_speed = 0.001 makes crafting impractically slow (~1000x
-  -- slower than a normal assembler). Providers are network devices, not
-  -- factories; the custom GUI never shows crafting tabs.
-  entity.crafting_speed = 0.001
-  entity.module_slots = profile.computer_slots + profile.memory_slots
   local module_categories = { "chiptorio-computer" }
   if profile.memory_slots and profile.memory_slots > 0 then
     module_categories[#module_categories + 1] = "chiptorio-memory"
   end
-  entity.allowed_module_categories = module_categories
 
-  entity.energy_usage = profile.power .. "kW"
-  entity.energy_source = entity.energy_source or { type = "electric" }
-  entity.energy_source.drain = profile.drain
+  local total_slots = profile.computer_slots + profile.memory_slots
 
-  M.set_entity_icon(entity, spec.name)
+  -- Build the graphics_set: either blender-rendered directional sprites or a
+  -- single custom animation. Base graphics are frozen single-frame stills;
+  -- rack_runtime.lua plays the working loop via rendering.draw_animation only
+  -- when compute modules are installed.
+  local graphics_set = { animation = {} }
 
   if spec.blender_sprite then
     local art = require("graphics.entity.server-rack.sprite-def")
-    local gs = { animation = {} }
     for direction, graphic in pairs(art) do
-      -- Base animation is frozen to a single frame; rack_runtime.lua plays
-      -- the full working loop via rendering.draw_animation with a named
-      -- animation prototype registered below.
+      -- Frozen still for the base graphics_set.
       local frozen = M.copy(graphic)
       for _, layer in ipairs(frozen.layers) do
         layer.frame_count = 1
         layer.animation_speed = 0.001
         layer.repeat_count = 1
       end
-      gs.animation[direction] = frozen
-      -- Register the full animation as a named prototype so rack_runtime can
-      -- play it via rendering.draw_animation.
+      graphics_set.animation[direction] = frozen
+
+      -- Full animation registered as a named prototype for rack_runtime.
       local anim = M.copy(graphic)
       anim.type = "animation"
       anim.name = "chiptorio-rack-" .. direction
-      data:extend({ anim })
+      animations[#animations + 1] = anim
     end
-    entity.graphics_set = gs
-    entity.collision_box = { { -1.4, -1.4 }, { 1.4, 1.4 } }
-    entity.selection_box = { { -1.5, -1.5 }, { 1.5, 1.5 } }
-    entity.drawing_box_vertical_extension = 2.5
-    entity.tile_width = 3
-    entity.tile_height = 3
+    -- Ensure all four directions exist in the graphics_set table.
+    graphics_set.animation = {
+      north = graphics_set.animation.north,
+      east = graphics_set.animation.east,
+      south = graphics_set.animation.south,
+      west = graphics_set.animation.west,
+    }
   elseif spec.custom_animation then
-    M.set_custom_graphics(entity, spec.custom_animation or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
-  elseif spec.tint then
-    M.tint_entity(entity, spec.tint)
+    -- Single still image for non-bladner providers (memory-bank, datacenter).
+    graphics_set.animation = {
+      filename = "__chiptorio__/graphics/entity/" .. spec.custom_animation .. ".png",
+      width = spec.size_w or 128,
+      height = spec.size_h or 128,
+      scale = spec.scale or 0.5,
+      shift = spec.shift or { 0, 0 },
+    }
   end
+
+  local entity = M.make_provider_base({
+    name = spec.name,
+    localised_name = { "entity-name." .. spec.name },
+    localised_description = { "entity-description." .. spec.name },
+    minable = { mining_time = 0.5, result = spec.name },
+    placeable_by = { item = spec.name, count = 1 },
+    fast_replaceable_group = "chiptorio-providers",
+    module_slots = total_slots,
+    allowed_module_categories = module_categories,
+    energy_usage = profile.power .. "kW",
+    drain = profile.drain,
+    graphics_set = graphics_set,
+    collision_box = spec.collision_box or { { -1.4, -1.4 }, { 1.4, 1.4 } },
+    selection_box = spec.selection_box or { { -1.5, -1.5 }, { 1.5, 1.5 } },
+    drawing_box_vertical_extension = spec.drawing_box_vertical_extension or 2.5,
+    tile_width = spec.tile_width or 3,
+    tile_height = spec.tile_height or 3,
+    max_health = spec.max_health,
+  })
 
   entities[#entities + 1] = entity
 
-  local item = M.copy(data.raw.item["assembling-machine-1"])
-  item.name = spec.name
-  item.localised_name = nil
-  item.localised_description = nil
+  local item = M.item_proto("assembling-machine-1", spec.name, "chiptorio-providers", spec.order)
   item.place_result = spec.name
-  item.subgroup = "chiptorio-providers"
-  item.order = spec.order
-  item.hidden = false
-  item.hidden_in_factoriopedia = false
   M.set_icon(item, spec.name)
   items[#items + 1] = item
 
@@ -166,10 +157,11 @@ make_provider({
   },
 })
 
--- Register entities and items. crafting_categories is empty so providers can
--- never craft anything.
+-- Register named animations together with entities so Factorio's prototype
+-- validation sees both at once.
 local all = {}
 for _, e in ipairs(entities) do all[#all + 1] = e end
 for _, i in ipairs(items) do all[#all + 1] = i end
+for _, a in ipairs(animations) do all[#all + 1] = a end
 for _, r in ipairs(recipes) do all[#all + 1] = r end
 data:extend(all)

@@ -313,6 +313,97 @@ function M.set_custom_accumulator(entity, name, width, height, scale, shift)
   entity.chargable_graphics = cg
 end
 
+--- Build a from-scratch assembling-machine prototype for Chiptorio devices
+--- that are not factories: compute providers, qualification stations, QLN
+--- storage nodes, the Answer Engine, etc.
+---
+--- Unlike cloning `data.raw.lab["lab"]` or `data.raw["assembling-machine"][...]`,
+--- this sets every field explicitly so there is no inherited baggage:
+--- no research inputs, no researching_speed, no unwanted crafting categories,
+--- no base-prototype animation clock, no module-effect limits.
+---
+--- Fields set explicitly:
+---   * identity: type, name, localised_name, localised_description
+---   * placement: minable, placeable_by, next_upgrade, fast_replaceable_group
+---   * visuals: corpse, hidden, hidden_in_factoriopedia, graphics_set
+---   * physics: collision_box, selection_box, drawing_box_vertical_extension,
+---     tile_width, tile_height
+---   * power: energy_usage, energy_source (electric with drain)
+---   * crafting: crafting_categories = {"crafting"}, crafting_speed = 0.001
+---     (Factorio requires a category and positive speed; 0.001 is effectively
+---     no crafting)
+---   * modules: module_slots, allowed_module_categories, allowed_effects = nil
+---   * inputs: optional list of input item names (for metrology-lab wafers)
+---   * misc: max_health, working_sound, water_reflection, icons_positioning
+function M.make_provider_base(spec)
+  local entity = {
+    type = "assembling-machine",
+    name = spec.name,
+    localised_name = spec.localised_name,
+    localised_description = spec.localised_description,
+    minable = spec.minable or { mining_time = 0.5, result = spec.name },
+    placeable_by = spec.placeable_by or { item = spec.name, count = 1 },
+    next_upgrade = nil,
+    fast_replaceable_group = spec.fast_replaceable_group,
+    hidden = spec.hidden or false,
+    hidden_in_factoriopedia = spec.hidden_in_factoriopedia or false,
+    corpse = nil,
+    dying_explosion = spec.dying_explosion,
+
+    -- No crafting: this is a network/compute device, not a factory.
+    -- Factorio requires a non-empty category and positive speed on
+    -- assembling-machines. We use the vanilla "crafting" category with a
+    -- near-zero speed so no recipe can ever complete in practical time.
+    crafting_categories = { "crafting" },
+    crafting_speed = 0.001,
+
+    -- Module slots (0 for pure devices, >0 for providers/storage nodes).
+    module_slots = spec.module_slots or 0,
+    allowed_module_categories = spec.allowed_module_categories or {},
+    -- Modules in Chiptorio have empty effect tables, but Factorio requires
+    -- allowed_effects to be non-empty when module_slots > 0.
+    allowed_effects = spec.allowed_effects or { "consumption" },
+
+    -- Electric power.
+    energy_usage = spec.energy_usage,
+    energy_source = {
+      type = "electric",
+      usage_priority = spec.usage_priority or "secondary-input",
+      drain = spec.drain or "0kW",
+    },
+
+    -- Graphics.
+    graphics_set = spec.graphics_set,
+
+    -- Entity icon (single-string form, used by entities).
+    icon = spec.icon or ("__chiptorio__/graphics/icons/" .. spec.name .. ".png"),
+    icon_size = spec.icon_size or 64,
+
+    -- Physics.
+    collision_box = spec.collision_box or { { -0.9, -0.9 }, { 0.9, 0.9 } },
+    selection_box = spec.selection_box or { { -1, -1 }, { 1, 1 } },
+    drawing_box_vertical_extension = spec.drawing_box_vertical_extension,
+    tile_width = spec.tile_width,
+    tile_height = spec.tile_height,
+
+    -- Optional overrides.
+    max_health = spec.max_health,
+    working_sound = spec.working_sound,
+    water_reflection = spec.water_reflection,
+    icons_positioning = spec.icons_positioning,
+    inputs = spec.inputs,
+  }
+
+  -- Remove nil fields so Factorio doesn't choke on them.
+  for k, v in pairs(entity) do
+    if v == nil then
+      entity[k] = nil
+    end
+  end
+
+  return entity
+end
+
 --- Shortcut for a crafting recipe.
 --- 2.1 merged RecipePrototype.category into a `categories` list, so accept
 --- the friendlier single-category form here.

@@ -1,65 +1,50 @@
 -- Metrology Lab: a network qualification station, not a research lab.
 --
--- It accepts qualification wafers as inputs and reports to the network graph,
--- but never researches ordinary technologies. It is a standalone assembling
--- machine clone with no crafting categories, giving us full control over
--- graphics, animation, and GUI without lab-clone quirks.
+-- Built from scratch (not cloned from lab) so there is no inherited baggage:
+-- no science inputs, no researching_speed, no crafting, no base-prototype
+-- animation clock. Accepts qualification wafers as inputs and reports to the
+-- network graph, but never researches ordinary technologies.
 
 local M = require("scripts.util")
 local nodes = require("scripts.process_nodes")
 
--- Standalone assembling-machine base for a non-researching machine.
-local am_base = data.raw["assembling-machine"]["assembling-machine-1"]
-if not am_base then
-  error("chiptorio: base assembling-machine not found")
+local entity = M.make_provider_base({
+  name = "metrology-lab",
+  localised_name = { "entity-name.metrology-lab" },
+  localised_description = { "entity-description.metrology-lab" },
+  minable = { mining_time = 0.5, result = "metrology-lab" },
+  placeable_by = { item = "metrology-lab", count = 1 },
+  module_slots = 0,
+  allowed_module_categories = {},
+  energy_usage = "250kW",
+  drain = "5kW",
+  graphics_set = {
+    animation = {
+      filename = "__chiptorio__/graphics/entity/metrology-lab.png",
+      width = 160,
+      height = 160,
+      scale = 0.5,
+      shift = { 0, 0 },
+    },
+  },
+  collision_box = { { -1.4, -1.4 }, { 1.4, 1.4 } },
+  selection_box = { { -1.5, -1.5 }, { 1.5, 1.5 } },
+  drawing_box_vertical_extension = 2.5,
+  tile_width = 3,
+  tile_height = 3,
+  inputs = {},
+})
+
+-- Qualification wafer inputs: the metrology lab consumes pilot wafers to
+-- advance half-node qualifications on the network.
+for _, half in ipairs(nodes.HALF_NODES) do
+  entity.inputs[#entity.inputs + 1] = nodes.qualification_item(half.key)
 end
-
-local entity = M.copy(am_base)
-entity.name = "metrology-lab"
-entity.localised_name = nil
-entity.localised_description = nil
-entity.minable = { mining_time = 0.5, result = "metrology-lab" }
-entity.placeable_by = { item = "metrology-lab", count = 1 }
-entity.next_upgrade = nil
-entity.fast_replaceable_group = nil
-entity.hidden = false
-entity.hidden_in_factoriopedia = false
-entity.corpse = nil
-
--- No crafting: this is a network qualification station, not a factory.
--- crafting_categories is inherited from the base assembling-machine
--- ({"crafting"}), but crafting_speed = 0.001 makes crafting impractically
--- slow. The metrology-lab is a network device, not a factory.
-entity.crafting_speed = 0.001
-entity.module_slots = 0
-entity.allowed_module_categories = {}
-
-entity.energy_usage = "250kW"
-entity.energy_source = entity.energy_source or { type = "electric" }
-entity.energy_source.drain = "5kW"
-
-M.set_entity_icon(entity, "metrology-lab")
-M.set_custom_graphics(entity, "metrology-lab", 160, 160, 0.5)
-
--- Freeze the base animation; the runtime can drive it via rendering overlay
--- if directional animation is needed later.
-entity.collision_box = { { -1.4, -1.4 }, { 1.4, 1.4 } }
-entity.selection_box = { { -1.5, -1.5 }, { 1.5, 1.5 } }
-entity.drawing_box_vertical_extension = 2.5
-entity.tile_width = 3
-entity.tile_height = 3
 
 data:extend({ entity })
 
-local item = M.copy(data.raw.item["assembling-machine-1"])
-item.name = "metrology-lab"
-item.localised_name = nil
-item.localised_description = nil
+local item = M.item_proto("assembling-machine-1", "metrology-lab", "chiptorio-computers", "f[metrology-lab]")
 item.place_result = "metrology-lab"
-item.subgroup = "chiptorio-computers"
-item.order = "f[metrology-lab]"
-item.hidden = false
-item.hidden_in_factoriopedia = false
 M.set_icon(item, "metrology-lab")
 data:extend({ item })
 

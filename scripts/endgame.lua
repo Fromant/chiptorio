@@ -1,10 +1,9 @@
 -- The Answer Engine: the final 5x5 machine.
 --
--- It is a standalone assembling-machine prototype with no crafting categories,
--- so it cannot be used to research ordinary technologies. Its only job is to
--- run the scripted 42-minute computation in scripts/answer_engine.lua.
--- Cloning the assembling-machine gives us module-free, research-free behaviour
--- with full control over graphics and animation.
+-- Built from scratch (not cloned from lab or assembling-machine) so there is
+-- no inherited baggage: no crafting, no modules, no researching_speed, no
+-- base-prototype animation clock. Its only job is to run the scripted
+-- 42-minute computation in scripts/answer_engine.lua.
 
 local M = require("scripts.util")
 
@@ -52,57 +51,38 @@ for _, name in ipairs(ingredient_names) do
   end
 end
 
--- Standalone assembling-machine base.
-local am_base = data.raw["assembling-machine"]["assembling-machine-1"]
-if not am_base then
-  error("chiptorio: base assembling-machine not found")
-end
+local entity = M.make_provider_base({
+  name = "answer-engine",
+  localised_name = { "entity-name.answer-engine" },
+  localised_description = { "entity-description.answer-engine" },
+  minable = { mining_time = 2, result = "answer-engine" },
+  placeable_by = { item = "answer-engine", count = 1 },
+  module_slots = 0,
+  allowed_module_categories = {},
+  energy_usage = "10MW",
+  drain = "2MW",
+  graphics_set = {
+    animation = {
+      filename = "__chiptorio__/graphics/entity/answer-engine.png",
+      width = 240,
+      height = 240,
+      scale = 0.5,
+      shift = { 0, 0 },
+    },
+  },
+  collision_box = { { -2.3, -2.3 }, { 2.3, 2.3 } },
+  selection_box = { { -2.5, -2.5 }, { 2.5, 2.5 } },
+  max_health = 5000,
+  working_sound = nil,
+  water_reflection = nil,
+  icons_positioning = nil,
+})
 
-local entity = M.copy(am_base)
-entity.name = "answer-engine"
-entity.localised_name = nil
-entity.localised_description = nil
-entity.minable = { mining_time = 2, result = "answer-engine" }
-entity.placeable_by = { item = "answer-engine", count = 1 }
-entity.next_upgrade = nil
-entity.fast_replaceable_group = nil
-entity.corpse = nil
-entity.dying_explosion = nil
-entity.max_health = 5000
-entity.collision_box = { { -2.3, -2.3 }, { 2.3, 2.3 } }
-entity.selection_box = { { -2.5, -2.5 }, { 2.5, 2.5 } }
-entity.hidden = false
-entity.hidden_in_factoriopedia = false
-
--- No crafting, no modules, no ordinary research.
--- crafting_categories is inherited from the base assembling-machine
--- ({"crafting"}), but crafting_speed = 0.001 makes crafting impractically
--- slow. The answer-engine is a scripted computation device, not a factory.
-entity.crafting_speed = 0.001
-entity.module_slots = 0
-entity.allowed_module_categories = {}
-
-entity.energy_usage = "10MW"
-entity.energy_source = entity.energy_source or { type = "electric" }
-entity.energy_source.drain = "2MW"
-entity.working_sound = nil
-entity.water_reflection = nil
-entity.icons_positioning = nil
-
-M.set_custom_graphics(entity, "answer-engine", 240, 240, 0.5)
-M.set_entity_icon(entity, "answer-engine")
 data:extend({ entity })
 
-local item = M.copy(data.raw.item["assembling-machine-1"])
-item.name = "answer-engine"
-item.localised_name = nil
-item.localised_description = nil
+local item = M.item_proto("assembling-machine-1", "answer-engine", "chiptorio-computers", "f[answer-engine]")
 item.place_result = "answer-engine"
-item.subgroup = "chiptorio-computers"
-item.order = "f[answer-engine]"
 item.stack_size = 1
-item.hidden = false
-item.hidden_in_factoriopedia = false
 M.set_icon(item, "answer-engine")
 data:extend({ item })
 

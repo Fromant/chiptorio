@@ -1,9 +1,8 @@
 -- QLN prototypes: the pre-quantum Data Bus and the phase-six quantum layer.
 --
--- DESIGN §9. All entities are cloned from base prototypes and tinted; no
--- custom entity art. Storage Drives and the Quantum Entanglement Core are lab
--- clones because a lab is the only 2.1 prototype that exposes a module
--- inventory. The Construction Core is an accumulator clone, because it reads
+-- DESIGN §9. Storage Drives and the Quantum Entanglement Core are built from
+-- scratch (assembling-machine prototypes with module slots) because that is
+-- the only way to expose a module inventory without research-lab baggage. The Construction Core is an accumulator clone, because it reads
 -- and spends `entity.energy` while idle. Every other node is a 1x1 container.
 --
 -- The runtime never learns any of these numbers from this file: the tuning
@@ -73,60 +72,41 @@ local function make_node(spec)
   })
 end
 
--- The QLN is a standalone assembling-machine-based storage machine: it needs
+-- The QLN is a from-scratch assembling-machine-based storage machine: it needs
 -- module slots for memory cells but must never be usable as a research lab.
 local function make_provider_node(spec)
-  local am_base = data.raw["assembling-machine"]["assembling-machine-1"]
-  if not am_base then
-    error("chiptorio: base assembling-machine missing; cannot build " .. spec.name)
-  end
+  local entity = Mutil.make_provider_base({
+    name = spec.name,
+    localised_name = { "entity-name." .. spec.name },
+    localised_description = { "entity-description." .. spec.name },
+    minable = { mining_time = spec.mining_time or 0.5, result = spec.name },
+    placeable_by = { item = spec.name, count = 1 },
+    module_slots = spec.module_slots or 0,
+    allowed_module_categories = spec.allowed_module_categories or {},
+    energy_usage = spec.energy_usage or "25kW",
+    drain = spec.drain or "5kW",
+    graphics_set = spec.custom_animation and {
+      animation = {
+        filename = "__chiptorio__/graphics/entity/" .. spec.custom_animation .. ".png",
+        width = spec.size_w or 128,
+        height = spec.size_h or 128,
+        scale = spec.scale or 0.5,
+        shift = spec.shift or { 0, 0 },
+      },
+    } or nil,
+    collision_box = spec.collision_box or { { -1.2, -1.2 }, { 1.2, 1.2 } },
+    selection_box = spec.selection_box or { { -1.5, -1.5 }, { 1.5, 1.5 } },
+  })
 
-  local entity = Mutil.copy(am_base)
-  entity.name = spec.name
-  entity.localised_name = nil
-  entity.localised_description = nil
-  entity.minable = { mining_time = spec.mining_time or 0.5, result = spec.name }
-  entity.placeable_by = { item = spec.name, count = 1 }
-  entity.next_upgrade = nil
-  entity.fast_replaceable_group = nil
-  entity.corpse = nil
-  entity.hidden = false
-  entity.hidden_in_factoriopedia = false
-
-  -- No crafting: this is a QLN storage node, not a factory.
-  -- crafting_categories is inherited from the base assembling-machine
-  -- ({"crafting"}), but crafting_speed = 0.001 makes crafting impractically
-  -- slow.
-  entity.crafting_speed = 0.001
-  entity.module_slots = spec.module_slots or 0
-  entity.allowed_module_categories = spec.allowed_module_categories
-
-  entity.energy_usage = spec.energy_usage or "25kW"
-  entity.energy_source = entity.energy_source or { type = "electric" }
-  entity.energy_source.drain = spec.drain or "5kW"
-
-  -- Collision box must match the sprite footprint, or a Storage Drive looks
-  -- like it occupies a 3x3 area while only blocking a 1.6x1.6 square.
-  entity.collision_box = spec.collision_box or { { -1.2, -1.2 }, { 1.2, 1.2 } }
-  entity.selection_box = spec.selection_box or { { -1.5, -1.5 }, { 1.5, 1.5 } }
-
-  Mutil.set_entity_icon(entity, spec.icon)
-  if spec.custom_animation then
-    Mutil.set_custom_graphics(entity, spec.custom_animation or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
-  elseif spec.tint then
+  -- Apply tint to the graphics if specified.
+  if spec.tint then
     Mutil.tint_entity(entity, spec.tint)
   end
+
   data:extend({ entity })
 
-  local item = Mutil.copy(data.raw.item["assembling-machine-1"])
-  item.name = spec.name
-  item.localised_name = nil
-  item.localised_description = nil
+  local item = Mutil.item_proto("assembling-machine-1", spec.name, "chiptorio-qln", spec.order)
   item.place_result = spec.name
-  item.subgroup = "chiptorio-qln"
-  item.order = spec.order
-  item.hidden = false
-  item.hidden_in_factoriopedia = false
   Mutil.set_icon(item, spec.icon)
   data:extend({ item })
 
