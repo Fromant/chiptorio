@@ -18,8 +18,7 @@ local nodes = require("scripts.process_nodes")
 
 local M = {}
 
-local INPUT = defines.inventory.lab_input
-local MACHINE_INPUT = defines.inventory.assembling_machine_input
+local INPUT = defines.inventory.chest
 
 local function init_storage()
   storage.qualification = storage.qualification or {}
@@ -96,17 +95,13 @@ local function powered(entity)
   return entity.energy > 0 or entity.status ~= defines.entity_status.no_power
 end
 
---- Get the input inventory for a lab or metrology-lab entity.
--- Labs use lab_input; standalone assembling-machines use assembling_machine_input.
+--- Get the chest inventory for a metrology-lab entity.
+-- Metrology labs are container prototypes, so they use chest inventory.
 local function lab_inventory(entity)
   if not (entity and entity.valid) then
     return nil
   end
-  local inv = entity.get_inventory(INPUT)
-  if inv then
-    return inv
-  end
-  return entity.get_inventory(MACHINE_INPUT)
+  return entity.get_inventory(INPUT)
 end
 
 --- Remove up to `wanted` PQWs from the force's labs. Returns how many were

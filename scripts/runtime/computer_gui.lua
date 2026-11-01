@@ -254,7 +254,8 @@ local function rebuild_gui(player, entity)
     -- Module slots: clickable inventory slots. Click with items in hand to
     -- insert, click filled slot to eject to cursor. Only accepted module
     -- types can go in each slot (compute vs memory).
-    local module_slots = entity.prototype and entity.prototype.module_inventory_size or 0
+    local inv = entity.get_inventory(defines.inventory.chest)
+    local module_slots = inv and inv.size or 0
     if device.kind == "provider" and module_slots > 0 then
       local layout = slot_layout(entity)
       local module_header = body.add({ type = "label", caption = { "chiptorio.computer-module-slots" } })

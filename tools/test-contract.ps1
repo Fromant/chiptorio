@@ -1,25 +1,3 @@
-<#
-.SYNOPSIS
-  Runs the Chiptorio data-contract and runtime probe.
-
-.DESCRIPTION
-  Copies chiptorio and the test probe into an isolated mod directory, creates
-  a map, runs a short benchmark, and requires the unit, data and runtime probe
-  suites to log PASS. The probe is a separate mod so it runs after every
-  chiptorio prototype and data-updates mutation.
-
-  Note: Factorio's `--create` with `--mod-directory` does not write a save
-  file in headless Steam environments. We work around this by creating a base
-  save without mods first, then loading it with the mod directory so Factorio
-  auto-registers the chiptorio mods.
-
-.EXAMPLE
-  powershell -ExecutionPolicy Bypass -File tools\test-contract.ps1
-
-.EXAMPLE
-  powershell -ExecutionPolicy Bypass -File tools\test-contract.ps1 -Keep -Ticks 600
-#>
-
 param(
   [string]$Factorio,
   [int]$Ticks = 300,
@@ -36,7 +14,6 @@ $mods = Join-Path $work "mods"
 $dest = Join-Path $mods "chiptorio"
 $probeDest = Join-Path $mods "chiptorio-test-probe"
 $save = Join-Path $work "contract.zip"
-$baseSave = Join-Path $work "contract-base.zip"
 $logPath = Join-Path $env:APPDATA "Factorio\factorio-current.log"
 
 if ($Ticks % 60 -ne 0) {
@@ -103,25 +80,21 @@ function Show-Failure {
   exit 1
 }
 
-# --- Step 1: Create a base save without mods (--create works without mods) ---
-Write-Host "Creating base save without mods"
-Remove-Item $baseSave -ErrorAction SilentlyContinue
-$createBase = Start-Process -FilePath $Factorio `
-  -ArgumentList @("--create", "`"$baseSave`"") `
+# --- Create a save with mods directly ---
+Write-Host "Creating save with mods"
+Remove-Item $save -ErrorAction SilentlyContinue
+$create = Start-Process -FilePath $Factorio `
+  -ArgumentList @("--mod-directory", "`"$mods`"", "--create", "`"$save`"") `
   -PassThru -Wait
-if ($createBase.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $baseSave)) {
-  throw "Base map creation failed with exit code $($createBase.ExitCode)"
+if ($create.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $save)) {
+  throw "Map creation failed with exit code $($create.ExitCode)"
 }
-if (-not (Test-Path $baseSave)) {
-  throw "Base map was not created at $baseSave"
+if (-not (Test-Path $save)) {
+  throw "Save was not created at $save"
 }
-Write-Host "Base save created: $baseSave"
+Write-Host "Save created: $save"
 
-# --- Step 2: Copy base save to final save name (Factorio will load mods from --mod-directory) ---
-Write-Host "Copying base save to final save path"
-Copy-Item -LiteralPath $baseSave -Destination $save -Force
-
-# --- Step 3: Run the benchmark with mods ---
+# --- Run the benchmark with mods ---
 Write-Host "Running a $Ticks-tick contract benchmark"
 $bench = Start-Process -FilePath $Factorio `
   -ArgumentList @("--mod-directory", "`"$mods`"", "--benchmark", "`"$save`"", "--benchmark-ticks", "$Ticks") `
@@ -165,4 +138,4 @@ if (-not $Keep) {
   Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-exit 0
+exit 0

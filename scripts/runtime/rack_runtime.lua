@@ -8,6 +8,7 @@
 -- assembling-machine prototypes in 2.1).
 
 local meta = require("scripts.research_meta")
+local network = require("scripts.runtime.network_runtime")
 local M = {}
 
 local COMPUTER_GUI_NAME = "chiptorio-computer-gui"
@@ -33,7 +34,7 @@ end
 
 --- Check if a provider has any computer modules installed.
 local function has_compute_modules(entity)
-  local inventory = entity.get_module_inventory()
+  local inventory = entity.get_inventory(defines.inventory.chest)
   if not inventory then return false end
   for _, item in pairs(inventory.get_contents()) do
     if meta.COMPUTER_PROFILES[item.name] then
@@ -109,6 +110,8 @@ function M.on_built(event)
     if dir == d then idx = i break end
   end
   set_entity_dir_index(entity, idx)
+  storage.network.dirty = true  -- Mark graph as dirty so network.tick() rebuilds with new inventory
+  network.tick()  -- Rebuild graph with new inventory
   update_visuals(entity)
 end
 
@@ -125,6 +128,8 @@ function M.on_removed(event)
 end
 
 function M.tick()
+  storage.network.dirty = true
+  network.tick()
   for _, surface in pairs(game.surfaces) do
     for _, entity in ipairs(surface.find_entities_filtered{name = PROVIDER_NAMES}) do
       if entity.valid then
@@ -166,7 +171,7 @@ function M.rotate(entity, reverse)
 
   -- Preserve state through entity replacement.
   local health, energy = entity.health, entity.energy
-  local modules = entity.get_module_inventory()
+  local modules = entity.get_inventory(defines.inventory.chest)
   local held = game.create_inventory(#modules)
   for slot = 1, #modules do held[slot].swap_stack(modules[slot]) end
 
@@ -182,7 +187,7 @@ function M.rotate(entity, reverse)
     return
   end
 
-  local target = replacement.get_module_inventory()
+  local target = replacement.get_inventory(defines.inventory.chest)
   for slot = 1, #target do target[slot].swap_stack(held[slot]) end
   held.destroy()
 

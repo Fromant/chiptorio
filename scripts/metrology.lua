@@ -14,36 +14,22 @@ local entity = M.make_provider_base({
   localised_description = { "entity-description.metrology-lab" },
   minable = { mining_time = 0.5, result = "metrology-lab" },
   placeable_by = { item = "metrology-lab", count = 1 },
-  module_slots = 0,
-  allowed_module_categories = {},
-  energy_usage = "250kW",
-  drain = "5kW",
-  graphics_set = {
-    animation = {
-      filename = "__chiptorio__/graphics/entity/metrology-lab.png",
-      width = 160,
-      height = 160,
-      scale = 0.5,
-      shift = { 0, 0 },
-    },
+  inventory_size = 100,
+  picture = {
+    filename = "__chiptorio__/graphics/entity/metrology-lab.png",
+    width = 160,
+    height = 160,
+    scale = 0.5,
+    shift = { 0, 0 },
   },
   collision_box = { { -1.4, -1.4 }, { 1.4, 1.4 } },
   selection_box = { { -1.5, -1.5 }, { 1.5, 1.5 } },
   drawing_box_vertical_extension = 2.5,
-  tile_width = 3,
-  tile_height = 3,
-  inputs = {},
 })
-
--- Qualification wafer inputs: the metrology lab consumes pilot wafers to
--- advance half-node qualifications on the network.
-for _, half in ipairs(nodes.HALF_NODES) do
-  entity.inputs[#entity.inputs + 1] = nodes.qualification_item(half.key)
-end
 
 data:extend({ entity })
 
-local item = M.item_proto("assembling-machine-1", "metrology-lab", "chiptorio-computers", "f[metrology-lab]")
+local item = M.item_proto("wooden-chest", "metrology-lab", "chiptorio-computers", "f[metrology-lab]")
 item.place_result = "metrology-lab"
 M.set_icon(item, "metrology-lab")
 data:extend({ item })

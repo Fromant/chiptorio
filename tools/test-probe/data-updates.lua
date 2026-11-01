@@ -228,6 +228,10 @@ local function picture_filename(sprite)
       end
     end
   end
+  -- Containers use direction-keyed pictures (north/east/south/west).
+  if type(sprite.north) == "table" then
+    return picture_filename(sprite.north)
+  end
   return nil
 end
 
@@ -855,32 +859,15 @@ check(memory_unlock["sram-module"] == "internet", "SRAM must stay an Internet un
 check(memory_unlock["dram-module"] == "process-3um", "DRAM must stay on the 3 µm node")
 check(memory_unlock["3d-nand-module"] == "process-7nm", "3D NAND must arrive with the 7 nm node")
 
--- Providers are standalone assembling-machine clones with crafting disabled
--- (crafting_categories = {"crafting"} with no usable recipes) and a readable
--- module inventory. A provider that accepts a science pack would become an
--- ordinary lab and bypass the network.
+-- Providers are standalone container prototypes with readable module
+-- inventory. A provider that accepts a science pack would become an ordinary
+-- lab and bypass the network.
 for _, name in ipairs(PROVIDERS) do
-  local proto = data.raw["assembling-machine"][name]
+  local proto = data.raw.container[name]
   check(proto, "missing provider entity " .. name)
   if proto then
     check(not proto.hidden, "provider is hidden: " .. name)
-    local cats = proto.crafting_categories or {}
-    check(#cats == 1 and cats[1] == "crafting",
-      "provider " .. name .. " crafting must be disabled")
-    check((proto.module_slots or 0) > 0, "provider " .. name .. " has no module slots")
-    local categories = {}
-    for _, category in ipairs(proto.allowed_module_categories or {}) do
-      categories[category] = true
-    end
-    check(categories["chiptorio-computer"], "provider " .. name .. " does not accept computer modules")
-    -- Only memory-bank and datacenter have memory slots; server-rack does not.
-    local expect_memory = (name == "memory-bank" or name == "datacenter")
-    check((categories["chiptorio-memory"] or false) == expect_memory,
-      "provider " .. name .. " memory category mismatch: expected " .. tostring(expect_memory))
-    check(
-      data.raw["assembling-machine"] and data.raw["assembling-machine"][name],
-      "provider " .. name .. " must be an assembling machine"
-    )
+    check((proto.inventory_size or 0) > 0, "provider " .. name .. " has inventory slots")
   end
   local item = data.raw.item[name]
   check(item, "missing provider item " .. name)
@@ -1012,10 +999,10 @@ for _, node in ipairs(nodes.NODES) do
   end
 end
 
-local metrology_lab = data.raw["assembling-machine"]["metrology-lab"]
+local metrology_lab = data.raw.container["metrology-lab"]
 check(metrology_lab, "missing metrology-lab entity")
 check(metrology_lab and not metrology_lab.hidden, "metrology-lab is hidden")
-check((metrology_lab.crafting_speed or 0) < 0.01, "metrology-lab crafting must be disabled")
+check((metrology_lab.inventory_size or 0) > 0, "metrology-lab has no inventory slots")
 local metrology_item = item("metrology-lab")
 check(metrology_item, "missing metrology-lab item")
 check(metrology_item and not metrology_item.hidden, "metrology-lab item is hidden")
@@ -1026,11 +1013,6 @@ check(item("metrology-test-structure"), "missing metrology-test-structure item")
 local test_recipe = data.raw.recipe["metrology-test-structure"]
 check(test_recipe, "missing metrology-test-structure recipe")
 check(test_recipe and test_recipe.enabled == false, "metrology-test-structure recipe should start locked")
-
-local lab_inputs = {}
-for _, input in ipairs(metrology_lab and metrology_lab.inputs or {}) do
-  lab_inputs[input] = true
-end
 
 local function has_prerequisite(tech, name)
   for _, prereq in ipairs(tech.prerequisites or {}) do
@@ -1148,24 +1130,17 @@ for _, name in ipairs(QLN_NODES) do
   check(recipe and recipe.enabled == false, "QLN recipe should start locked: " .. name)
 end
 
-local drive = data.raw["assembling-machine"]["qln-storage-drive"]
-check(drive, "qln-storage-drive must be an assembling machine")
+local drive = data.raw.container["qln-storage-drive"]
+check(drive, "qln-storage-drive must be a container")
 if drive then
   check(#(drive.inputs or {}) == 0, "qln-storage-drive must have no science inputs")
-  check(drive.module_slots == qmeta.DRIVE_SLOTS, "qln-storage-drive module slots do not match qln_meta")
-  local categories = {}
-  for _, category in ipairs(drive.allowed_module_categories or {}) do
-    categories[category] = true
-  end
-  check(categories["chiptorio-memory"], "qln-storage-drive does not accept memory modules")
-  check(not categories["chiptorio-chip"], "qln-storage-drive must not accept compute chips")
+  check(drive.inventory_size == qmeta.DRIVE_SLOTS, "qln-storage-drive inventory size does not match qln_meta")
 end
 for _, name in ipairs({ "quantum-entanglement-core" }) do
-  local proto = data.raw["assembling-machine"][name]
-  check(proto, name .. " must be an assembling machine")
+  local proto = data.raw.container[name]
+  check(proto, name .. " must be a container")
   if proto then
-    check((proto.crafting_speed or 0) < 0.01, name .. " crafting must be disabled")
-    check((proto.module_slots or 0) == 0, name .. " must have no module slots")
+    check((proto.inventory_size or 0) == 0, name .. " must have no inventory slots")
   end
 end
 
@@ -1654,7 +1629,7 @@ check(unlocked_recipes(ai_meta.INFERENCE_LAB.gate)[ai_meta.INFERENCE_LAB.name],
 -- The endgame machine is a real recipe in the compute category, unlocked only
 -- by The Question.
 check(item("answer-engine"), "missing answer-engine item")
-check(data.raw["assembling-machine"] and data.raw["assembling-machine"]["answer-engine"], "missing answer-engine entity")
+check(data.raw.container["answer-engine"], "missing answer-engine entity")
 local answer_recipe = data.raw.recipe["answer-engine"]
 check(answer_recipe, "missing answer-engine recipe")
 if answer_recipe then

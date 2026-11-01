@@ -81,31 +81,21 @@ local function make_provider_node(spec)
     localised_description = { "entity-description." .. spec.name },
     minable = { mining_time = spec.mining_time or 0.5, result = spec.name },
     placeable_by = { item = spec.name, count = 1 },
-    module_slots = spec.module_slots or 0,
-    allowed_module_categories = spec.allowed_module_categories or {},
-    energy_usage = spec.energy_usage or "25kW",
-    drain = spec.drain or "5kW",
-    graphics_set = spec.custom_animation and {
-      animation = {
-        filename = "__chiptorio__/graphics/entity/" .. spec.custom_animation .. ".png",
-        width = spec.size_w or 128,
-        height = spec.size_h or 128,
-        scale = spec.scale or 0.5,
-        shift = spec.shift or { 0, 0 },
-      },
+    inventory_size = spec.inventory_size or 0,
+    picture = spec.custom_animation and {
+      filename = "__chiptorio__/graphics/entity/" .. spec.custom_animation .. ".png",
+      width = spec.size_w or 128,
+      height = spec.size_h or 128,
+      scale = spec.scale or 0.5,
+      shift = spec.shift or { 0, 0 },
     } or nil,
     collision_box = spec.collision_box or { { -1.2, -1.2 }, { 1.2, 1.2 } },
     selection_box = spec.selection_box or { { -1.5, -1.5 }, { 1.5, 1.5 } },
   })
 
-  -- Apply tint to the graphics if specified.
-  if spec.tint then
-    Mutil.tint_entity(entity, spec.tint)
-  end
-
   data:extend({ entity })
 
-  local item = Mutil.item_proto("assembling-machine-1", spec.name, "chiptorio-qln", spec.order)
+  local item = Mutil.item_proto("wooden-chest", spec.name, "chiptorio-qln", spec.order)
   item.place_result = spec.name
   Mutil.set_icon(item, spec.icon)
   data:extend({ item })
@@ -290,7 +280,7 @@ make_provider_node({
   size_w = 128,
   size_h = 128,
   scale = 0.5,
-  module_slots = qmeta.DRIVE_SLOTS,
+  inventory_size = qmeta.DRIVE_SLOTS,
   allowed_module_categories = { "chiptorio-memory" },
   energy_usage = "25kW",
   drain = "5kW",
@@ -334,7 +324,7 @@ make_provider_node({
   size_w = 128,
   size_h = 128,
   scale = 0.5,
-  module_slots = 0,
+  inventory_size = 0,
   allowed_module_categories = {},
   energy_usage = "10MW",
   drain = "500kW",

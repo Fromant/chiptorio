@@ -57,30 +57,22 @@ local entity = M.make_provider_base({
   localised_description = { "entity-description.answer-engine" },
   minable = { mining_time = 2, result = "answer-engine" },
   placeable_by = { item = "answer-engine", count = 1 },
-  module_slots = 0,
-  allowed_module_categories = {},
-  energy_usage = "10MW",
-  drain = "2MW",
-  graphics_set = {
-    animation = {
-      filename = "__chiptorio__/graphics/entity/answer-engine.png",
-      width = 240,
-      height = 240,
-      scale = 0.5,
-      shift = { 0, 0 },
-    },
+  inventory_size = 0,
+  picture = {
+    filename = "__chiptorio__/graphics/entity/answer-engine.png",
+    width = 240,
+    height = 240,
+    scale = 0.5,
+    shift = { 0, 0 },
   },
   collision_box = { { -2.3, -2.3 }, { 2.3, 2.3 } },
   selection_box = { { -2.5, -2.5 }, { 2.5, 2.5 } },
   max_health = 5000,
-  working_sound = nil,
-  water_reflection = nil,
-  icons_positioning = nil,
 })
 
 data:extend({ entity })
 
-local item = M.item_proto("assembling-machine-1", "answer-engine", "chiptorio-computers", "f[answer-engine]")
+local item = M.item_proto("wooden-chest", "answer-engine", "chiptorio-computers", "f[answer-engine]")
 item.place_result = "answer-engine"
 item.stack_size = 1
 M.set_icon(item, "answer-engine")

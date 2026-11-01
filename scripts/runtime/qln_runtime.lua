@@ -134,7 +134,7 @@ end
 --- modules count; extra modules are stored but ignored, exactly like a
 --- provider's slot limit.
 local function drive_capacity(entity)
-  local inventory = entity.get_module_inventory()
+  local inventory = entity.get_inventory(defines.inventory.chest)
   if not inventory then
     return 0
   end

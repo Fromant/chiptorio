@@ -266,8 +266,9 @@ function M.chip_multipliers(force_index)
 end
 
 --- Read a provider's module inventory and turn it into capacities. Only the
--- first `computer_slots` computers and `memory_slots` memory modules count;
--- extra modules are stored but ignored, so the physical slot count is the limit.
+-- Count compute and memory modules in the chest inventory. Containers have a
+-- single inventory with no slot-type separation; any item can go in any slot.
+-- The physical inventory size is the limit.
 local function provider_descriptor(entity)
   local profile = meta.PROVIDERS[meta.provider_name(entity.name)]
   if not profile then
@@ -277,9 +278,6 @@ local function provider_descriptor(entity)
   local force_index = entity.force and entity.force.index or 0
   local multiplier = M.chip_multipliers(force_index)
 
-  -- Infinite research is stored as a level, not a multiplier: level 2 means
-  -- `infinite_multiplier(tech, 2)`, never 2. A missing entry is level 0 (not
-  -- researched), which must stay at 1 rather than become `infinite_multiplier(0)`.
   local infinite = storage.research and storage.research.infinite_multipliers
     and storage.research.infinite_multipliers[force_index] or {}
   local function infinite_mult(tech_name)
@@ -293,8 +291,6 @@ local function provider_descriptor(entity)
   local efficiency_mult = infinite_mult("chip-efficiency")
   local cooling_mult = infinite_mult("cooling-efficiency")
 
-  -- Fold efficiency into the multiplier table so installed computers and
-  -- memory modules are scaled exactly like the provider base power and heat.
   local scaled = {
     compute = multiplier.compute or 1,
     power = (multiplier.power or 1) * efficiency_mult,
@@ -305,35 +301,31 @@ local function provider_descriptor(entity)
   device.power = (profile.power or 0) * scaled.power
   device.heat = (profile.heat or 0) * scaled.power
   device.cooling = (profile.cooling or 0) * cooling_mult
-  device.computer_slots = profile.computer_slots or 0
-  device.memory_slots = profile.memory_slots or 0
-  device.computers = 0
-  device.memory_modules = 0
 
-  local inventory = entity.get_module_inventory()
+  local inventory = entity.get_inventory(defines.inventory.chest)
   if not inventory then
     return device
   end
 
+  local computer_count = 0
+  local memory_count = 0
+
   for _, item in ipairs(inventory.get_contents()) do
     local computer = meta.COMPUTER_PROFILES[item.name]
     local memory = meta.MEMORY_PROFILES[item.name]
-    if computer and device.computers < device.computer_slots then
-      local count = item.count
-      if count > device.computer_slots - device.computers then
-        count = device.computer_slots - device.computers
-      end
-      device.computers = device.computers + count
-      add_profile(device, computer, count, scaled)
-    elseif memory and device.memory_modules < device.memory_slots then
-      local count = item.count
-      if count > device.memory_slots - device.memory_modules then
-        count = device.memory_slots - device.memory_modules
-      end
-      device.memory_modules = device.memory_modules + count
-      add_profile(device, memory, count, scaled)
+    if computer then
+      computer_count = computer_count + item.count
+      add_profile(device, computer, item.count, scaled)
+    elseif memory then
+      memory_count = memory_count + item.count
+      add_profile(device, memory, item.count, scaled)
     end
   end
+
+  device.computer_slots = profile.computer_slots or 0
+  device.memory_slots = profile.memory_slots or 0
+  device.computers = computer_count
+  device.memory_modules = memory_count
 
   return device
 end

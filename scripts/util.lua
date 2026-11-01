@@ -335,9 +335,13 @@ end
 ---   * modules: module_slots, allowed_module_categories, allowed_effects = nil
 ---   * inputs: optional list of input item names (for metrology-lab wafers)
 ---   * misc: max_health, working_sound, water_reflection, icons_positioning
+--- Build a from-scratch container prototype for Chiptorio compute providers
+--- and storage nodes. Containers are the correct base type: they have
+--- inventory slots, native direction support, and no crafting/crafting-speed
+--- baggage. Compute is read from the chest inventory at runtime.
 function M.make_provider_base(spec)
   local entity = {
-    type = "assembling-machine",
+    type = "container",
     name = spec.name,
     localised_name = spec.localised_name,
     localised_description = spec.localised_description,
@@ -350,30 +354,13 @@ function M.make_provider_base(spec)
     corpse = nil,
     dying_explosion = spec.dying_explosion,
 
-    -- No crafting: this is a network/compute device, not a factory.
-    -- Factorio requires a non-empty category and positive speed on
-    -- assembling-machines. We use the vanilla "crafting" category with a
-    -- near-zero speed so no recipe can ever complete in practical time.
-    crafting_categories = { "crafting" },
-    crafting_speed = 0.001,
-
-    -- Module slots (0 for pure devices, >0 for providers/storage nodes).
-    module_slots = spec.module_slots or 0,
+    -- Inventory slots (0 for pure devices, >0 for providers/storage nodes).
+    -- Containers use defines.inventory.chest for inventory access.
+    inventory_size = spec.inventory_size or 0,
     allowed_module_categories = spec.allowed_module_categories or {},
-    -- Modules in Chiptorio have empty effect tables, but Factorio requires
-    -- allowed_effects to be non-empty when module_slots > 0.
-    allowed_effects = spec.allowed_effects or { "consumption" },
 
-    -- Electric power.
-    energy_usage = spec.energy_usage,
-    energy_source = {
-      type = "electric",
-      usage_priority = spec.usage_priority or "secondary-input",
-      drain = spec.drain or "0kW",
-    },
-
-    -- Graphics.
-    graphics_set = spec.graphics_set,
+    -- Picture with direction support. Containers use picture.north/east/south/west.
+    picture = spec.picture,
 
     -- Entity icon (single-string form, used by entities).
     icon = spec.icon or ("__chiptorio__/graphics/icons/" .. spec.name .. ".png"),
@@ -383,15 +370,9 @@ function M.make_provider_base(spec)
     collision_box = spec.collision_box or { { -0.9, -0.9 }, { 0.9, 0.9 } },
     selection_box = spec.selection_box or { { -1, -1 }, { 1, 1 } },
     drawing_box_vertical_extension = spec.drawing_box_vertical_extension,
-    tile_width = spec.tile_width,
-    tile_height = spec.tile_height,
 
     -- Optional overrides.
     max_health = spec.max_health,
-    working_sound = spec.working_sound,
-    water_reflection = spec.water_reflection,
-    icons_positioning = spec.icons_positioning,
-    inputs = spec.inputs,
   }
 
   -- Remove nil fields so Factorio doesn't choke on them.

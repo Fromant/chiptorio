@@ -363,12 +363,13 @@ local function check_research()
 
   -- One microcomputer provides 8 scalar, 256 memory, 32 bandwidth -- enough
   -- for vlsi-process (floor=8, memory=16, bandwidth=8).
-  datacenter.get_module_inventory().insert({ name = "microcomputer", count = 1 })
-  bank.get_module_inventory().insert({ name = "sram-module", count = 4 })
+  datacenter.get_inventory(defines.inventory.chest).insert({ name = "microcomputer", count = 1 })
+  bank.get_inventory(defines.inventory.chest).insert({ name = "sram-module", count = 4 })
 
   for _, entity in ipairs(created) do
     raise(defines.events.script_raised_built, entity)
   end
+  remote.call("chiptorio-network", "tick")
 
   local topo = topology(surface.index)
   check(topo, "topology returned nothing after research setup")
@@ -445,7 +446,8 @@ local function check_research()
 
   -- Empty the datacenter but leave memory alone: this is a pure compute
   -- shortfall, so the reason must be compute and decay must be proportional.
-  datacenter.get_module_inventory().clear()
+  datacenter.get_inventory(defines.inventory.chest).clear()
+  remote.call("chiptorio-rack", "on_built", {entity = datacenter})
   local starved_compute = remote.call("chiptorio-research", "evaluate", "vlsi-process")
   check(starved_compute, "research evaluate returned nothing without compute")
   if starved_compute then
@@ -458,7 +460,7 @@ local function check_research()
     check(lab.disabled_by_script == true, "compute-starved lab must be paused")
   end
 
-  datacenter.get_module_inventory().insert({ name = "microcomputer", count = 1 })
+  datacenter.get_inventory(defines.inventory.chest).insert({ name = "microcomputer", count = 1 })
   local recovered = remote.call("chiptorio-research", "evaluate", "vlsi-process")
   check(recovered, "research evaluate returned nothing after reinstalling computer")
   if recovered then
@@ -478,7 +480,7 @@ local function check_research()
   end
 
   -- Now starve on compute: clear the datacenter. vlsi-process must decay.
-  datacenter.get_module_inventory().clear()
+  datacenter.get_inventory(defines.inventory.chest).clear()
   local starved = remote.call("chiptorio-research", "evaluate", "vlsi-process")
   check(starved, "research evaluate returned nothing without compute")
   if starved then
@@ -553,7 +555,7 @@ local function check_qualification()
   created[#created + 1] = rack
   created[#created + 1] = bank
 
-  -- Try multiple inventory defines: Factorio 2.1 renamed assembling-machine
+  -- Try multiple inventory defines: Factorio 2.1 renamed container
   -- input inventory to crafter_input. Try lab_input, crafter_input, then chest.
   local inventory = nil
   for _, def in pairs({
@@ -578,12 +580,12 @@ local function check_qualification()
 
   local inserted = inventory.insert({ name = nodes.qualification_item(first.key), count = first.samples })
   if inserted == 0 then
-    log("CHIPTORIO-TEST SKIP qualification: could not insert wafers into metrology-lab (assembling-machine input inventory may not accept items without recipes)")
+    log("CHIPTORIO-TEST SKIP qualification: could not insert wafers into metrology-lab (container input inventory may not accept items without recipes)")
     return
   end
   check(inserted == first.samples, "could not insert wafers into metrology-lab: inserted " .. tostring(inserted) .. " of " .. tostring(first.samples))
-  rack.get_module_inventory().insert({ name = "microcomputer", count = 1 })
-  bank.get_module_inventory().insert({ name = "sram-module", count = 4 })
+  rack.get_inventory(defines.inventory.chest).insert({ name = "microcomputer", count = 1 })
+  bank.get_inventory(defines.inventory.chest).insert({ name = "sram-module", count = 4 })
 
   -- The map has no power grid. Fill the lab buffer so the power gate passes;
   -- the probe is testing analysis and network gating, not electricity.
@@ -657,7 +659,7 @@ local function check_qualification()
 
   -- 800 nm needs a network. With no compute it must fail even though the lab
   -- is connected, powered and has memory and bandwidth.
-  rack.get_module_inventory().clear()
+  rack.get_inventory(defines.inventory.chest).clear()
   local second_tech = force.technologies[nodes.half_tech_name(second.key)]
   check(second_tech, "missing refinement technology on the force: " .. nodes.half_tech_name(second.key))
   if second_tech then
@@ -672,7 +674,7 @@ local function check_qualification()
 
   -- One computer clears the floor: 1 * 8 * 1.05 = 8.4 scalar, above the
   -- 800 nm floor of 8.
-  rack.get_module_inventory().insert({ name = "microcomputer", count = 1 })
+  rack.get_inventory(defines.inventory.chest).insert({ name = "microcomputer", count = 1 })
   local recovered = remote.call("chiptorio-qualification", "evaluate", second.key)
   check(recovered, "qualification evaluate returned nothing after installing computer")
   if recovered then
@@ -740,7 +742,7 @@ local function check_qln()
     return
   end
 
-  drive.get_module_inventory().insert({ name = "sram-module", count = 4 })
+  drive.get_inventory(defines.inventory.chest).insert({ name = "sram-module", count = 4 })
   import_chest.insert({ name = "iron-plate", count = 100 })
 
   raise_built(created)
@@ -865,12 +867,12 @@ local function check_qln()
   -- An assembling machine with no recipe has no item filters and accepts
   -- nothing, so give it one exactly like a player would.
   local assembler = surface.create_entity({
-    name = "assembling-machine-1",
+    name = "stone-furnace",
     position = { 113.5, 56.5 },
     force = force,
     recipe = "iron-gear-wheel",
   })
-  check(assembler, "could not place assembling-machine-1 at 113.5,56.5")
+  check(assembler, "could not place stone-furnace at 113.5,56.5")
   if assembler then
     machines[#machines + 1] = assembler
   end
@@ -1175,8 +1177,8 @@ local function check_qln()
     return
   end
 
-  drive_a.get_module_inventory().insert({ name = "sram-module", count = 4 })
-  drive_b.get_module_inventory().insert({ name = "sram-module", count = 4 })
+  drive_a.get_inventory(defines.inventory.chest).insert({ name = "sram-module", count = 4 })
+  drive_b.get_inventory(defines.inventory.chest).insert({ name = "sram-module", count = 4 })
   supply_a.insert({ name = "iron-plate", count = 30 })
   raise_built(quantum_created)
   qln_step(1)
@@ -1244,9 +1246,9 @@ local function check_isolation()
   end
 
   -- Force A can clear the vlsi-process gate; force B has a lab but no provider.
-  drive_a.get_module_inventory().insert({ name = "sram-module", count = 4 })
-  drive_b.get_module_inventory().insert({ name = "sram-module", count = 4 })
-  datacenter_a.get_module_inventory().insert({ name = "microcomputer", count = 1 })
+  drive_a.get_inventory(defines.inventory.chest).insert({ name = "sram-module", count = 4 })
+  drive_b.get_inventory(defines.inventory.chest).insert({ name = "sram-module", count = 4 })
+  datacenter_a.get_inventory(defines.inventory.chest).insert({ name = "microcomputer", count = 1 })
   raise_built(created)
   qln_step(1)
 
@@ -1412,7 +1414,7 @@ local function check_answer()
     if not provider then
       racks_ok = false
     else
-      local modules = provider.get_module_inventory()
+      local modules = provider.get_inventory(defines.inventory.chest)
       for _, module in ipairs(spec[2]) do
         modules.insert({ name = module[1], count = module[2] })
       end
@@ -1429,7 +1431,7 @@ local function check_answer()
     destroy_all(created)
     return
   end
-  local inserted = drive.get_module_inventory().insert({ name = "sram-module", count = 4 })
+  local inserted = drive.get_inventory(defines.inventory.chest).insert({ name = "sram-module", count = 4 })
   check(inserted == 4, "could not install 4 SRAM modules in the Answer Storage Drive: " .. tostring(inserted))
 
   raise_built(created)
@@ -1630,9 +1632,9 @@ local function check_ai()
     return
   end
 
-  local inserted = rack.get_module_inventory().insert({ name = "supercomputer", count = 1 })
+  local inserted = rack.get_inventory(defines.inventory.chest).insert({ name = "supercomputer", count = 1 })
   check(inserted == 1, "could not install the supercomputer training needs: " .. tostring(inserted))
-  drive.get_module_inventory().insert({ name = "sram-module", count = 4 })
+  drive.get_inventory(defines.inventory.chest).insert({ name = "sram-module", count = 4 })
 
   -- machine-learning unlocks both buildings and every tier gate. Researching it
   -- recursively also covers the prerequisite chain on this disposable map.
@@ -1763,7 +1765,7 @@ local function check_computer_gui()
     destroy_all(created)
     return
   end
-  rack.get_module_inventory().insert({ name = "microcomputer", count = 1 })
+  rack.get_inventory(defines.inventory.chest).insert({ name = "microcomputer", count = 1 })
   raise_built(created)
 
   local raised, err = pcall(function()
@@ -1941,7 +1943,7 @@ local function check_qln_terminal_gui()
   -- Add a storage drive to make the terminal functional
   local drive = place(surface, force, created, "qln-storage-drive", 154.5, 67.5)
   if drive then
-    drive.get_module_inventory().insert({ name = "sram-module", count = 4 })
+    drive.get_inventory(defines.inventory.chest).insert({ name = "sram-module", count = 4 })
   end
   raise_built(created)
 
@@ -2319,7 +2321,7 @@ local function pt_build_bench(surface, force, created, provider, providers, plan
   for i = 1, providers do
     local entity = place(surface, force, created, provider, 104.5 + (i - 1) * 4, 80.5)
     if entity then
-      local modules = entity.get_module_inventory()
+      local modules = entity.get_inventory(defines.inventory.chest)
       for _ = 1, slots do
         index = index + 1
         if not plan[index] then
@@ -2526,7 +2528,7 @@ local function check_playthrough()
   end
 
   if engine and drive then
-    local inserted = drive.get_module_inventory().insert({ name = "3d-nand-module", count = 4 })
+    local inserted = drive.get_inventory(defines.inventory.chest).insert({ name = "3d-nand-module", count = 4 })
     check(inserted == 4, "could not install four 3d-nand modules in the Answer Storage Drive: " .. tostring(inserted))
 
     qln_step(2)
@@ -2710,10 +2712,10 @@ local function save_load_build()
     return
   end
 
-  local inserted = drive.get_module_inventory().insert({ name = "sram-module", count = 4 })
+  local inserted = drive.get_inventory(defines.inventory.chest).insert({ name = "sram-module", count = 4 })
   check(inserted == 4, "could not install 4 SRAM modules in the save-load drive: " .. tostring(inserted))
-  rack.get_module_inventory().insert({ name = "microcomputer", count = 1 })
-  bank.get_module_inventory().insert({ name = "sram-module", count = 4 })
+  rack.get_inventory(defines.inventory.chest).insert({ name = "microcomputer", count = 1 })
+  bank.get_inventory(defines.inventory.chest).insert({ name = "sram-module", count = 4 })
   raise_built(created)
 
   -- The map has no power grid; fill the buffer so the power gate passes. The
@@ -3059,7 +3061,7 @@ script.on_init(function()
     check(animation and animation.speed == 0, "rack animation should be frozen while idle")
 
     -- Install compute modules: animation should start
-    check(rack.get_module_inventory().insert{name="microcomputer",count=2} == 2,
+    check(rack.get_inventory(defines.inventory.chest).insert{name="microcomputer",count=2} == 2,
       "could not install rack rotation modules")
     animation = remote.call("chiptorio-rack", "animation_status", rack)
     check(animation and animation.speed > 0, "rack animation should run when active")
@@ -3076,7 +3078,7 @@ script.on_init(function()
     end
 
     -- Modules preserved through rotation
-    check(rotated.get_module_inventory().get_item_count("microcomputer") == 2,
+    check(rotated.get_inventory(defines.inventory.chest).get_item_count("microcomputer") == 2,
       "rack rotation lost modules")
 
     local box = rotated.bounding_box
@@ -3189,7 +3191,7 @@ script.on_nth_tick(120, function()
   check_playthrough()
 
   -- --- Standalone prototype migration tests ---
-  -- Verify all non-lab machines are standalone assembling-machine prototypes,
+  -- Verify all non-lab machines are standalone container prototypes,
   -- not lab clones. This ensures full control over graphics, animation, and GUI.
   check_provider_standalone()
   check_metrology_standalone()
@@ -3213,7 +3215,7 @@ end)
 -- Standalone Prototype Migration Tests
 -- ============================================================================
 
---- Verify all compute providers are standalone assembling-machines, not lab clones.
+--- Verify all compute providers are standalone containers, not lab clones.
 function check_provider_standalone()
   local surface = game.surfaces[1]
   local force = game.forces["player"]
@@ -3223,13 +3225,8 @@ function check_provider_standalone()
     local entity = place(surface, force, created, name, 151.5, 67.5)
     check(entity and entity.valid, "provider " .. name .. " can be placed")
     if entity and entity.valid then
-      check(entity.type == "assembling-machine",
-        name .. " is an assembling-machine, got " .. tostring(entity.type))
-      check(#(entity.prototype.crafting_categories or {}) == 0 or
-          entity.prototype.crafting_categories[1] == "crafting",
-        name .. " has crafting disabled")
-      check((entity.prototype.module_inventory_size or 0) > 0,
-        name .. " has module slots")
+      check(entity.type == "container",
+        name .. " is an container, got " .. tostring(entity.type))
       -- Must NOT be a lab
       check(entity.prototype.type ~= "lab",
         name .. " is not a lab prototype")
@@ -3238,7 +3235,7 @@ function check_provider_standalone()
   destroy_all(created)
 end
 
---- Verify metrology-lab is a standalone assembling-machine, not a lab clone.
+--- Verify metrology-lab is a standalone container, not a lab clone.
 function check_metrology_standalone()
   local surface = game.surfaces[1]
   local force = game.forces["player"]
@@ -3249,13 +3246,13 @@ function check_metrology_standalone()
   if entity and entity.valid then
     check(entity.prototype.type ~= "lab",
       "metrology-lab is not a lab prototype")
-    check(entity.type == "assembling-machine",
+    check(entity.type == "container",
       "metrology-lab is not a lab prototype")
   end
   destroy_all(created)
 end
 
---- Verify answer-engine is a standalone assembling-machine, not a lab clone.
+--- Verify answer-engine is a standalone container, not a lab clone.
 function check_answer_engine_standalone()
   local surface = game.surfaces[1]
   local force = game.forces["player"]
@@ -3264,15 +3261,15 @@ function check_answer_engine_standalone()
   local entity = place(surface, force, created, "answer-engine", 151.5, 67.5)
   check(entity and entity.valid, "answer-engine can be placed")
   if entity and entity.valid then
-    check(entity.type == "assembling-machine",
-      "answer-engine is an assembling-machine, got " .. tostring(entity.type))
+    check(entity.type == "container",
+      "answer-engine is an container, got " .. tostring(entity.type))
     check(entity.prototype.type ~= "lab",
       "answer-engine is not a lab prototype")
   end
   destroy_all(created)
 end
 
---- Verify qln-storage-drive is a standalone assembling-machine, not a lab clone.
+--- Verify qln-storage-drive is a standalone container, not a lab clone.
 function check_qln_drive_standalone()
   local surface = game.surfaces[1]
   local force = game.forces["player"]
@@ -3281,17 +3278,15 @@ function check_qln_drive_standalone()
   local entity = place(surface, force, created, "qln-storage-drive", 151.5, 67.5)
   check(entity and entity.valid, "qln-storage-drive can be placed")
   if entity and entity.valid then
-    check(entity.type == "assembling-machine",
-      "qln-storage-drive is an assembling-machine, got " .. tostring(entity.type))
+    check(entity.type == "container",
+      "qln-storage-drive is an container, got " .. tostring(entity.type))
     check(entity.prototype.type ~= "lab",
       "qln-storage-drive is not a lab prototype")
-    check((entity.prototype.module_inventory_size or 0) > 0,
-      "qln-storage-drive has module slots")
   end
   destroy_all(created)
 end
 
---- Verify quantum-entanglement-core is a standalone assembling-machine, not a lab clone.
+--- Verify quantum-entanglement-core is a standalone container, not a lab clone.
 function check_quantum_core_standalone()
   local surface = game.surfaces[1]
   local force = game.forces["player"]
@@ -3300,8 +3295,8 @@ function check_quantum_core_standalone()
   local entity = place(surface, force, created, "quantum-entanglement-core", 151.5, 67.5)
   check(entity and entity.valid, "quantum-entanglement-core can be placed")
   if entity and entity.valid then
-    check(entity.type == "assembling-machine",
-      "quantum-entanglement-core is an assembling-machine, got " .. tostring(entity.type))
+    check(entity.type == "container",
+      "quantum-entanglement-core is an container, got " .. tostring(entity.type))
     check(entity.prototype.type ~= "lab",
       "quantum-entanglement-core is not a lab prototype")
   end
@@ -3372,7 +3367,7 @@ function check_provider_gui_module_validation()
         button = defines.mouse_button_type.left,
       })
     end
-    local inv = rack.get_module_inventory()
+    local inv = rack.get_inventory(defines.inventory.chest)
     check(inv and inv[1] and inv[1].valid_for_read and inv[1].name == "microcomputer",
       "compute module can be inserted into compute slot 1")
   end
@@ -3390,7 +3385,7 @@ function check_provider_gui_module_validation()
         button = defines.mouse_button_type.left,
       })
     end
-    local inv = rack.get_module_inventory()
+    local inv = rack.get_inventory(defines.inventory.chest)
     -- Slot 1 should still have microcomputer, not sram
     check(inv and inv[1] and inv[1].valid_for_read and inv[1].name == "microcomputer",
       "memory module is rejected from compute slot")

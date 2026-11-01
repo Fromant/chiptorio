@@ -19,9 +19,12 @@ local rack = require("scripts.runtime.rack_runtime")
 script.on_event(defines.events.on_entity_cloned, function(event)
   rack.on_built(event)
 end)
+script.on_event(defines.events.script_raised_built, function(event)
+  rack.on_built(event)
+end)
 script.on_event("chiptorio-rack-rotate", rack.on_input)
 script.on_event("chiptorio-rack-rotate-reverse", rack.on_input)
-remote.add_interface("chiptorio-rack", { rotate = rack.rotate, animation_status = rack.animation_status })
+remote.add_interface("chiptorio-rack", { rotate = rack.rotate, animation_status = rack.animation_status, on_built = rack.on_built })
 
 script.on_init(function()
   answer_engine.init_storage()
@@ -178,6 +181,8 @@ remote.add_interface("chiptorio-network", {
   status = network.status,
   -- /c remote.call("chiptorio-network", "topology", 1)
   topology = network.topology,
+  -- /c remote.call("chiptorio-network", "tick")
+  tick = network.tick,
   -- /c remote.call("chiptorio-network", "overlay", true)
   -- Custom-input events cannot be raised from script, so the overlay tests and
   -- debug hooks go through this instead of faking a keypress.
