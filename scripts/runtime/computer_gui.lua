@@ -251,9 +251,9 @@ local function rebuild_gui(player, entity)
       body.add({ type = "label", caption = { "chiptorio.computer-labs-active", active } })
     end
 
-    -- Module slots: interactive, with category enforcement.
-    -- Providers (server-rack, memory-bank, datacenter) have module slots;
-    -- labs do not (module_slots = 0).
+    -- Module slots: clickable inventory slots. Click with items in hand to
+    -- insert, click filled slot to eject to cursor. Only accepted module
+    -- types can go in each slot (compute vs memory).
     local module_slots = entity.prototype and entity.prototype.module_inventory_size or 0
     if device.kind == "provider" and module_slots > 0 then
       local layout = slot_layout(entity)
@@ -275,13 +275,15 @@ local function rebuild_gui(player, entity)
           local slot = module_inv[i]
           local has_module = slot and slot.valid_for_read
 
-          -- Sprite showing what's in the slot (or empty placeholder).
-          local sprite_name = has_module and ("item/" .. slot.name) or "utility/slot"
-          local slot_sprite = slot_flow.add({
-            type = "sprite",
-            sprite = sprite_name,
+          -- Clickable sprite-button: click with items in hand to insert,
+          -- click filled slot to eject to cursor.
+          local slot_btn = slot_flow.add({
+            type = "sprite-button",
+            name = COMPUTER_GUI .. "-slot-" .. i,
+            sprite = has_module and ("item/" .. slot.name) or "utility/slot",
+            style = "slot_button",
           })
-          slot_sprite.style.size = 32
+          slot_btn.style.size = 32
 
           -- Count label.
           if has_module then
@@ -307,24 +309,6 @@ local function rebuild_gui(player, entity)
             local hint = is_compute_slot and { "chiptorio.computer-slot-empty-compute" } or { "chiptorio.computer-slot-empty-memory" }
             status_label.caption = hint
             status_label.style.font_color = { 0.6, 0.6, 0.6 }
-          end
-
-          -- Insert / eject buttons.
-          local btn_flow = slot_flow.add({ type = "flow", direction = "horizontal" })
-          if has_module then
-            local eject_btn = btn_flow.add({
-              type = "button",
-              name = COMPUTER_GUI .. "-eject-" .. i,
-              caption = { "chiptorio.computer-eject" },
-            })
-            eject_btn.style.minimal_width = 70
-          else
-            local insert_btn = btn_flow.add({
-              type = "button",
-              name = COMPUTER_GUI .. "-insert-" .. i,
-              caption = { "chiptorio.computer-insert" },
-            })
-            insert_btn.style.minimal_width = 70
           end
         end
       end
@@ -381,35 +365,32 @@ function M.on_gui_click(event)
     return
   end
 
-  -- Module slot insert / eject.
-  local slot_index = tonumber(element.name:match("^" .. COMPUTER_GUI .. "-insert-(%d+)$"))
+  -- Module slot click: click with items in hand to insert, click filled slot
+  -- to eject to cursor.
+  local slot_index = tonumber(element.name:match("^" .. COMPUTER_GUI .. "-slot-(%d+)$"))
   if slot_index then
     local entity = open_entity[player.index]
     if not (entity and entity.valid) then
       player.print({ "chiptorio.computer-gui-closed" })
       return
     end
-    local ok = try_insert_module(player, entity, slot_index)
-    if ok then
-      rebuild_gui(player, entity)
-    else
-      local stack = player.cursor_stack
-      if not (stack and stack.valid_for_read) then
-        player.print({ "chiptorio.computer-insert-empty-cursor" })
-      end
+    local inv = entity.get_module_inventory()
+    if not inv then
+      return
     end
-    return
-  end
+    local slot = inv[slot_index]
+    local cursor = player.cursor_stack
 
-  slot_index = tonumber(element.name:match("^" .. COMPUTER_GUI .. "-eject-(%d+)$"))
-  if slot_index then
-    local entity = open_entity[player.index]
-    if not (entity and entity.valid) then
-      player.print({ "chiptorio.computer-gui-closed" })
-      return
-    end
-    local ok = try_remove_module(player, entity, slot_index)
-    if ok then
+    if cursor and cursor.valid_for_read then
+      -- Try to insert cursor item into this slot.
+      local ok = try_insert_module(player, entity, slot_index)
+      if ok then
+        rebuild_gui(player, entity)
+      end
+    elseif slot and slot.valid_for_read then
+      -- Eject slot contents to empty cursor.
+      cursor.set_stack{ name = slot.name, count = slot.count, quality = slot.quality }
+      slot.clear()
       rebuild_gui(player, entity)
     end
     return
