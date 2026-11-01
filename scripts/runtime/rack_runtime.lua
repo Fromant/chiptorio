@@ -57,7 +57,7 @@ end
 
 local function entity_dir_index(entity)
   local t = dirs_table()
-  return t[entity.unit_number] or 1
+  return t[entity.unit_number]
 end
 
 local function set_entity_dir_index(entity, index)
@@ -66,7 +66,9 @@ local function set_entity_dir_index(entity, index)
 end
 
 local function entity_direction(entity)
-  return DIRECTIONS[entity_dir_index(entity)]
+  local idx = entity_dir_index(entity)
+  if idx then return DIRECTIONS[idx] end
+  return entity.direction
 end
 
 --- Create or update the rendering overlay for a provider based on whether it
@@ -100,8 +102,13 @@ end
 function M.on_built(event)
   local entity = event and (event.entity or event.destination)
   if not (entity and entity.valid and is_provider(entity)) then return end
-  -- Store initial direction (default to north index 1)
-  set_entity_dir_index(entity, 1)
+  -- Store initial direction from the entity's actual facing, not north by default.
+  local dir = entity.direction
+  local idx = 1
+  for i, d in ipairs(DIRECTIONS) do
+    if dir == d then idx = i break end
+  end
+  set_entity_dir_index(entity, idx)
   update_visuals(entity)
 end
 
@@ -145,6 +152,14 @@ end
 function M.rotate(entity, reverse)
   if not (entity and entity.valid and is_provider(entity)) then return end
   local idx = entity_dir_index(entity)
+  if not idx then
+    -- Entity not in storage (e.g. placed before mod load): read direction from entity.
+    local dir = entity.direction
+    idx = 1
+    for i, d in ipairs(DIRECTIONS) do
+      if dir == d then idx = i break end
+    end
+  end
   local step = reverse and -1 or 1
   local new_idx = ((idx - 1 + step) % 4) + 1
   local new_dir = DIRECTIONS[new_idx]

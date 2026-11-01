@@ -385,9 +385,18 @@ function M.on_gui_click(event)
   local slot_index = tonumber(element.name:match("^" .. COMPUTER_GUI .. "-insert-(%d+)$"))
   if slot_index then
     local entity = open_entity[player.index]
-    if entity and entity.valid then
-      try_insert_module(player, entity, slot_index)
+    if not (entity and entity.valid) then
+      player.print({ "chiptorio.computer-gui-closed" })
+      return
+    end
+    local ok = try_insert_module(player, entity, slot_index)
+    if ok then
       rebuild_gui(player, entity)
+    else
+      local stack = player.cursor_stack
+      if not (stack and stack.valid_for_read) then
+        player.print({ "chiptorio.computer-insert-empty-cursor" })
+      end
     end
     return
   end
@@ -395,8 +404,12 @@ function M.on_gui_click(event)
   slot_index = tonumber(element.name:match("^" .. COMPUTER_GUI .. "-eject-(%d+)$"))
   if slot_index then
     local entity = open_entity[player.index]
-    if entity and entity.valid then
-      try_remove_module(player, entity, slot_index)
+    if not (entity and entity.valid) then
+      player.print({ "chiptorio.computer-gui-closed" })
+      return
+    end
+    local ok = try_remove_module(player, entity, slot_index)
+    if ok then
       rebuild_gui(player, entity)
     end
     return

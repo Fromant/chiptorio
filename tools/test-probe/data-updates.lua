@@ -856,15 +856,17 @@ check(memory_unlock["dram-module"] == "process-3um", "DRAM must stay on the 3 µ
 check(memory_unlock["3d-nand-module"] == "process-7nm", "3D NAND must arrive with the 7 nm node")
 
 -- Providers are standalone assembling-machine clones with crafting disabled
--- (crafting_speed = 0.001, effectively never crafts) and a readable module
--- inventory. A provider that accepts a science pack would become an ordinary
--- lab and bypass the network.
+-- (crafting_categories = {"crafting"} with no usable recipes) and a readable
+-- module inventory. A provider that accepts a science pack would become an
+-- ordinary lab and bypass the network.
 for _, name in ipairs(PROVIDERS) do
   local proto = data.raw["assembling-machine"][name]
   check(proto, "missing provider entity " .. name)
   if proto then
     check(not proto.hidden, "provider is hidden: " .. name)
-    check((proto.crafting_speed or 0) < 0.01, "provider " .. name .. " crafting must be disabled")
+    local cats = proto.crafting_categories or {}
+    check(#cats == 1 and cats[1] == "crafting",
+      "provider " .. name .. " crafting must be disabled")
     check((proto.module_slots or 0) > 0, "provider " .. name .. " has no module slots")
     local categories = {}
     for _, category in ipairs(proto.allowed_module_categories or {}) do
