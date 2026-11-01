@@ -10,6 +10,8 @@
 local meta = require("scripts.research_meta")
 local M = {}
 
+local COMPUTER_GUI_NAME = "chiptorio-computer-gui"
+
 local PROVIDER_NAMES = { "server-rack", "memory-bank", "datacenter" }
 
 local DIRECTIONS = { defines.direction.north, defines.direction.east,
@@ -184,9 +186,14 @@ function M.on_input(event)
   if not player then return end
   local selected = player.selected
   if selected and selected.valid and selected.force == player.force and is_provider(selected) then
-    local opened = player.opened == selected
     local replacement = M.rotate(selected, event.input_name == "chiptorio-rack-rotate-reverse")
-    if opened and replacement then player.opened = replacement end
+    if replacement and player.opened and player.opened.valid then
+      -- Re-open the custom GUI on the replacement entity if it was open.
+      local gui = player.gui.screen[COMPUTER_GUI_NAME]
+      if gui and gui.valid then
+        player.opened = replacement
+      end
+    end
   end
 end
 

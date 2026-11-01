@@ -110,8 +110,8 @@ end
 
 -- Custom inputs first.
 data:extend({
-  { type = "custom-input", name = "chiptorio-rack-rotate", key_sequence = "", linked_game_control = "rotate", consuming = "none" },
-  { type = "custom-input", name = "chiptorio-rack-rotate-reverse", key_sequence = "", linked_game_control = "reverse-rotate", consuming = "none" },
+  { type = "custom-input", name = "chiptorio-rack-rotate", key_sequence = "R", consuming = "none" },
+  { type = "custom-input", name = "chiptorio-rack-rotate-reverse", key_sequence = "Shift-R", consuming = "none" },
 })
 
 make_provider({

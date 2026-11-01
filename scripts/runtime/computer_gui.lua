@@ -108,12 +108,12 @@ local function try_insert_module(player, entity, slot_index)
 
   if is_compute_slot then
     if not is_compute_module(name) then
-      player.print({ "chiptorio.computer_wrong_slot", "compute" })
+      player.print({ "chiptorio.computer-wrong-slot", "compute" })
       return false
     end
   else
     if not is_memory_module(name) then
-      player.print({ "chiptorio.computer_wrong_slot", "memory" })
+      player.print({ "chiptorio.computer-wrong-slot", "memory" })
       return false
     end
   end
@@ -133,7 +133,7 @@ local function try_insert_module(player, entity, slot_index)
     slot.set_stack{ name = name, count = to_move, quality = stack.quality }
     stack.count = stack.count - to_move
   else
-    player.print({ "chiptorio.computer_slot_occupied" })
+    player.print({ "chiptorio.computer-slot-occupied" })
     return false
   end
   return true
@@ -156,7 +156,7 @@ local function try_remove_module(player, entity, slot_index)
       slot.count = slot.count - to_move
       if slot.count <= 0 then slot.clear() end
     else
-      player.print({ "chiptorio.computer_cursor_full" })
+      player.print({ "chiptorio.computer-cursor-full" })
       return false
     end
   else
@@ -297,14 +297,14 @@ local function rebuild_gui(player, entity)
             local name = slot.name
             local ok = is_compute_slot and is_compute_module(name) or is_memory_module(name)
             if ok then
-              status_label.caption = { "chiptorio.computer_module_ok" }
+              status_label.caption = { "chiptorio.computer-module-ok" }
               status_label.style.font_color = { 0.6, 1, 0.6 }
             else
-              status_label.caption = { "chiptorio.computer_module_wrong" }
+              status_label.caption = { "chiptorio.computer-module-wrong" }
               status_label.style.font_color = { 1, 0.6, 0.6 }
             end
           else
-            local hint = is_compute_slot and { "chiptorio.computer_slot_empty_compute" } or { "chiptorio.computer_slot_empty_memory" }
+            local hint = is_compute_slot and { "chiptorio.computer-slot-empty-compute" } or { "chiptorio.computer-slot-empty-memory" }
             status_label.caption = hint
             status_label.style.font_color = { 0.6, 0.6, 0.6 }
           end
@@ -315,14 +315,14 @@ local function rebuild_gui(player, entity)
             local eject_btn = btn_flow.add({
               type = "button",
               name = COMPUTER_GUI .. "-eject-" .. i,
-              caption = { "chiptorio.computer_eject" },
+              caption = { "chiptorio.computer-eject" },
             })
             eject_btn.style.minimal_width = 70
           else
             local insert_btn = btn_flow.add({
               type = "button",
               name = COMPUTER_GUI .. "-insert-" .. i,
-              caption = { "chiptorio.computer_insert" },
+              caption = { "chiptorio.computer-insert" },
             })
             insert_btn.style.minimal_width = 70
           end
