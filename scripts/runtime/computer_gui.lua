@@ -316,6 +316,53 @@ local function rebuild_gui(player, entity)
     end
   end
 
+  -- Player inventory: show player's main inventory so items can be dragged
+  -- into rack slots. Click a player slot to pick up, click a rack slot with
+  -- items in hand to insert.
+  local player_inv = player.get_inventory(defines.inventory.character_main)
+  if player_inv and player_inv.valid_for_read then
+    local player_header = body.add({ type = "label", caption = { "chiptorio.computer-player-inventory" } })
+    player_header.style.font = "default-bold"
+    player_header.style.top_margin = 8
+    player_header.style.bottom_margin = 4
+
+    local player_flow = body.add({ type = "flow", direction = "horizontal" })
+    player_flow.style.vertical_align = "center"
+    local player_label = player_flow.add({ type = "label", caption = { "chiptorio.computer-your-inventory" } })
+    player_label.style.font_color = { 0.8, 0.8, 0.8 }
+
+    body.add({ type = "line" })
+
+    -- Player inventory grid: 10 columns
+    local player_cols = 10
+    local row_flow = body.add({ type = "flow", direction = "horizontal" })
+    row_flow.style.vertical_align = "center"
+
+    local col = 0
+    for i = 1, player_inv.get_size() do
+      local stack = player_inv[i]
+      local has_item = stack and stack.valid_for_read
+
+      local slot_btn = row_flow.add({
+        type = "sprite-button",
+        name = COMPUTER_GUI .. "-player-" .. i,
+        sprite = has_item and ("item/" .. stack.name) or "utility/slot",
+        style = "slot_button",
+        tooltip = has_item
+          and stack.prototype.localised_name
+          or { "chiptorio.computer-player-slot-empty" },
+      })
+      slot_btn.style.size = 32
+
+      col = col + 1
+      if col >= player_cols then
+        col = 0
+        row_flow = body.add({ type = "flow", direction = "horizontal" })
+        row_flow.style.vertical_align = "center"
+      end
+    end
+  end
+
   local toolbar = frame.add({ type = "flow", direction = "horizontal" })
   toolbar.style.horizontally_stretchable = true
   toolbar.add({
@@ -393,6 +440,43 @@ function M.on_gui_click(event)
       slot.clear()
       rebuild_gui(player, entity)
     end
+    return
+  end
+
+  -- Player inventory slot click: pick up items to cursor.
+  local player_slot_index = tonumber(element.name:match("^" .. COMPUTER_GUI .. "-player-(%d+)$"))
+  if player_slot_index then
+    local entity = open_entity[player.index]
+    if not (entity and entity.valid) then
+      player.print({ "chiptorio.computer-gui-closed" })
+      return
+    end
+    local player_inv = player.get_inventory(defines.inventory.character_main)
+    if not player_inv then
+      return
+    end
+    local stack = player_inv[player_slot_index]
+    local cursor = player.cursor_stack
+
+    if cursor and cursor.valid_for_read then
+      -- Swap: if same item, add to cursor; if different, swap stacks
+      if cursor.name == stack.name then
+        local room = cursor.prototype.stack_size - cursor.count
+        local to_move = math.min(stack.count, room)
+        cursor.count = cursor.count + to_move
+        stack.count = stack.count - to_move
+        if stack.count <= 0 then stack.clear() end
+      else
+        local temp = { name = stack.name, count = stack.count, quality = stack.quality }
+        stack.set_stack(cursor.name, cursor.count, cursor.quality)
+        cursor.set_stack(temp.name, temp.count, temp.quality)
+      end
+    else
+      -- Pick up to cursor
+      cursor.set_stack{ name = stack.name, count = stack.count, quality = stack.quality }
+      stack.clear()
+    end
+    rebuild_gui(player, entity)
     return
   end
 end

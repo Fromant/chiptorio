@@ -63,11 +63,34 @@ local function make_provider(spec)
   elseif spec.custom_animation then
     -- Single still image for non-bladner providers (memory-bank, datacenter).
     graphics_set.animation = {
-      filename = "__chiptorio__/graphics/entity/" .. spec.custom_animation .. ".png",
-      width = spec.size_w or 128,
-      height = spec.size_h or 128,
-      scale = spec.scale or 0.5,
-      shift = spec.shift or { 0, 0 },
+      north = {
+        filename = "__chiptorio__/graphics/entity/" .. spec.custom_animation .. ".png",
+        width = spec.size_w or 128,
+        height = spec.size_h or 128,
+        scale = spec.scale or 0.5,
+        shift = spec.shift or { 0, 0 },
+      },
+      east = {
+        filename = "__chiptorio__/graphics/entity/" .. spec.custom_animation .. ".png",
+        width = spec.size_w or 128,
+        height = spec.size_h or 128,
+        scale = spec.scale or 0.5,
+        shift = spec.shift or { 0, 0 },
+      },
+      south = {
+        filename = "__chiptorio__/graphics/entity/" .. spec.custom_animation .. ".png",
+        width = spec.size_w or 128,
+        height = spec.size_h or 128,
+        scale = spec.scale or 0.5,
+        shift = spec.shift or { 0, 0 },
+      },
+      west = {
+        filename = "__chiptorio__/graphics/entity/" .. spec.custom_animation .. ".png",
+        width = spec.size_w or 128,
+        height = spec.size_h or 128,
+        scale = spec.scale or 0.5,
+        shift = spec.shift or { 0, 0 },
+      },
     }
   end
 
