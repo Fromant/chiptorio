@@ -7,7 +7,8 @@ tinted cable tiers share their underlying shape assets.
 
 ## Model-first iteration
 
-For geometry or motion revisions, stop before rendering the animation:
+For geometry or motion revisions, inspect the staged model before final sprite
+production. Use diagnostic pose and motion renders during authoring:
 
 1. Use **Build model only (no animation render)** in Production tools, or run
    `npm run pipeline -- build --asset=entity:wafer-fab --model-only`.
@@ -25,8 +26,14 @@ For geometry or motion revisions, stop before rendering the animation:
    It reuses the checked model cache. Review final sprites separately, then use
    the existing isolated validation and publication gates.
 
-Do not run full animation renders during model iteration before the user accepts
-the model. Existing renders retain their Blender downloads and feedback under
+During model iteration, render diagnostic poses and motion previews proactively.
+Use side, rear, top, close-up and game cameras as needed; inspect the geometry
+yourself before asking for model approval. These previews are independent of
+the final shipping render/approval gates. `npm run pipeline -- diagnose
+--model=<revision>` produces six-view plus close-up pose sheets and a whole-cycle surface
+contact report. Contacts include legitimate joints and supports and require
+visual interpretation. Never treat that report alone as proof of no collisions.
+Existing renders retain their Blender downloads and feedback under
 **Previously reviewed assets - Blender files and feedback**. Source, descriptor
 or model changes invalidate model acceptance. Model approval is independent of
 shipping-art approval and cannot publish files. Image-only assets use PNG review.
@@ -144,6 +151,7 @@ after publishing one (cached art is reused).
 
 ```sh
 npm run pipeline -- status
+npm run pipeline -- diagnose --model=<model-revision>
 npm run pipeline -- build --batch=batch-6 --draft
 npm run pipeline -- build --asset=entity:wafer-fab
 npm run pipeline -- build --batch=42
@@ -151,6 +159,7 @@ npm test
 npm run test:ui
 npm run build
 npm run test:pipeline:blender
+npm run test:pipeline:geometry
 npm run test:pipeline:factorio
 ```
 

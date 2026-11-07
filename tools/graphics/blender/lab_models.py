@@ -4,6 +4,7 @@ No privileged operator face. One unit = one tile. Working loops are editable
 Blender drivers with a 48-frame period; static/animated exports share geometry.
 """
 import math
+import json
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -500,10 +501,23 @@ def build(asset, builder=None, output=None):
         obj.select_set(True)
     bpy.context.view_layer.objects.active = sources[0]
     bpy.ops.object.convert(target="MESH")
+    # Preserve source-part identity through material batching for diagnostic BVHs.
+    part_names = []
+    for obj in scene.objects:
+        if obj.type != "MESH":
+            continue
+        part_id = len(part_names)
+        part_names.append(obj.name)
+        attribute = obj.data.attributes.new("asset_part", "INT", "FACE")
+        for value in attribute.data:
+            value.value = part_id
+    scene["diagnostic_part_names"] = json.dumps(part_names)
     before = len([obj for obj in scene.objects if obj.type == "MESH"])
     groups = {}
     for obj in list(scene.objects):
-        if obj.type != "MESH" or (obj.animation_data and obj.animation_data.drivers):
+        if (obj.type != "MESH" or
+                (obj.animation_data and (obj.animation_data.action or obj.animation_data.drivers)) or
+                abs(obj.matrix_world.determinant()) < 1e-10):
             continue
         key = (obj.parent, tuple(col.name for col in obj.users_collection),
                tuple(mat.name if mat else "" for mat in obj.data.materials))

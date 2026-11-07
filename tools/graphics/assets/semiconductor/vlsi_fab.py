@@ -39,37 +39,48 @@ def build(w):
             w.cyl('Polished reflective face',(0,0,.075),.24,.025,w.steel)
             for side in (-1,1):
                 w.box('Mirror kinematic mount',(side*.29,.07,.05),(.06,.15,.20),w.steel)
+        w.box('Mirror rear support',(x+math.sin(tilt)*.05,(y+.14+1.43)/2,z+math.cos(tilt)*.05),(.07,1.43-y-.14,.07),w.steel)
+    for x in (-.50,.50):
+        w.box('Reticle rear cantilever',(x,1.05,2.91),(.10,.86,.08),w.steel)
     w.box('Reticle vacuum stage',(0,.65,2.99),(1.14,.87,.11),w.iron)
     w.box('Reticle carrier',(0,.65,3.07),(.65,.57,.04),w.blue,.002)
     for x in (-.57,.57):
         w.box('Reticle stage guide',(x,.65,3.04),(.06,1.05,.05),w.steel)
+    for x in (-.85,.85):
+        w.box('Projection bridge upright',(x,-.25,1.22),(.10,.18,.56),w.white)
+    w.box('Projection aperture support bridge',(0,-.25,1.49),(1.80,.18,.10),w.steel)
     w.box('Exposure aperture shroud',(0,-.45,1.58),(.90,.66,.15),w.iron)
     exposure=lamp(w,'Contained exposure light',(.34,.48,.83),
                   '(1 if 36<=((frame-1)%192)<48 or 68<=((frame-1)%192)<80 or 100<=((frame-1)%192)<112 or 132<=((frame-1)%192)<144 else 0)',1.2)
     w.cyl('Exposure aperture',(0,-.45,1.49),.22,.025,exposure)
     for x in (-.59,.59):
         w.box('Air bearing stage rail',(x,-.54,1.02),(.10,1.96,.12),w.steel)
-    stage_keys=[(0,(0,-1.36,1.10)),(16,(0,-1.36,1.10)),(32,(-.13,-.58,1.10)),
-                (48,(-.13,-.58,1.10)),(64,(.13,-.58,1.10)),(80,(.13,-.58,1.10)),
-                (96,(-.13,-.32,1.10)),(112,(-.13,-.32,1.10)),(128,(.13,-.32,1.10)),
-                (144,(.13,-.32,1.10)),(170,(0,-1.36,1.10)),(176,(0,-1.36,.66)),
-                (184,(0,-1.36,.66)),(192,(0,-1.36,1.10))]
+    stage_keys=[(0,(0,-1.36,1.395)),(16,(0,-1.36,1.395)),(32,(-.13,-.58,1.395)),
+                (48,(-.13,-.58,1.395)),(64,(.13,-.58,1.395)),(80,(.13,-.58,1.395)),
+                (96,(-.13,-.32,1.395)),(112,(-.13,-.32,1.395)),(128,(.13,-.32,1.395)),
+                (144,(.13,-.32,1.395)),(170,(0,-1.36,1.395)),(176,(0,-1.36,1.395)),
+                (184,(0,-1.36,1.395)),(192,(0,-1.36,1.395))]
+    with w.part('Lower Y air-bearing sled') as sled:
+        animate(sled,'location',lambda p:(0,sample(p,stage_keys)[1],1.13))
+        w.box('Y sled bearing plate',(0,0,0),(1.44,.95,.10),w.steel)
+        for y in (-.27,.27):
+            w.box('Upper X guide',(0,y,.075),(1.50,.08,.05),w.steel)
     with w.part('Scanner wafer stage') as stage:
         move(stage,stage_keys)
         w.box('XY air bearing carriage',(0,0,-.10),(1.02,.95,.13),w.steel)
-        w.cyl('Electrostatic wafer chuck',(0,0,-.015),.40,.06,w.iron)
+        w.cyl('Electrostatic wafer chuck',(0,0,-.0425),.40,.06,w.iron)
         wafer(w,'Scanner wafer',radius=.37,etched=False)
         for i,(x,y) in enumerate([(-.10,-.10),(.10,-.10),(-.10,.10),(.10,.10)]):
             with w.part('Exposed wafer field',(x,y,0)) as field:
                 start=36+i*32
-                animate(field,'scale',lambda p,start=start:(1,1,sample(p,[(0,0),(start,0),(start+10,1),(174,1),(180,0),(192,0)])))
+                animate(field,'scale',lambda p,start=start:(1,1,max(.0001,sample(p,[(0,0),(start,0),(start+10,1),(174,1),(180,0),(192,0)]))))
                 for dx in (-.035,.035):
                     for dy in (-.035,.035):
                         w.box('Lithographic die pattern',(dx,dy,.022),(.055,.055,.006),w.gold,.001)
-    for x in (-.62,.62):
-        w.box('Load-lock sidewall',(x,-1.53,.91),(.07,.72,.88),w.white)
-    w.box('Load-lock front wall',(0,-1.91,.91),(1.30,.07,.88),w.white)
-    w.box('Load-lock roof',(0,-1.53,1.35),(1.30,.80,.08),w.white)
+    for x in (-.90,.90):
+        w.box('Load-lock sidewall',(x,-1.53,1.085),(.07,.72,1.23),w.white)
+    w.box('Load-lock front wall',(0,-1.91,1.085),(1.86,.07,1.23),w.white)
+    w.box('Load-lock roof',(0,-1.53,1.70),(1.86,.80,.08),w.white)
     for x in (-1.55,1.58):
         service(w,(x,-.36,0),.61,1.50,w.white)
         for z in (1.03,1.43,1.83):

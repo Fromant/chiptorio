@@ -10,6 +10,7 @@ import { loadRegistry, digest, safePath, workspacePath } from './registry.mjs';
 import { selectAssets } from './registry.mjs';
 import { ProductionPipeline } from './publish.mjs';
 import { ModelReview } from './model-review.mjs';
+import {diagnoseModel,diagnosticFolder} from './diagnostics.mjs';
 import { buildAsset } from './build.mjs';
 import { changeAsset, scaffold } from './planning.mjs';
 
@@ -70,6 +71,25 @@ app.post('/api/pipeline/model/:revision/still',async(req,res)=>{
   });res.status(202).json({id:job.id});
 });
 app.post('/api/pipeline/model/:revision/review',async(req,res)=>res.json(await models.review(req.params.revision,req.body.decision,req.body.comment??'')));
+app.get('/api/pipeline/model/:revision/diagnostics',async(req,res)=>{
+  const folder=await diagnosticFolder(root,req.params.revision);
+  if(!await exists(path.join(folder,'report.json')))return res.json({available:false});
+  const {readFile}=await import('node:fs/promises');
+  const report=JSON.parse(await readFile(path.join(folder,'report.json'),'utf8'));
+  res.json({available:true,contacts:report.contacts.length,note:report.note,
+    images:['game','front','left','right','rear','top','detail'].map(view=>({view,url:`/api/pipeline/model/${req.params.revision}/diagnostic/${view}-sheet.png`}))});
+});
+app.get('/api/pipeline/model/:revision/diagnostic/:file',async(req,res)=>{
+  if(!/^(game|front|left|right|rear|top|detail)-sheet\.png$/.test(req.params.file)&&req.params.file!=='report.json')return res.status(404).end();
+  res.set('Cache-Control','no-store');res.sendFile(await safePath(await diagnosticFolder(root,req.params.revision),req.params.file));
+});
+app.post('/api/pipeline/model/:revision/diagnose',async(req,res)=>{
+  const m=await models.read(req.params.revision);await models.current(m);
+  const job=startJob('Geometry inspection / '+m.asset.name,async job=>{
+    const result=await diagnoseModel(root,m.revision,tools);
+    job.log=`Seven-camera pose sheets ready. ${result.contacts} contact pairs for inspection; these include intended joints and supports.`;
+  });res.status(202).json({id:job.id});
+});
 app.post('/api/pipeline/model/:revision/render',async(req,res)=>{
   const m=await models.read(req.params.revision);await models.current(m);
   if(m.review?.decision!=='approved')throw new Error('Review the model before rendering');

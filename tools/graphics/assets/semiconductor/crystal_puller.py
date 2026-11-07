@@ -43,15 +43,19 @@ def build(w):
     heightkeys=[(0,.12),(72,.82),(132,.82),(140,.12),(192,.12)]
     with w.part('Travelling pull head') as head:
         animate(head,'location',lambda p:(sample(p,xkeys),-.12,0))
-        w.box('Pull head carriage',(0,.17,3.31),(.45,.55,.33),w.ochre)
+        w.box('Pull head carriage',(0,.17,3.13),(.45,.55,.33),w.ochre)
         w.box('Spindle gearbox',(0,-.13,3.18),(.40,.28,.27),w.steel,.035)
         w.cyl('Geared hoist motor',(.31,.12,3.31),.15,.36,w.iron,'X')
         for x in (.19,.25,.31,.37,.43):w.ring('Motor cooling fin',(x,.12,3.31),.16,.016,w.steel,'X')
         w.box('Gearbox inspection glass',(0,-.278,3.18),(.16,.018,.08),w.blue,.004)
+        for x in (-.17,.17):
+            w.box('Rail wheel bracket',(x,.30,3.335),(.06,.06,.12),w.steel)
+            wheel=w.cyl('Under-rail carriage wheel',(x,.30,3.375),.055,.06,w.steel,'Y')
+            animate(wheel,'rotation_euler',lambda p:(math.pi/2,(sample(p,xkeys)+.52)/.055,0))
         # Telescoping draw spindle ends at the gearbox underside, never through it.
         shaft=w.cyl('Variable length seed draw spindle',(0,0,0),.035,1,w.steel)
-        animate(shaft,'location',lambda p:(0,0,(3.02+sample(p,topkeys))/2))
-        animate(shaft,'scale',lambda p:(1,1,3.02-sample(p,topkeys)))
+        animate(shaft,'location',lambda p:(0,0,(3.045+sample(p,topkeys))/2))
+        animate(shaft,'scale',lambda p:(1,1,3.045-sample(p,topkeys)))
         with w.part('Growing crystal') as crystal:
             animate(crystal,'location',lambda p:(0,0,sample(p,topkeys)))
             animate(crystal,'rotation_euler',lambda p:(0,0,math.tau*p/PERIOD))
@@ -70,5 +74,5 @@ def build(w):
         if 90<=p<=114:assert top-height>1.47,'Transfer before crystal clears vessel lip'
         if 114<p<156:assert abs(x-1.34)<.00001,'Crystal lowers away from receiver'
         if 132<=p<=140:assert top<1.44,'Crystal resizes outside the opaque cooling receiver'
-        assert shaft.location.z+shaft.scale.z/2<=3.02001,'Draw spindle penetrates gearbox'
+        assert shaft.location.z+shaft.scale.z/2<=3.04501,'Draw spindle penetrates gearbox'
     return finish(w,check,1.15)

@@ -69,6 +69,7 @@ test('batch-five deep link shows all five distinct installed machines and workin
   const canvas=page.locator('.asset-card canvas').first(); await canvas.scrollIntoViewIfNeeded();
   await expect.poll(()=>canvas.evaluate(c=>c.getContext('2d').getImageData(0,0,c.width,c.height).data.some((n,i)=>i%4===3&&n>0))).toBe(true);
   await page.screenshot({path:path.join(directory,'.cache/batch-5.png'),fullPage:true});
+  await canvas.scrollIntoViewIfNeeded();
   const before=await canvas.evaluate(c=>c.toDataURL());
   await expect.poll(()=>canvas.evaluate(c=>c.toDataURL())).not.toBe(before);
   for(const name of ['circuit-assembler','network-monitor']){
@@ -79,6 +80,7 @@ test('batch-five deep link shows all five distinct installed machines and workin
     await expect.poll(()=>revised.evaluate(c=>c.toDataURL())).not.toBe(first);
   }
   await page.getByRole('button',{name:'Idle',exact:true}).click();
+  await canvas.scrollIntoViewIfNeeded();
   await expect.poll(()=>canvas.evaluate(c=>c.toDataURL())).not.toBe(before);
   expect(errors).toEqual([]);
 });
@@ -193,4 +195,24 @@ test('model review precedes explicit rendering and keeps Blender downloads avail
   expect(calls).toEqual([`/api/pipeline/model/${revision}/review`]);
   await page.getByRole('button',{name:'Render final animation'}).click();
   await expect(page.getByText('No new models awaiting review. Future iterations can stop at the model stage.')).toBeVisible();
+});
+
+
+test('diagnostic gallery switches cameras without approving or rendering shipping art',async({page,request})=>{
+  const baseline=await(await request.get('/api/pipeline')).json(),revision='c'.repeat(64),asset=baseline.registry.assets.find(a=>a.id==='entity:wafer-fab'),bytes=await readFile(path.join(root,'thumbnail.png'));
+  const calls=[];
+  await page.route('**/api/pipeline**',async route=>{
+    const url=new URL(route.request().url());
+    if(route.request().method()==='POST'){calls.push(url.pathname);return route.fulfill({json:{}});}
+    if(url.pathname.includes('/diagnostic/'))return route.fulfill({contentType:'image/png',body:bytes});
+    if(url.pathname.endsWith('/diagnostics'))return route.fulfill({json:{available:true,contacts:2,note:'Fixture bearing contacts',images:['game','front','left','right','rear','top','detail'].map(view=>({view,url:'/api/pipeline/model/'+revision+'/diagnostic/'+view+'-sheet.png'}))}});
+    return route.fulfill({json:{...baseline,candidates:[],models:[{revision,asset,details:{buildKey:'a'.repeat(64)},createdAt:1,review:null}]}});
+  });
+  await page.goto('/');await page.getByText('Geometry inspection renders',{exact:true}).click();
+  await expect(page.getByLabel('Inspection camera').locator('option')).toHaveCount(7);
+  await page.getByLabel('Inspection camera').selectOption('detail');
+  await expect(page.getByRole('img',{name:'detail geometry inspection poses'})).toBeVisible();
+  expect(calls).toEqual([]);
+  await page.getByRole('button',{name:'Generate inspection views'}).click();
+  expect(calls).toEqual(['/api/pipeline/model/'+revision+'/diagnose']);
 });

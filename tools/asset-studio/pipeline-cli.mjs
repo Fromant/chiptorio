@@ -1,4 +1,5 @@
 import { ModelReview } from './model-review.mjs';
+import { diagnoseModel } from './diagnostics.mjs';
 import { root, detectTools } from './host.mjs';
 import { loadRegistry, selectAssets } from './registry.mjs';
 import { buildAsset } from './build.mjs';
@@ -17,7 +18,8 @@ try{
     }
     if(failures)process.exitCode=1;
     else if(!args.includes('--model-only')&&!args.includes('--draft')&&revisions.length>1){const bundle=await pipeline.bundle(revisions);console.log(`Batch candidate · ${bundle.revision}\nReview: http://127.0.0.1:4173/?review=${bundle.revision}`);}
-  }else if(command==='validate')console.log(JSON.stringify(await pipeline.validate(value('revision'),await detectTools())));
+  }else if(command==='diagnose')console.log(JSON.stringify(await diagnoseModel(root,value('model'),await detectTools())));
+  else if(command==='validate')console.log(JSON.stringify(await pipeline.validate(value('revision'),await detectTools())));
   else if(command==='publish')console.log(JSON.stringify(await pipeline.publish(value('revision'),{confirm:value('confirm')})));
-  else throw new Error('Usage: npm run pipeline -- status | build --asset=<id> / --batch=<id> [--draft] | validate --revision=<hash> | publish --revision=<hash> --confirm=<same hash>. Visual approval is recorded only through Asset Studio.');
+  else throw new Error('Usage: npm run pipeline -- status | diagnose --model=<revision> | build --asset=<id> / --batch=<id> [--draft] | validate --revision=<hash> | publish --revision=<hash> --confirm=<same hash>. Visual approval is recorded only through Asset Studio.');
 }catch(error){console.error(error.message);process.exitCode=1;}
