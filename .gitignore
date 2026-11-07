@@ -3,3 +3,13 @@
 
 # Blender review renders and intermediate frames (shipped sprites live in graphics/)
 tools/graphics/blender/renders/
+tools/graphics/blender/**/__pycache__/
+tools/graphics/blender/**/*.blend1
+
+# Local asset-studio dependencies, builds, prototypes and preview renders
+tools/asset-studio/node_modules/
+tools/asset-studio/dist/
+tools/asset-studio/.cache/
+tools/asset-studio/test-results/
+tools/asset-studio/playwright-report/
+tools/asset-studio/workspace/

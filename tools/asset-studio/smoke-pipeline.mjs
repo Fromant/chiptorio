@@ -1,0 +1,32 @@
+/** Real Blender smoke against an isolated, disposable fixture. Never approves production art. */
+import { mkdir, cp, writeFile, readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { root, detectTools } from './host.mjs';
+import { atomicJSON, workspacePath, loadRegistry, hashFile } from './registry.mjs';
+import { buildAsset } from './build.mjs';
+import { Pipeline } from './pipeline.mjs';
+import assert from 'node:assert/strict';
+
+const fixture=path.join(process.env.LOCALAPPDATA?path.join(process.env.LOCALAPPDATA,'Temp/opencode'):workspacePath(root),`cp-${randomUUID().slice(0,8)}`);
+await mkdir(path.join(fixture,'tools/asset-studio'),{recursive:true});
+await cp(path.join(root,'tools/graphics/blender'),path.join(fixture,'tools/graphics/blender'),{recursive:true,filter:async(file)=>{const rel=path.relative(path.join(root,'tools/graphics/blender'),file);return !rel||(!rel.split(path.sep).some(s=>['renders','__pycache__'].includes(s))&&(!path.extname(file)||file.endsWith('.py')));}});
+for(const file of ['worker.py','pack.mjs'])await cp(path.join(root,'tools/asset-studio',file),path.join(fixture,'tools/asset-studio',file));
+await mkdir(path.join(fixture,'graphics'),{recursive:true});await writeFile(path.join(fixture,'graphics/published-assets.lua'),'-- metadata: {}\nreturn {}\n');
+await writeFile(path.join(fixture,'tools/graphics/fixture.py'),'def build(w):\n    w.base(.8)\n    slider=w.box("Fixture actuator",(0,0,.7),(.2,.2,.5),w.paint)\n    w.travel(slider,0,.12)\n    lamp=w.pulse("Fixture activity",(.1,.7,.3),0)\n    w.box("Fixture lamp",(0,-.2,.6),(.08,.03,.04),lamp)\n    return [1,1], .65, 4\n');
+const asset={id:'entity:pipeline-fixture',name:'pipeline-fixture',kind:'Entity',group:'fixture',order:0,profile:'entity',mode:'native-crafting',locked:false,prototype:{type:'assembling-machine',name:'pipeline-fixture'},source:{format:'python',builder:'tools/graphics/fixture.py',dependencies:[],placeholder:false},render:{frames:4,period:48,footprint:[1,1],samples:16,draftSamples:8,resolution:512,views:['game']},targets:['working.png','idle.png','shadow.png','sprite-def.lua'].map(file=>({artifact:file,path:`graphics/entity/pipeline-fixture/${file}`}))};
+await atomicJSON(path.join(fixture,'tools/asset-studio/assets.json'),{version:1,groups:[{id:'fixture',batch:1}],assets:[asset]});
+const tools=await detectTools(),job={log:''},pipeline=new Pipeline(fixture);
+const built=await buildAsset(fixture,asset,{tools,job});const candidate=await pipeline.stage(built.asset,built.artifacts,built.details);
+await pipeline.verify(candidate.revision);
+const again=await buildAsset(fixture,asset,{tools,job});const cached=await pipeline.stage(again.asset,again.artifacts,again.details);
+assert.equal(cached.revision,candidate.revision);assert.equal(cached.cached,true);assert.match(job.log,/Build CACHED/);assert.match(job.log,/Render CACHED/);assert.match(job.log,/Pack CACHED/);
+assert.equal(await readFile(path.join(fixture,'graphics/published-assets.lua'),'utf8'),'-- metadata: {}\nreturn {}\n');
+const legacy=structuredClone((await loadRegistry(root)).assets.find(a=>a.id==='entity:network-monitor'));
+legacy.group='fixture';legacy.locked=false;legacy.render.draftSamples=16;
+await atomicJSON(path.join(fixture,'tools/asset-studio/assets.json'),{version:1,groups:[{id:'fixture',batch:1}],assets:[asset,legacy]});
+const canonical=path.join(root,legacy.source.model),originalModel=await hashFile(canonical);
+const oldBuilt=await buildAsset(fixture,legacy,{draft:true,tools,job});const oldCandidate=await pipeline.stage(oldBuilt.asset,oldBuilt.artifacts,oldBuilt.details);await pipeline.verify(oldCandidate.revision);
+assert.equal(await hashFile(canonical),originalModel,'Legacy staging changed the canonical model');
+await assert.rejects(pipeline.review(oldCandidate.revision,'approved'),/Drafts/);
+console.log(`Blender staging PASS · ${candidate.revision.slice(0,12)} · build/render/pack cache PASS\nLegacy builder staging PASS · canonical model and installed files unchanged\nFixture: ${fixture}`);

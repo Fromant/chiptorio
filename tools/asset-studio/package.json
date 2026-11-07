@@ -1,0 +1,33 @@
+{
+  "name": "chiptorio-asset-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --watch-path=server.mjs --watch-path=host.mjs --watch-path=catalog.mjs --watch-path=registry.mjs --watch-path=pipeline.mjs --watch-path=publish.mjs --watch-path=model-review.mjs --watch-path=build.mjs --watch-path=planning.mjs --watch-path=pack.mjs --watch-path=integration.mjs server.mjs",
+    "start": "node server.mjs --production",
+    "build": "vite build",
+    "export": "node export.mjs",
+    "render:batch5": "node render-batch.mjs",
+    "pipeline": "node pipeline-cli.mjs",
+    "test:pipeline:blender": "node smoke-pipeline.mjs",
+    "test:pipeline:factorio": "node smoke-validation.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:ui": "playwright test"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.0",
+    "express": "^5.1.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "vite": "^7.3.0"
+  }
+}
