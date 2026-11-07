@@ -749,13 +749,14 @@
         "format": "python",
         "builder": "tools/graphics/assets/semiconductor/wafer_fab.py",
         "dependencies": [
-          "tools/graphics/assets/semiconductor/semiconductor_geometry.py"
+          "tools/graphics/assets/semiconductor/semiconductor_geometry.py",
+          "tools/graphics/assets/semiconductor/review_geometry.py"
         ],
         "placeholder": false
       },
       "render": {
-        "frames": 48,
-        "period": 96,
+        "frames": 96,
+        "period": 192,
         "footprint": [
           5,
           5
@@ -1244,13 +1245,14 @@
         "format": "python",
         "builder": "tools/graphics/assets/semiconductor/crystal_puller.py",
         "dependencies": [
-          "tools/graphics/assets/semiconductor/semiconductor_geometry.py"
+          "tools/graphics/assets/semiconductor/semiconductor_geometry.py",
+          "tools/graphics/assets/semiconductor/review_geometry.py"
         ],
         "placeholder": false
       },
       "render": {
-        "frames": 48,
-        "period": 96,
+        "frames": 96,
+        "period": 192,
         "footprint": [
           5,
           5
@@ -1559,13 +1561,14 @@
         "format": "python",
         "builder": "tools/graphics/assets/semiconductor/assembly_fab.py",
         "dependencies": [
-          "tools/graphics/assets/semiconductor/semiconductor_geometry.py"
+          "tools/graphics/assets/semiconductor/semiconductor_geometry.py",
+          "tools/graphics/assets/semiconductor/review_geometry.py"
         ],
         "placeholder": false
       },
       "render": {
-        "frames": 48,
-        "period": 96,
+        "frames": 96,
+        "period": 192,
         "footprint": [
           5,
           5
@@ -2036,13 +2039,14 @@
         "format": "python",
         "builder": "tools/graphics/assets/semiconductor/computer_assembler.py",
         "dependencies": [
-          "tools/graphics/assets/semiconductor/semiconductor_geometry.py"
+          "tools/graphics/assets/semiconductor/semiconductor_geometry.py",
+          "tools/graphics/assets/semiconductor/review_geometry.py"
         ],
         "placeholder": false
       },
       "render": {
-        "frames": 48,
-        "period": 96,
+        "frames": 96,
+        "period": 192,
         "footprint": [
           5,
           5
@@ -2381,13 +2385,14 @@
         "format": "python",
         "builder": "tools/graphics/assets/semiconductor/vlsi_fab.py",
         "dependencies": [
-          "tools/graphics/assets/semiconductor/semiconductor_geometry.py"
+          "tools/graphics/assets/semiconductor/semiconductor_geometry.py",
+          "tools/graphics/assets/semiconductor/review_geometry.py"
         ],
         "placeholder": false
       },
       "render": {
-        "frames": 48,
-        "period": 96,
+        "frames": 96,
+        "period": 192,
         "footprint": [
           5,
           5

@@ -12,7 +12,7 @@ test('batch six candidates all use the authorized 5x5 footprint and explicit nat
   const plan=await loadRegistry(root),assets=plan.assets.filter(a=>a.group==='batch-6');
   assert.deepEqual(assets.map(a=>a.name).sort(),[...names].sort());
   for(const asset of assets){
-    assert.deepEqual(asset.render.footprint,[5,5]);assert.equal(asset.mode,'native-crafting');assert.equal(asset.render.frames,48);assert.equal(asset.render.period,96);
+    assert.deepEqual(asset.render.footprint,[5,5]);assert.equal(asset.mode,'native-crafting');assert.equal(asset.render.frames,96);assert.equal(asset.render.period,192);
     assert.equal(asset.source.format,'python');assert.equal(asset.source.placeholder,false);assert.equal(asset.locked,!!asset.installed?.revision);checkBinding(asset);
     assert.ok(await exists(path.join(root,asset.source.builder)));
     for(const dep of asset.source.dependencies)assert.ok(await exists(path.join(root,dep)));
