@@ -862,18 +862,19 @@
       },
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/infrastructure/cooling_tower.py",
+        "dependencies": [
+          "tools/graphics/assets/infrastructure/common.py"
+        ],
         "placeholder": false
       },
       "render": {
-        "frames": 1,
-        "period": 48,
+        "frames": 96,
+        "period": 192,
         "footprint": [
-          3,
-          3
+          7,
+          7
         ],
         "samples": 32,
         "draftSamples": 8,
@@ -902,7 +903,63 @@
           "artifact": "sprite-def.lua",
           "path": "graphics/entity/cooling-tower/sprite-def.lua"
         }
-      ]
+      ],
+      "integration": {
+        "fluidPorts": [
+          {
+            "box": 1,
+            "connection": 1,
+            "direction": 0,
+            "from": [
+              -1,
+              -1
+            ],
+            "position": [
+              -1,
+              -3
+            ]
+          },
+          {
+            "box": 2,
+            "connection": 1,
+            "direction": 0,
+            "from": [
+              1,
+              -1
+            ],
+            "position": [
+              1,
+              -3
+            ]
+          },
+          {
+            "box": 3,
+            "connection": 1,
+            "direction": 8,
+            "from": [
+              -1,
+              1
+            ],
+            "position": [
+              -1,
+              3
+            ]
+          },
+          {
+            "box": 4,
+            "connection": 1,
+            "direction": 8,
+            "from": [
+              1,
+              1
+            ],
+            "position": [
+              1,
+              3
+            ]
+          }
+        ]
+      }
     },
     {
       "id": "entity:analytical-engine",
@@ -1118,22 +1175,23 @@
       },
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/infrastructure/quantum_fab.py",
+        "dependencies": [
+          "tools/graphics/assets/infrastructure/common.py"
+        ],
         "placeholder": false
       },
       "render": {
-        "frames": 1,
-        "period": 48,
+        "frames": 96,
+        "period": 192,
         "footprint": [
-          3,
-          3
+          11,
+          11
         ],
         "samples": 32,
         "draftSamples": 8,
-        "resolution": 768,
+        "resolution": 1024,
         "width": null,
         "height": null,
         "fit": "contain",
@@ -1158,7 +1216,63 @@
           "artifact": "sprite-def.lua",
           "path": "graphics/entity/quantum-fab/sprite-def.lua"
         }
-      ]
+      ],
+      "integration": {
+        "fluidPorts": [
+          {
+            "box": 1,
+            "connection": 1,
+            "direction": 0,
+            "from": [
+              -1,
+              -1
+            ],
+            "position": [
+              -1,
+              -5
+            ]
+          },
+          {
+            "box": 2,
+            "connection": 1,
+            "direction": 0,
+            "from": [
+              1,
+              -1
+            ],
+            "position": [
+              1,
+              -5
+            ]
+          },
+          {
+            "box": 3,
+            "connection": 1,
+            "direction": 8,
+            "from": [
+              -1,
+              1
+            ],
+            "position": [
+              -1,
+              5
+            ]
+          },
+          {
+            "box": 4,
+            "connection": 1,
+            "direction": 8,
+            "from": [
+              1,
+              1
+            ],
+            "position": [
+              1,
+              5
+            ]
+          }
+        ]
+      }
     },
     {
       "id": "entity:training-cluster",
@@ -1368,10 +1482,11 @@
       },
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/infrastructure/network_switch.py",
+        "dependencies": [
+          "tools/graphics/assets/infrastructure/common.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -1379,11 +1494,11 @@
         "period": 48,
         "footprint": [
           3,
-          2
+          3
         ],
         "samples": 32,
         "draftSamples": 8,
-        "resolution": 768,
+        "resolution": 512,
         "width": null,
         "height": null,
         "fit": "contain",
@@ -1780,10 +1895,11 @@
       },
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/infrastructure/network_router.py",
+        "dependencies": [
+          "tools/graphics/assets/infrastructure/common.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -1791,11 +1907,11 @@
         "period": 48,
         "footprint": [
           3,
-          2
+          3
         ],
         "samples": 32,
         "draftSamples": 8,
-        "resolution": 768,
+        "resolution": 512,
         "width": null,
         "height": null,
         "fit": "contain",
@@ -2192,18 +2308,19 @@
       },
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/infrastructure/memory_bank.py",
+        "dependencies": [
+          "tools/graphics/assets/infrastructure/common.py"
+        ],
         "placeholder": false
       },
       "render": {
         "frames": 1,
         "period": 48,
         "footprint": [
-          3,
-          3
+          5,
+          5
         ],
         "samples": 32,
         "draftSamples": 8,

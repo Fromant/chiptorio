@@ -10,7 +10,7 @@ test('live catalog filters, inspects, animates and adapts to mobile', async ({ p
   const catalog = await (await page.request.get('/api/catalog')).json();
   await expect(page.getByRole('heading', { name: 'Asset review',exact:true })).toBeVisible();
   await expect(page.locator('.asset-card')).toHaveCount(0);
-  await page.getByRole('button',{name:'Browse installed assets and references'}).click();
+  await page.getByRole('button',{name:'Browse asset library'}).click();
   await expect(page.locator('.asset-card')).toHaveCount(catalog.entries.length);
   await page.getByRole('button', { name: /Completed Blender/ }).click();
   await expect(page.locator('.asset-card')).toHaveCount(22);
@@ -52,6 +52,27 @@ test('export works without the server and loads embedded images', async ({ page 
   expect(external).toEqual([]); expect(errors).toEqual([]);
 });
 
+test('approved artwork is visible per asset even in a partly approved batch and opens its exact model',async({page,request})=>{
+  const catalog=await(await request.get('/api/catalog')).json(),revision='e'.repeat(64),calls=[];
+  catalog.entries=structuredClone(catalog.installedEntries??catalog.entries);
+  catalog.groups=catalog.groups.map(g=>g.status==='approved'?{...g,status:'future'}:g);
+  const entry=catalog.entries.find(e=>e.id==='entity:network-monitor');
+  entry.approval={revision,level:'artwork',published:false,current:true};entry.source='Approved artwork · not published';
+  await page.route('**/api/catalog',route=>route.fulfill({json:catalog}));
+  await page.route(`**/api/pipeline/model/${revision}/open`,route=>{calls.push(route.request().url());return route.fulfill({json:{opened:'inspection copy'}});});
+  await page.goto('/');await page.getByRole('button',{name:'Browse asset library'}).click();
+  await page.getByRole('button',{name:/Approved artwork/}).click();
+  await expect(page.locator('.asset-card')).toHaveCount(1);
+  await expect(page.locator('.asset-card')).toContainText('network-monitor');
+  await expect(page.locator('.asset-card .status-label')).toHaveClass(/approved/);
+  const canvas=page.locator('.asset-card canvas');await canvas.scrollIntoViewIfNeeded();
+  await expect.poll(()=>canvas.evaluate(c=>c.getContext('2d').getImageData(0,0,c.width,c.height).data.some((n,i)=>i%4===3&&n>0))).toBe(true);
+  await page.locator('.asset-card').getByRole('button',{name:'Blender',exact:true}).click();
+  await expect.poll(()=>calls.length).toBe(1);
+  await page.getByRole('button',{name:'Inspect network-monitor',exact:true}).click();
+  await expect(page.getByRole('dialog')).toContainText('The game still uses the installed revision until publication.');
+});
+
 test('API rejects cross-origin writes and unknown model paths', async ({ request }) => {
   const origin = await request.post('/api/model/open', { headers: { Origin: 'http://malicious.example' }, data: { id: 'entity:server-rack' } });
   expect(origin.status()).toBe(403);
@@ -62,7 +83,7 @@ test('API rejects cross-origin writes and unknown model paths', async ({ request
 test('batch-five deep link shows all five distinct installed machines and working motion', async ({ page }) => {
   const errors=[]; page.on('pageerror', error=>errors.push(error.message));
   await page.goto('/?batch=done-5');
-  await page.getByRole('button',{name:'Browse installed assets and references'}).click();
+  await page.getByRole('button',{name:'Browse asset library'}).click();
   await expect(page.locator('.asset-card')).toHaveCount(5);
   await expect(page.getByRole('heading', {name:'Batch 5 / completed'})).toBeVisible();
   await expect(page.locator('.asset-card').getByRole('button', {name:'Blender',exact:true})).toHaveCount(5);

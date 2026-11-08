@@ -57,8 +57,14 @@ Drafts, bundles, superseded versions, stale sources and reviewed assets stay out
 of this queue. No review history or artifacts are deleted.
 
 Build/source controls and candidate history are under **Production tools**.
-Installed graphics and references are behind **Browse installed assets and
-references**. Select a batch or asset for production; there is no rebuild-all.
+Graphics and references are behind **Browse asset library**. The library shows
+the newest approved artwork in place of its installed predecessor, labelled
+**Approved artwork · not published** until publication. The **Approved artwork**
+filter finds these entries. Approval remains bound to the exact artifact bytes;
+later source edits do not hide already reviewed artwork. Installed snapshots
+remain separate for review comparisons, and publication still requires current
+sources and isolated validation. Select a batch or asset for production; there
+is no rebuild-all.
 
 1. **Configure/edit.** `Scaffold model.py` creates source under
    `tools/graphics/assets/`, never installed art. Replace its placeholder and clear

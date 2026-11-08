@@ -11,6 +11,7 @@ import { selectAssets } from './registry.mjs';
 import { ProductionPipeline } from './publish.mjs';
 import { ModelReview } from './model-review.mjs';
 import {diagnoseModel,diagnosticFolder} from './diagnostics.mjs';
+import {approvedLibrary} from './library.mjs';
 import { buildAsset } from './build.mjs';
 import { changeAsset, scaffold } from './planning.mjs';
 
@@ -126,7 +127,7 @@ async function catalog(force = false) {
   }
   return current;
 }
-app.get('/api/catalog', async (req, res) => res.json((await catalog(req.query.scan === '1')).data));
+app.get('/api/catalog', async (req, res) => res.json((await approvedLibrary(root,await catalog(req.query.scan === '1'))).data));
 app.get('/api/jobs', (req, res) => res.json(jobs.map(({ promise, ...job }) => job)));
 app.get('/api/image', async (req, res) => {
   const file = (await catalog()).registry.get(req.query.key);

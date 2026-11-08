@@ -18,3 +18,5 @@ button[hidden]{display:none}
 [hidden]{display:none!important}
 
 .model-detail{margin-top:20px;padding-top:20px;border-top:1px solid var(--line)}
+
+.status-label.approved,.stage-badge.approved{color:var(--green)}.dot.approved,.status-label.approved>span{background:var(--green)}

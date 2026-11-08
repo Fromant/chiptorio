@@ -68,11 +68,11 @@ function AssetCard({ entry, group, images, settings, select, action, busy, tools
 
     <button className="art-button" onClick={() => select(entry)} aria-label={`Inspect ${entry.name}`}><Preview entry={entry} images={images} {...settings} /><span className="art-kind">{entry.kind}</span>{entry.model && <span className="model-mark"><Box size={13} /> .blend</span>}</button>
 
-    <div className="card-body"><div className={`status-label ${group.status}`}><span />{entry.source}</div><h3>{entry.name}</h3>
+    <div className="card-body"><div className={`status-label ${entry.approval?'approved':group.status}`}><span />{entry.source}</div><h3>{entry.name}</h3>
 
       <div className="card-meta">{entry.footprint ? `${entry.footprint.map(n => +n.toFixed(2)).join(' × ')} tiles` : `${images[entry.image].width} × ${images[entry.image].height} px`}<span>·</span>{entry.files.length} source{entry.files.length === 1 ? '' : 's'}</div>
 
-      <div className="card-actions"><button onClick={() => select(entry)}><Layers3 size={14} /> Inspect</button>{entry.model && <><button title="Open editable model in Blender" disabled={!tools.blender} onClick={() => action('/api/model/open', { id: entry.id })}><ExternalLink size={14} /> Blender</button><button title="Render one low-sample game-view preview. Does not install graphics." disabled={busy || !tools.blender} onClick={() => action('/api/model/preview', { id: entry.id })}><Play size={14} /> Render</button></>}</div>
+      <div className="card-actions"><button onClick={() => select(entry)}><Layers3 size={14} /> Inspect</button>{entry.model && <><button title="Open editable model in Blender" disabled={!tools.blender} onClick={() => action(entry.approval?`/api/pipeline/model/${entry.approval.revision}/open`:'/api/model/open',entry.approval?{}:{id:entry.id})}><ExternalLink size={14} /> Blender</button><button title="Render one low-sample game-view preview. Does not install graphics." disabled={busy || !tools.blender} onClick={() => action(entry.approval?`/api/pipeline/model/${entry.approval.revision}/still`:'/api/model/preview',entry.approval?{}:{id:entry.id})}><Play size={14} /> Render</button></>}</div>
 
     </div>
 
@@ -136,11 +136,13 @@ function App() {
 
   const tokens = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
 
+  const status = e => e.approval ? 'approved' : groups.get(e.group).status;
+
   const filtered = data.entries.filter(e => {
 
     const text = `${e.name} ${e.source} ${e.kind} ${e.files.join(' ')} ${groups.get(e.group).title}`.toLowerCase();
 
-    return tokens.every(t => text.includes(t)) && (stage === 'all' || groups.get(e.group).status === stage) && (kind === 'all' || e.kind === kind) && (selectedGroup === 'all' || e.group === selectedGroup);
+    return tokens.every(t => text.includes(t)) && (stage === 'all' || status(e) === stage) && (kind === 'all' || e.kind === kind) && (selectedGroup === 'all' || e.group === selectedGroup);
 
   });
 
@@ -154,7 +156,7 @@ function App() {
 
       <div className="sidebar-label">LIBRARY</div>
 
-      {[['all', 'All graphics', ImageIcon], ['done', 'Completed Blender', Check], ['future', 'Render queue', Clock3], ['reference', 'Legacy & reference', Layers3]].map(([id, label, Icon]) => <button key={id} className={`nav-item ${stage === id ? 'active' : ''}`} onClick={() => { setStage(id); setSelectedGroup('all'); }}><Icon size={17} />{label}<span>{id === 'all' ? data.entries.length : data.entries.filter(e => groups.get(e.group).status === id).length}</span></button>)}
+      {[['all', 'All graphics', ImageIcon], ['approved', 'Approved artwork', Check], ['done', 'Completed Blender', Check], ['future', 'Render queue', Clock3], ['reference', 'Legacy & reference', Layers3]].map(([id, label, Icon]) => <button key={id} className={`nav-item ${stage === id ? 'active' : ''}`} onClick={() => { setStage(id); setSelectedGroup('all'); }}><Icon size={17} />{label}<span>{id === 'all' ? data.entries.length : data.entries.filter(e => status(e) === id).length}</span></button>)}
 
       <div className="sidebar-label batch-label">PRODUCTION ORDER <span>{data.groups.length}</span></div>
 
@@ -179,13 +181,13 @@ function App() {
       {!showLibrary&&<h1 className="review-heading">Asset review</h1>}
       <PipelinePanel catalog={data} busy={busy} action={action}/>
 
-      <button onClick={()=>setShowLibrary(!showLibrary)}>{showLibrary?'Hide asset library':'Browse installed assets and references'}</button>
+      <button onClick={()=>setShowLibrary(!showLibrary)}>{showLibrary?'Hide asset library':'Browse asset library'}</button>
 
       {showLibrary&&<><div className="filters"><div className="search"><Search size={18} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search names, paths, batches…" aria-label="Search all assets" />{search && <button className="icon-button" onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button>}</div><select value={kind} onChange={e => setKind(e.target.value)} aria-label="Graphic type"><option value="all">All types</option>{[...new Set(data.entries.map(e => e.kind))].map(k => <option key={k}>{k}</option>)}</select><div className="segmented"><button className={working ? 'on' : ''} onClick={() => setWorking(true)}>Working</button><button className={!working ? 'on' : ''} onClick={() => setWorking(false)}>Idle</button></div><button className="icon-button" aria-label={paused ? 'Resume animations' : 'Pause animations'} title={paused ? 'Resume' : 'Pause'} onClick={() => setPaused(!paused)}>{paused ? <Play size={17} /> : <Pause size={17} />}</button><button className={`icon-button ${footprint ? 'on' : ''}`} title="Show selection footprints" aria-pressed={footprint} onClick={() => setFootprint(!footprint)}><Grid2X2 size={17} /></button></div>
 
       <div className="results"><span>{filtered.length} graphics {search && `matching “${search}”`}</span><div>{selectedGroup !== 'all' && <button onClick={() => setSelectedGroup('all')}>Clear batch <X size={12} /></button>}<button disabled={busy || !data.tools.factorio} title="Read current prototypes in isolated headless Factorio; no player save is loaded" onClick={() => action('/api/refresh')}><RefreshCw size={12} /> Refresh prototypes</button></div></div>
 
-      {data.groups.map(g => { const entries = filtered.filter(e => e.group === g.id); return entries.length ? <section key={g.id} className="batch-section"><div className="section-title"><span className={`dot ${g.status}`} /><h2>{g.title}</h2><span className="count">{entries.length}</span><span className={`stage-badge ${g.status}`}>{g.status === 'done' ? 'INSTALLED' : g.status === 'future' ? 'PROPOSED' : 'REFERENCE'}</span></div><p className="section-note">{g.note}</p><div className="asset-grid">{entries.map(entry => <AssetCard key={entry.id} entry={entry} group={g} images={data.images} settings={settings} select={setSelected} action={action} busy={busy} tools={data.tools} />)}</div></section> : null; })}
+      {data.groups.map(g => { const entries = filtered.filter(e => e.group === g.id); return entries.length ? <section key={g.id} className="batch-section"><div className="section-title"><span className={`dot ${g.status}`} /><h2>{g.title}</h2><span className="count">{entries.length}</span><span className={`stage-badge ${g.status}`}>{g.status === 'approved' ? 'APPROVED' : g.status === 'done' ? 'INSTALLED' : g.status === 'future' ? 'PROPOSED' : 'REFERENCE'}</span></div><p className="section-note">{g.note}</p><div className="asset-grid">{entries.map(entry => <AssetCard key={entry.id} entry={entry} group={g} images={data.images} settings={settings} select={setSelected} action={action} busy={busy} tools={data.tools} />)}</div></section> : null; })}
 
       {!filtered.length && <div className="empty"><Search size={32} /><h2>No graphics found</h2><p>Try another name, or clear a batch or type filter.</p><button onClick={() => { setSearch(''); setSelectedGroup('all'); setStage('all'); setKind('all'); }}>Reset filters</button></div>}
 
@@ -199,7 +201,7 @@ function App() {
 
     {consoleOpen && <aside className="job-panel"><div className="panel-title"><Terminal size={17} /><h2>Tool activity</h2><button className="icon-button" aria-label="Close activity" onClick={() => setConsoleOpen(false)}><X size={18} /></button></div><p>Preview renders never rebuild models or overwrite installed graphics.</p>{jobs.length === 0 && <p>No tool jobs yet.</p>}{jobs.map(job => <details key={job.id} open={job.status === 'running'}><summary><span className={`dot ${job.status === 'complete' ? 'done' : 'future'}`} />{job.label}<span>{job.status}</span></summary>{job.preview && <a href={job.preview} target="_blank" rel="noreferrer"><img src={job.preview} alt={job.label} /></a>}<pre>{job.log || 'Starting…'}</pre></details>)}</aside>}
 
-    {selectedEntry && <dialog id="asset-detail" onClose={() => setSelected(null)} onClick={e => { if (e.target === e.currentTarget) e.currentTarget.close(); }}><div className="panel-title"><span className="eyebrow">ASSET INSPECTOR</span><button className="icon-button" aria-label="Close inspector" onClick={() => document.querySelector('#asset-detail').close()}><X size={20} /></button></div><h2>{selectedEntry.name}</h2><p>{selectedEntry.kind} / {selectedEntry.source}</p><Preview entry={selectedEntry} images={data.images} {...settings} large /><div className="inspector-info"><span>{selectedEntry.prototype ?? selectedEntry.kind}</span>{selectedEntry.model && <code>{selectedEntry.model}</code>}</div><h3>Source images <span>{selectedEntry.files.length}</span></h3><div className="source-grid">{selectedEntry.files.map(key => <a key={key} href={data.images[key].src} target="_blank" rel="noreferrer"><img loading="lazy" src={data.images[key].src} alt={key} /><code>{key}</code><small>{data.images[key].width} × {data.images[key].height} px <ExternalLink size={12} /></small></a>)}</div>{selectedEntry.model && <div className="inspector-actions"><button disabled={!data.tools.blender} onClick={() => action('/api/model/open', { id: selectedEntry.id })}><ExternalLink size={15} /> Open in Blender</button><button className="primary" disabled={busy || !data.tools.blender} onClick={() => action('/api/model/preview', { id: selectedEntry.id })}><Play size={15} /> Render game-view preview</button></div>}<p className="muted">Single fixed game camera. Current installed sprites above; preview renders are separate and never installed automatically.</p></dialog>}
+    {selectedEntry && <dialog id="asset-detail" onClose={() => setSelected(null)} onClick={e => { if (e.target === e.currentTarget) e.currentTarget.close(); }}><div className="panel-title"><span className="eyebrow">ASSET INSPECTOR</span><button className="icon-button" aria-label="Close inspector" onClick={() => document.querySelector('#asset-detail').close()}><X size={20} /></button></div><h2>{selectedEntry.name}</h2>{selectedEntry.approval&&<p>Approved artwork shown here. The game still uses the installed revision until publication.</p>}<p>{selectedEntry.kind} / {selectedEntry.source}</p><Preview entry={selectedEntry} images={data.images} {...settings} large /><div className="inspector-info"><span>{selectedEntry.prototype ?? selectedEntry.kind}</span>{selectedEntry.model && <code>{selectedEntry.model}</code>}</div><h3>Source images <span>{selectedEntry.files.length}</span></h3><div className="source-grid">{selectedEntry.files.map(key => <a key={key} href={data.images[key].src} target="_blank" rel="noreferrer"><img loading="lazy" src={data.images[key].src} alt={key} /><code>{key}</code><small>{data.images[key].width} × {data.images[key].height} px <ExternalLink size={12} /></small></a>)}</div>{selectedEntry.model && <div className="inspector-actions"><button disabled={!data.tools.blender} onClick={() => action(selectedEntry.approval?`/api/pipeline/model/${selectedEntry.approval.revision}/open`:'/api/model/open',selectedEntry.approval?{}:{id:selectedEntry.id})}><ExternalLink size={15} /> Open in Blender</button><button className="primary" disabled={busy || !data.tools.blender} onClick={() => action(selectedEntry.approval?`/api/pipeline/model/${selectedEntry.approval.revision}/still`:'/api/model/preview',selectedEntry.approval?{}:{id:selectedEntry.id})}><Play size={15} /> Render game-view preview</button></div>}<p className="muted">Single fixed game camera. Library artwork is shown above. Preview renders are separate and never installed automatically.</p></dialog>}
 
   </div>;
 

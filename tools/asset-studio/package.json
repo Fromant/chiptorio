@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "node --watch-path=server.mjs --watch-path=host.mjs --watch-path=catalog.mjs --watch-path=registry.mjs --watch-path=pipeline.mjs --watch-path=publish.mjs --watch-path=diagnostics.mjs --watch-path=model-review.mjs --watch-path=build.mjs --watch-path=planning.mjs --watch-path=pack.mjs --watch-path=integration.mjs server.mjs",
+    "dev": "node --watch-path=server.mjs --watch-path=host.mjs --watch-path=library.mjs --watch-path=catalog.mjs --watch-path=registry.mjs --watch-path=pipeline.mjs --watch-path=publish.mjs --watch-path=diagnostics.mjs --watch-path=model-review.mjs --watch-path=build.mjs --watch-path=planning.mjs --watch-path=pack.mjs --watch-path=integration.mjs server.mjs",
     "start": "node server.mjs --production",
     "build": "vite build",
     "export": "node export.mjs",

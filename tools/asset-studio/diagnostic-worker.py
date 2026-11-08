@@ -119,16 +119,19 @@ for o in s.objects:
 camera=s.camera
 camera.data.type='ORTHO'
 camera.data.ortho_scale=6.2
-target=Vector((0,0,1.1))
+target=Vector((0,0,s.get('camera_target_z',1.1)))
+footprint=max(s.get('footprint_tiles',[5,5]))
+overview_scale=max(6.2,footprint*1.25+1)
 views={'game':(0,-9,10.1),'front':(0,-10,1.4),'left':(-10,0,1.4),
        'right':(10,0,1.4),'rear':(0,10,1.4),'top':(0,0,11.1)}
 views['detail']=(3,-7,4)
-detail_targets={'wafer-fab':(0,-.4,1.15),'computer-assembler':(-.3,-.25,1.6),
+detail_targets={'cooling-tower':(0,-.5,2),'quantum-fab':(0,-2.8,1.9),'memory-bank':(0,0,1.5),
+                'wafer-fab':(0,-.4,1.15),'computer-assembler':(-.3,-.25,1.6),
                 'assembly-fab':(0,-.4,1.3),'crystal-puller':(.4,-.12,2.1),'vlsi-fab':(0,.3,2.0)}
 images=[]
 for view,position in views.items():
     aim=Vector(detail_targets.get(s.get('asset_name'),(0,0,1.1))) if view=='detail' else target
-    camera.data.ortho_scale=3.9 if view=='detail' else 6.2
+    camera.data.ortho_scale=(5.5 if footprint>=7 else 3.9) if view=='detail' else overview_scale
     camera.location=position
     camera.rotation_euler=(aim-camera.location).to_track_quat('-Z','Y').to_euler()
     for phase in phases:
