@@ -23,3 +23,5 @@ require("scripts.technology")
 require("scripts.circuits")
 require("scripts.computers")
 require("scripts.ai")
+-- Approved artwork is applied after all Chiptorio entity owners are defined.
+require("scripts.published_assets")

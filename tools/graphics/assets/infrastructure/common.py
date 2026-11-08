@@ -45,6 +45,34 @@ def port(w,name,x,y,z=.35):
     w.cyl(name,(x,y,z),.075,.28,w.steel,'Y')
     w.ring(name+' flange',(x,y+(.10 if y>0 else -.10),z),.09,.016,w.iron,'Y')
 
+def tube(w,name,points,radius=.06,mat=None,bend=.16):
+    """Straight pipe runs with bounded, rounded elbows; no AUTO-handle overshoot."""
+    from mathutils import Vector
+    pts=[Vector(p) for p in points]; path=[pts[0]]
+    for a,b,c in zip(pts,pts[1:],pts[2:]):
+        distance=min(bend,(b-a).length*.4,(c-b).length*.4)
+        before=b+(a-b).normalized()*distance;after=b+(c-b).normalized()*distance
+        path.append(before)
+        for step in range(1,9):
+            t=step/8;path.append((1-t)**2*before+2*(1-t)*t*b+t*t*after)
+    path.append(pts[-1])
+    curve=bpy.data.curves.new(name,'CURVE');curve.dimensions='3D';curve.bevel_depth=radius;curve.bevel_resolution=3
+    spline=curve.splines.new('POLY');spline.points.add(len(path)-1)
+    for p,co in zip(spline.points,path):p.co=(*co,1)
+    obj=bpy.data.objects.new(name,curve);w.cols['Cables'].objects.link(obj);obj.parent=w.parent
+    curve.materials.append(mat or w.steel)
+    return obj
+
+def blink(w,name,phase=0,color=(.06,.8,.25)):
+    mat=active(w,name,color,f'(1 if ((frame-1+{phase})%48)<12 or 22<=((frame-1+{phase})%48)<28 else 0)',3.0)
+    node=mat.node_tree.nodes.get('Principled BSDF')
+    for i in range(3):
+        driver=node.inputs['Base Color'].driver_add('default_value',i).driver
+        var=driver.variables.new();var.name='working';var.type='SINGLE_PROP'
+        var.targets[0].id_type='SCENE';var.targets[0].id=w.scene;var.targets[0].data_path='["working"]'
+        driver.expression=f'{color[i]}*(0.025+0.975*working*(1 if ((frame-1+{phase})%48)<12 or 22<=((frame-1+{phase})%48)<28 else 0))'
+    return mat
+
 def hood(w,name,x,y):
     for dy in (-.86,.86):w.box(name+' side',(x,y+dy,1.30),(1.9,.08,1.7),w.white)
     w.box(name+' cover',(x,y,2.18),(1.9,1.8,.08),w.white)

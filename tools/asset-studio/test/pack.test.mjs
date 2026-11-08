@@ -36,6 +36,15 @@ test('directional adapter packs every view using the established layers contract
   const meta=await pack(asset,root,out),lua=await readFile(path.join(out,'sprite-def.lua'),'utf8');
   assert.equal(Object.keys(meta.views).length,4);for(const view of views)assert.ok(lua.includes(`${view}={layers={`));assert.ok(!lua.includes('north={animation='));
 });
+
+test('rotatable native machines retain working and idle animations in every direction',async t=>{
+  const root=await fixture(t);await renders(root,true);const out=path.join(root,'packed'),views=['north','east','south','west'];
+  const asset={name:'fixture',profile:'entity',mode:'native-crafting',integration:{directional:true},render:{footprint:[1,1],views},targets:[...views.flatMap(v=>['working.png','idle.png','shadow.png'].map(f=>({artifact:`${v}/${f}`,path:`graphics/entity/fixture/${v}-${f}`}))),{artifact:'sprite-def.lua',path:'graphics/entity/fixture/sprite-def.lua'}]};
+  const meta=await pack(asset,root,out),lua=await readFile(path.join(out,'sprite-def.lua'),'utf8');
+  for(const view of views){assert.ok(meta.views[view].idle);assert.equal((lua.match(new RegExp(`${view}=`, 'g'))??[]).length,2);}
+  assert.match(lua,/on_animation=\{north=\{layers=\{.*frame_count=2/);
+  assert.match(lua,/off_animation=\{north=\{layers=\{.*frame_count=1, repeat_count=2/);
+});
 for(const profile of ['image','cable','presentation'])test(`${profile} PNG intake preserves bytes and resumes/rebuilds only a corrupt packing stage`,async t=>{
   const root=await fixture(t),bytes=await sprite(22,16);await writeFile(path.join(root,'source.png'),bytes);
   const asset={id:`file:graphics/${profile}.png`,name:profile,profile,mode:'image',locked:false,group:'batch-42',source:{format:'image',image:'source.png'},render:{frames:1,period:1,footprint:[1,1],width:64,height:64},targets:[{artifact:'image.png',path:`graphics/${profile}.png`}]};

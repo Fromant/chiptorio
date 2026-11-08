@@ -13,6 +13,7 @@
 local graph_builder = require("scripts.runtime.network_graph")
 local meta = require("scripts.research_meta")
 local qmeta = require("scripts.qln_meta")
+local visuals = require("scripts.runtime.device_visuals")
 
 local M = {}
 
@@ -859,6 +860,15 @@ function M.tick()
     rebuild_all()
     draw_overlay()
     M.refresh_monitors()
+  end
+  for _, graph in pairs(storage.network.graphs) do
+    for _, device in pairs(graph.devices or {}) do
+      if device.name == "wireless-access-point" or device.name == MONITOR or device.name == SWITCH or device.name == ROUTER or device.name == "memory-bank" then
+        local linked = graph.device_network[device.id] ~= nil
+        -- These are link/capacity heartbeats, not invented packet counters.
+        visuals.set_active(device.entity, linked and (device.name ~= "memory-bank" or (device.memory or 0) > 0))
+      end
+    end
   end
 end
 

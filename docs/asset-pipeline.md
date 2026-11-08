@@ -135,6 +135,13 @@ existing registered `device_visuals` owner; current owners run at 12 fps
 (`frames = period / 2`, source rig 24 fps). Unknown activity owners fail closed:
 implement gameplay signals deliberately, never infer activity from entity existence.
 The directional adapter supports the established server-rack runtime and four views.
+Native crafting may also declare `integration.directional` with all four cardinal
+`render.views`, working/idle/shadow targets for each view, and a reviewed fluid-port
+plan. Its generated `Animation4Way` definitions follow native crafting and rotation;
+it does not use the server-rack runtime adapter. `integration.basePipeSprites`
+reuses base assembler connector pictures and covers rather than replacing native
+pipe joins with authored sprite seams. Link/capacity owners for Switch, Router and
+Memory Bank are guarded until their animations exist after publication.
 
 `graphics/published-assets.lua` starts empty: the data-stage adapter changes no
 installed art until an approved entity binding is published. Binding metadata is
@@ -176,6 +183,7 @@ npm run build
 npm run test:pipeline:blender
 npm run test:pipeline:geometry
 npm run test:pipeline:factorio
+npm run test:pipeline:infrastructure
 ```
 
 CLI output contains short stage summaries, revision IDs and review URLs. Visual

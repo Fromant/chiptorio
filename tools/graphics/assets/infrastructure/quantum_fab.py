@@ -1,7 +1,7 @@
 """Eleven-tile cryogenic fabrication cell with a visible indexed process line."""
 import math
 import bpy
-from common import base,animate,sample,cabinet,port,active,hood,finish
+from common import base,animate,sample,cabinet,port,active,hood,finish,tube
 
 def build(w):
     base(w,11,True,[(16,'Carrier enters line'),(32,'Align under quantum probe'),(48,'Field A'),(80,'Field B'),(112,'Corrected array ready'),(148,'Unload processor')])
@@ -53,8 +53,11 @@ def build(w):
     for x in (-1,1):
         port(w,'Cryogenic coupling',x,-5.23);port(w,'Cryogenic coupling',x,5.23)
         side=1 if x>0 else -1
-        w.pipe('Cryogen external service',[(x,-5.23,.35),(side*4.9,-4.8,.65),(side*4.9,3.0,.65),(side*1.3,2.6,1.12)],.07,w.blue)
-        w.pipe('Cryogen return service',[(side*1.3,2.6,1.72),(side*2.8,3.8,1.0),(x,5.23,.35)],.06,w.steel)
+        tube(w,'Insulated cryogen supply',[(x,-5.23,.35),(x,-4.35,.60),(side*2.80,-4.35,.60),(side*2.80,3.60,.60),(side*2.80,3.60,1.12),(side*2.80,2.60,1.12),(side*1.30,2.60,1.12)],.075,w.ivory)
+        tube(w,'Cryogen return manifold',[(x,5.23,.35),(x,4.25,.60),(side*2.45,4.25,.60),(side*2.45,3.40,.60),(side*2.45,3.40,1.72),(side*2.45,2.80,1.72),(side*1.30,2.80,1.72)],.065,w.steel)
+        for y in (-3.85,-1.0,1.65,3.50):
+            w.box('Supply pipe saddle',(side*2.80,y,.50),(.26,.12,.16),w.iron)
+            w.ring('Supply pipe clamp',(side*2.80,y,.60),.09,.012,w.steel,'Y')
     def check(p):
         if 40<=p<=112:assert abs(carrier.location.x)<.0001,'Probe runs before carrier alignment'
         if 124<=p<=148:assert head.location.z>2.3,'Carrier leaves beneath lowered probe'

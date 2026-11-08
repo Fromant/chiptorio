@@ -883,21 +883,60 @@
         "height": null,
         "fit": "contain",
         "views": [
-          "game"
+          "north",
+          "east",
+          "south",
+          "west"
         ]
       },
       "targets": [
         {
-          "artifact": "working.png",
-          "path": "graphics/entity/cooling-tower/working.png"
+          "artifact": "north/working.png",
+          "path": "graphics/entity/cooling-tower/north-working.png"
         },
         {
-          "artifact": "idle.png",
-          "path": "graphics/entity/cooling-tower/idle.png"
+          "artifact": "north/idle.png",
+          "path": "graphics/entity/cooling-tower/north-idle.png"
         },
         {
-          "artifact": "shadow.png",
-          "path": "graphics/entity/cooling-tower/shadow.png"
+          "artifact": "north/shadow.png",
+          "path": "graphics/entity/cooling-tower/north-shadow.png"
+        },
+        {
+          "artifact": "east/working.png",
+          "path": "graphics/entity/cooling-tower/east-working.png"
+        },
+        {
+          "artifact": "east/idle.png",
+          "path": "graphics/entity/cooling-tower/east-idle.png"
+        },
+        {
+          "artifact": "east/shadow.png",
+          "path": "graphics/entity/cooling-tower/east-shadow.png"
+        },
+        {
+          "artifact": "south/working.png",
+          "path": "graphics/entity/cooling-tower/south-working.png"
+        },
+        {
+          "artifact": "south/idle.png",
+          "path": "graphics/entity/cooling-tower/south-idle.png"
+        },
+        {
+          "artifact": "south/shadow.png",
+          "path": "graphics/entity/cooling-tower/south-shadow.png"
+        },
+        {
+          "artifact": "west/working.png",
+          "path": "graphics/entity/cooling-tower/west-working.png"
+        },
+        {
+          "artifact": "west/idle.png",
+          "path": "graphics/entity/cooling-tower/west-idle.png"
+        },
+        {
+          "artifact": "west/shadow.png",
+          "path": "graphics/entity/cooling-tower/west-shadow.png"
         },
         {
           "artifact": "sprite-def.lua",
@@ -958,7 +997,9 @@
               3
             ]
           }
-        ]
+        ],
+        "directional": true,
+        "basePipeSprites": true
       }
     },
     {
@@ -1473,14 +1514,14 @@
       "group": "batch-7",
       "order": 2,
       "profile": "entity",
-      "mode": "static",
+      "mode": "scripted",
       "locked": false,
       "installed": null,
       "prototype": {
         "type": "container",
         "name": "network-switch"
       },
-      "activity": null,
+      "activity": "network-switch",
       "source": {
         "format": "python",
         "builder": "tools/graphics/assets/infrastructure/network_switch.py",
@@ -1490,7 +1531,7 @@
         "placeholder": false
       },
       "render": {
-        "frames": 1,
+        "frames": 24,
         "period": 48,
         "footprint": [
           3,
@@ -1886,14 +1927,14 @@
       "group": "batch-7",
       "order": 3,
       "profile": "entity",
-      "mode": "static",
+      "mode": "scripted",
       "locked": false,
       "installed": null,
       "prototype": {
         "type": "container",
         "name": "network-router"
       },
-      "activity": null,
+      "activity": "network-router",
       "source": {
         "format": "python",
         "builder": "tools/graphics/assets/infrastructure/network_router.py",
@@ -1903,7 +1944,7 @@
         "placeholder": false
       },
       "render": {
-        "frames": 1,
+        "frames": 24,
         "period": 48,
         "footprint": [
           3,
@@ -2299,14 +2340,14 @@
       "group": "batch-7",
       "order": 4,
       "profile": "entity",
-      "mode": "static",
+      "mode": "scripted",
       "locked": false,
       "installed": null,
       "prototype": {
         "type": "container",
         "name": "memory-bank"
       },
-      "activity": null,
+      "activity": "memory-bank",
       "source": {
         "format": "python",
         "builder": "tools/graphics/assets/infrastructure/memory_bank.py",
@@ -2316,7 +2357,7 @@
         "placeholder": false
       },
       "render": {
-        "frames": 1,
+        "frames": 24,
         "period": 48,
         "footprint": [
           5,

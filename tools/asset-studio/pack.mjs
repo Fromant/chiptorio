@@ -28,7 +28,7 @@ export async function pack(asset,renderFolder,output) {
   if(work.entity!==asset.name||idle.entity!==asset.name||idle.frames!==1)throw new Error('Mismatched render identity');
   for(const key of ['origin_px','footprint'])if(JSON.stringify(work[key])!==JSON.stringify(idle[key]))throw new Error(`Working/idle ${key} mismatch`);
   if(JSON.stringify(work.footprint)!==JSON.stringify(asset.render.footprint))throw new Error('Mismatched footprint');
-  const directional=asset.mode==='existing-directional',views=directional?['north','east','south','west']:['game'];
+  const legacyDirectional=asset.mode==='existing-directional',directional=legacyDirectional||asset.integration?.directional,views=directional?['north','east','south','west']:['game'];
   let total,body;const sources={};
   for(const view of views){
     const w=work.directions[view],rest=idle.directions[view];
@@ -61,8 +61,12 @@ export async function pack(asset,renderFolder,output) {
   }
   const sprite=(file,animated=false,shadow=false)=>`{filename=${JSON.stringify('__chiptorio__/'+file)}, width=${width}, height=${height}, scale=0.5, shift={${shift}}, frame_count=${animated?frames:1}${animated?`, line_length=${columns}, animation_speed=${work.animation_speed}`:''}${shadow?', draw_as_shadow=true':''}}`;
   let lua;
-  if(directional){
+  if(legacyDirectional){
     lua=`return {\n${views.map(view=>`${view}={layers={${sprite(asset.targets.find(t=>t.artifact===view+'/working.png').path,true)},${sprite(asset.targets.find(t=>t.artifact===view+'/shadow.png').path,false,true).replace('frame_count=1',`repeat_count=${frames}`)}}}`).join(',\n')}\n}\n`;
+  }else if(directional){
+    const target=f=>asset.targets.find(t=>t.artifact===f)?.path;
+    const state=(working)=>`{${views.map(view=>`${view}={layers={${sprite(target(view+'/'+(working?'working.png':'idle.png')),working).replace(/frame_count=1(?=[,}])/,`frame_count=1, repeat_count=${frames}`)},${sprite(target(view+'/shadow.png'),false,true).replace(/frame_count=1(?=[,}])/,`frame_count=1, repeat_count=${frames}`)}}}`).join(',')}}`;
+    lua=`return {footprint={${asset.render.footprint}}, on_animation=${state(true)}, off_animation=${state(false)}}\n`;
   }else{
     const target=f=>asset.targets.find(t=>t.artifact===f)?.path;
     for(const f of ['working.png','idle.png','shadow.png','sprite-def.lua'])if(!target(f))throw new Error(`Missing entity target ${f}`);

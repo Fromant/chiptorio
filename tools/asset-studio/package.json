@@ -17,7 +17,8 @@
     "test:pipeline:geometry": "node smoke-geometry.mjs",
     "test:pipeline:factorio": "node smoke-validation.mjs",
     "test": "node --test test/*.test.mjs",
-    "test:ui": "playwright test"
+    "test:ui": "playwright test",
+    "test:pipeline:infrastructure": "node smoke-infrastructure.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.0",

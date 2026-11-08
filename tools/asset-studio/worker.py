@@ -86,7 +86,7 @@ else:
     for state in states:
         args = ['render.py','--','--samples',str(config['samples']),'--resolution',str(config['resolution']),
                 '--device','auto','--output-dir',str(Path(config['output'])/state)]
-        if asset['mode'] == 'existing-directional':
+        if asset['mode'] == 'existing-directional' or asset.get('integration',{}).get('directional'):
             args += ['--fixed-scale','--angles','north,east,south,west']
         else:
             args += ['--game-view']

@@ -443,4 +443,63 @@ M.fluid = function(name, amount)
   return { type = "fluid", name = name, amount = amount }
 end
 
+--- Fixed-view Blender art for devices, native crafting and accumulators.
+--- Containers retain their idle body/shadow; runtime
+--- overlays only the working body, never a second shadow. Charge/discharge are
+--- native for accumulators.
+function M.set_blender_device_graphics(entity, name, options)
+  options = options or {}
+  local art = require("graphics.entity." .. name .. ".sprite-def")
+  local idle = M.copy(art.off_animation)
+  for _, layer in ipairs(idle.layers) do
+    layer.frame_count, layer.line_length, layer.repeat_count, layer.animation_speed = nil, nil, nil, nil
+  end
+  local body = M.copy(art.on_animation.layers[1])
+  if entity.type == "accumulator" then
+    entity.chargable_graphics = {
+      picture = idle,
+      charge_animation = M.copy(body),
+      discharge_animation = M.copy(body),
+      charge_animation_is_looped = true,
+      charge_cooldown = 120,
+      discharge_cooldown = 120,
+    }
+  elseif entity.type == "assembling-machine" and options.native_crafting then
+    -- Idle animation needs the same effective frame count as the working loop.
+    local rest = M.copy(art.off_animation)
+    for _, layer in ipairs(rest.layers) do
+      layer.frame_count = 1
+      layer.repeat_count = art.on_animation.layers[1].frame_count
+    end
+    entity.graphics_set = {
+      animation = M.copy(art.on_animation), idle_animation = rest,
+    }
+  else
+    if entity.type == "assembling-machine" then
+      -- Training is scripted, not the cloned assembler's crafting clock.
+      entity.graphics_set = { animation = M.copy(art.off_animation) }
+    elseif entity.type == "lab" then
+      -- Inference is scripted, not vanilla research activity.
+      entity.on_animation = M.copy(art.off_animation)
+      entity.off_animation = M.copy(art.off_animation)
+      entity.light = nil
+    else
+      entity.picture = idle
+    end
+    body.type, body.name = "animation", "chiptorio-device-" .. name
+    data:extend({ body })
+  end
+  entity.flags = M.copy(entity.flags or {})
+  local fixed = false
+  for _, flag in ipairs(entity.flags) do if flag == "not-rotatable" then fixed = true end end
+  if not fixed then entity.flags[#entity.flags + 1] = "not-rotatable" end
+  if not options.preserve_bounds then
+    local width, height = art.footprint[1], art.footprint[2]
+    entity.tile_width, entity.tile_height = width, height
+    entity.collision_box = { { -width / 2 + 0.15, -height / 2 + 0.15 }, { width / 2 - 0.15, height / 2 - 0.15 } }
+    entity.selection_box = { { -width / 2, -height / 2 }, { width / 2, height / 2 } }
+  end
+  entity.drawing_box_vertical_extension = 2
+end
+
 return M
