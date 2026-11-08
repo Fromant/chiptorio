@@ -19,11 +19,12 @@ local SUPPORTED = {
   ["network-switch"] = true,
   ["network-router"] = true,
   ["memory-bank"] = true,
+  ["datacenter"] = true,
 }
 -- Only the revised facilities get deterministic per-entity phase offsets.
 -- Approved terminal and earlier batches retain their exact existing behavior.
 local PHASE_FRAMES = { ["network-monitor"] = 48, ["training-cluster"] = 24, ["inference-lab"] = 32,
-  ["network-switch"] = 24, ["network-router"] = 24, ["memory-bank"] = 24 }
+  ["network-switch"] = 24, ["network-router"] = 24, ["memory-bank"] = 24, ["datacenter"] = 48 }
 
 local function records()
   storage.chiptorio_device_visuals = storage.chiptorio_device_visuals or {}

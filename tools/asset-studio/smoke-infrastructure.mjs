@@ -13,13 +13,14 @@ import {processLog} from './process.mjs';
 const baseline=await contextHash(root),folder=await mkdtemp(path.join(os.tmpdir(),'chiptorio-infrastructure-'));
 const mods=path.join(folder,'mods'),fixture=path.join(mods,'chiptorio'),probe=path.join(mods,'infrastructure-probe');
 await copySnapshot(root,fixture);await mkdir(probe,{recursive:true});
-const assets=(await loadRegistry(root)).assets.filter(a=>a.group==='batch-7'&&a.name!=='quantum-fab');
+const assets=(await loadRegistry(root)).assets.filter(a=>(a.group==='batch-7'&&a.name!=='quantum-fab')||a.group==='batch-8');
 // Small synthetic texture fixtures test prototype/runtime wiring, not visual approval.
 for(const a of assets){
   const dir=path.join(fixture,'graphics/entity',a.name);await mkdir(dir,{recursive:true});
-  await sharp({create:{width:24,height:1,channels:4,background:'#6080a0'}}).png().toFile(path.join(dir,'fixture.png'));
+  const frames=a.name==='datacenter'?48:24;
+  await sharp({create:{width:frames,height:1,channels:4,background:'#6080a0'}}).png().toFile(path.join(dir,'fixture.png'));
   const image=`__chiptorio__/graphics/entity/${a.name}/fixture.png`;
-  const layer=(work)=>`{filename=${JSON.stringify(image)},width=1,height=1,scale=0.5,frame_count=${work?24:1}${work?',line_length=24,animation_speed=0.2':',repeat_count=24'}}`;
+  const layer=(work)=>`{filename=${JSON.stringify(image)},width=1,height=1,scale=0.5,frame_count=${work?frames:1}${work?`,line_length=${frames},animation_speed=0.2`:',repeat_count='+frames}}`;
   const animation=work=>`{layers={${layer(work)}}}`;
   const state=work=>a.integration?.directional?`{${['north','east','south','west'].map(v=>v+'='+animation(work)).join(',')}}`:animation(work);
   await writeFile(path.join(dir,'sprite-def.lua'),`return {footprint={${a.render.footprint}},on_animation=${state(true)},off_animation=${state(false)}}\n`);
@@ -42,6 +43,8 @@ end
 for _,name in ipairs({'network-switch','network-router','memory-bank'}) do
   assert(data.raw.animation['chiptorio-device-'..name].frame_count==24)
 end
+assert(data.raw.animation['chiptorio-device-datacenter'].frame_count==48)
+assert(data.raw.container.datacenter.tile_width==11 and data.raw.container.datacenter.tile_height==11)
 data:extend({{type='recipe',name='infrastructure-port-test',categories={'chiptorio-cooling'},main_product='coolant',ingredients={{type='fluid',name='water',amount=1},{type='fluid',name='steam',amount=1}},results={{type='fluid',name='coolant',amount=1},{type='fluid',name='cryogen',amount=1}}}})
 log('INFRASTRUCTURE DATA PASS')
 `);
@@ -69,6 +72,19 @@ script.on_init(function()
   memory.insert{name='sram-module',count=1};memory.teleport({100.5,.5})
   script.raise_event(defines.events.script_raised_built,{entity=memory});remote.call('chiptorio-network','tick')
   assert(not active(memory),'Disconnected populated memory must stay idle')
+  local center=place('datacenter',75.5,.5);place('network-cable',69.5,.5)
+  remote.call('chiptorio-network','tick');assert(not active(center),'Empty Datacenter must stay idle')
+  center.insert{name='microcomputer',count=1};remote.call('chiptorio-network','tick')
+  assert(active(center),'Connected computer capacity must activate the Datacenter')
+  local inventory=center.get_inventory(defines.inventory.chest)
+  inventory.clear();remote.call('chiptorio-network','tick');assert(not active(center),'Removing Datacenter hardware must stop activity')
+  center.insert{name='sram-module',count=1};remote.call('chiptorio-network','tick')
+  assert(active(center),'Connected memory-only Datacenter must indicate supplied capacity')
+  inventory.clear();center.insert{name='iron-plate',count=1};remote.call('chiptorio-network','tick')
+  assert(not active(center),'Unrelated cargo must not advertise Datacenter capacity')
+  inventory.clear();center.insert{name='microcomputer',count=1};center.teleport({120.5,.5})
+  script.raise_event(defines.events.script_raised_built,{entity=center});remote.call('chiptorio-network','tick')
+  assert(not active(center),'Disconnected populated Datacenter must stay idle')
   for _,direction in ipairs({defines.direction.north,defines.direction.east,defines.direction.south,defines.direction.west}) do
     local cooler=place('cooling-tower',40.5,.5,direction);local pipes={}
     -- Recipe unlocks the native fluid boxes on an otherwise idle machine.
@@ -91,4 +107,4 @@ const log=path.join(folder,'test.log');
 await processLog(tools.factorio,['--config',config,'--mod-directory',mods,'--create',path.join(folder,'fixture.zip')],{cwd:folder,log});
 const result=await readFile(log,'utf8');assert.match(result,/INFRASTRUCTURE DATA PASS/);assert.match(result,/INFRASTRUCTURE RUNTIME PASS/);
 assert.equal(await contextHash(root),baseline,'Production context changed during isolated check');
-console.log(`Infrastructure bindings PASS: native four-direction sprites, base pipe connectors, link/capacity signals, 16 rotated pipe connections.\nProduction unchanged. Fixture: ${folder}`);
+console.log(`Infrastructure bindings PASS: native four-direction sprites, base pipe connectors, link/capacity signals including Datacenter computer/memory/disconnection transitions, 16 rotated pipe connections.\nProduction unchanged. Fixture: ${folder}`);

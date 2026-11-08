@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-export const activityOwners=['metrology-lab','answer-engine','qln-storage-drive','quantum-entanglement-core','foup-dock','wireless-access-point','qln-import-node','qln-export-node','qln-provider-node','qln-requester-node','qln-terminal','training-cluster','inference-lab','network-monitor','network-switch','network-router','memory-bank'];
+export const activityOwners=['metrology-lab','answer-engine','qln-storage-drive','quantum-entanglement-core','foup-dock','wireless-access-point','qln-import-node','qln-export-node','qln-provider-node','qln-requester-node','qln-terminal','training-cluster','inference-lab','network-monitor','network-switch','network-router','memory-bank','datacenter'];
 export function checkBinding(asset) {
   if(asset.profile!=='entity')return;
   const type=asset.prototype?.type;

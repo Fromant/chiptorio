@@ -10,6 +10,7 @@ local owners = {
   ["qln-requester-node"]=true, ["qln-terminal"]=true,
   ["training-cluster"]=true, ["inference-lab"]=true, ["network-monitor"]=true,
   ["network-switch"]=true, ["network-router"]=true, ["memory-bank"]=true,
+  ["datacenter"]=true,
 }
 for name, binding in pairs(bindings) do
   local entity = assert(data.raw[binding.type] and data.raw[binding.type][name], "Published asset prototype missing: " .. name)

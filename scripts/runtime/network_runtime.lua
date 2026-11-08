@@ -863,10 +863,12 @@ function M.tick()
   end
   for _, graph in pairs(storage.network.graphs) do
     for _, device in pairs(graph.devices or {}) do
-      if device.name == "wireless-access-point" or device.name == MONITOR or device.name == SWITCH or device.name == ROUTER or device.name == "memory-bank" then
+      if device.name == "wireless-access-point" or device.name == MONITOR or device.name == SWITCH or device.name == ROUTER or device.name == "memory-bank" or device.name == "datacenter" then
         local linked = graph.device_network[device.id] ~= nil
         -- These are link/capacity heartbeats, not invented packet counters.
-        visuals.set_active(device.entity, linked and (device.name ~= "memory-bank" or (device.memory or 0) > 0))
+        local populated = device.name ~= "memory-bank" or (device.memory or 0) > 0
+        if device.name == "datacenter" then populated = (device.compute or 0) + (device.memory or 0) > 0 end
+        visuals.set_active(device.entity, linked and populated)
       end
     end
   end

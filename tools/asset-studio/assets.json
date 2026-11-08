@@ -481,31 +481,32 @@
       "group": "batch-8",
       "order": 0,
       "profile": "entity",
-      "mode": "static",
+      "mode": "scripted",
       "locked": false,
       "installed": null,
       "prototype": {
         "type": "container",
         "name": "datacenter"
       },
-      "activity": null,
+      "activity": "datacenter",
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/infrastructure/datacenter.py",
+        "dependencies": [
+          "tools/graphics/assets/infrastructure/common.py"
+        ],
         "placeholder": false
       },
       "render": {
-        "frames": 1,
-        "period": 48,
+        "frames": 48,
+        "period": 96,
         "footprint": [
-          3,
-          3
+          11,
+          11
         ],
         "samples": 32,
         "draftSamples": 8,
-        "resolution": 768,
+        "resolution": 1024,
         "width": null,
         "height": null,
         "fit": "contain",
