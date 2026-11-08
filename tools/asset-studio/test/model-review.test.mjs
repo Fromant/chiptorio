@@ -34,3 +34,13 @@ test('source changes invalidate model review and unsafe model paths fail closed'
  await assert.rejects(store.model({...built.details,model:'../../outside.blend'}),/No staged/);
  await assert.rejects(store.read('../outside'),/Invalid model revision/);
 });
+
+test('renderer-only changes preserve legacy geometry approvals',async t=>{
+ const {root,store,built}=await fixture(t),renderer='tools/graphics/blender/render.py';
+ await mkdir(path.dirname(path.join(root,renderer)),{recursive:true});await writeFile(path.join(root,renderer),'old renderer');
+ built.details.sources[renderer]=digest(Buffer.from('old renderer'));
+ const {revision}=await store.stage(built);await store.review(revision,'approved');
+ await writeFile(path.join(root,renderer),'GPU renderer policy');
+ await store.current(await store.read(revision));
+ assert.equal((await store.read(revision)).review.decision,'approved');
+});

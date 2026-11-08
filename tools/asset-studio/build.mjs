@@ -32,7 +32,7 @@ export async function buildAsset(root,asset,{draft=false,modelOnly=false,tools,j
   const hashes={};for(const dep of [...dependencies].sort()){const file=await safePath(root,dep);hashes[dep]=await hashFile(file);if(!hashes[dep])throw new Error(`Missing source dependency: ${dep}`);}
   const tool=tools?.blender?await stat(tools.blender).then(s=>({path:tools.blender,size:s.size,mtime:s.mtimeMs})):null;
   const worker=path.join(root,'tools/asset-studio/worker.py');
-  const buildHashes=Object.fromEntries(Object.entries(hashes).filter(([name])=>name!=='tools/graphics/blender/render.py'));
+  const buildHashes=Object.fromEntries(Object.entries(hashes).filter(([name])=>!['tools/graphics/blender/render.py','tools/graphics/blender/gpu_device.py'].includes(name)));
   const buildKey=digest({source:asset.source,name:asset.name,footprint:asset.render.footprint,period:asset.render.period,hashes:buildHashes,tool,worker:await hashFile(worker)});
   const buildFolder=path.join(workspace,'steps/build',buildKey),snapshot=path.join(buildFolder,'source'),model=path.join(buildFolder,'model.blend');
   let renderFolder,renderKey;
@@ -54,14 +54,16 @@ export async function buildAsset(root,asset,{draft=false,modelOnly=false,tools,j
       if(!await exists(model))throw new Error('Builder did not produce a staged model');
       await seal(buildFolder);say('Build PASS');
     }else say('Build CACHED');
-    if(modelOnly)return {asset,details:{buildKey,model:path.relative(workspace,model).replaceAll('\\','/'),sources:hashes,modelHash:await hashFile(model)}};
+    if(modelOnly)return {asset,details:{buildKey,model:path.relative(workspace,model).replaceAll('\\','/'),sources:buildHashes,modelHash:await hashFile(model)}};
     const frames=draft?Math.min(asset.render.frames,8):asset.render.frames,samples=draft?(asset.render.draftSamples??8):asset.render.samples;
     const renderer=path.join(root,'tools/graphics/blender/render.py');
-    renderKey=digest({model:await hashFile(model),period:asset.render.period,resolution:asset.render.resolution,views:asset.render.views,frames,samples,tool,renderer:await hashFile(renderer),worker:await hashFile(worker)});
+    const gpuHelper=path.join(root,'tools/graphics/blender/gpu_device.py');
+    renderKey=digest({model:await hashFile(model),period:asset.render.period,resolution:asset.render.resolution,views:asset.render.views,frames,samples,tool,renderer:await hashFile(renderer),gpuHelper:await hashFile(gpuHelper),worker:await hashFile(worker)});
     renderFolder=path.join(workspace,'steps/render',renderKey);
     if(!await completed(renderFolder)){
       await rm(renderFolder,{recursive:true,force:true});await mkdir(renderFolder,{recursive:true});
       const rendererCopy=path.join(renderFolder,'renderer.py');await cp(renderer,rendererCopy);
+      await cp(gpuHelper,path.join(renderFolder,'gpu_device.py'));
       const config=path.join(renderFolder,'render.json');await atomicJSON(config,{snapshot,asset,model,build:false,renderer:rendererCopy,output:renderFolder,frames,samples,resolution:asset.render.resolution});
       await processLog(tools.blender,['-b','--python-exit-code','1','-P',worker,'--',config],{cwd:snapshot,log:path.join(workspace,'logs',`${renderKey}-render.log`)});
       await seal(renderFolder);say(`Render PASS · ${frames} frames`);

@@ -31,15 +31,29 @@ def build(w):
     for z in (1.25,1.70,2.15):
         w.cyl('Vacuum access flange',(.97,-.43,z),.12,.08,w.steel,'Y')
         w.ring('Access flange seal',(.97,-.48,z),.10,.012,w.iron,'Y')
-    # A deliberate front service cutaway reveals a folded reflective optical train.
-    for x,y,z,tilt in [(-.45,.65,2.84,.42),(.40,.45,2.46,-.48),(-.36,.18,2.05,.50),(.30,-.05,1.70,-.38)]:
-        with w.part('Reflective projection mirror',(x,y,z)) as mirror:
-            mirror.rotation_euler.y=tilt
-            w.cyl('Mirror backing',(0,0,0),.27,.13,w.iron)
-            w.cyl('Polished reflective face',(0,0,.075),.24,.025,w.steel)
+    # Thin reflective faces lie on the visible folded optical path. Normals
+    # bisect incoming/outgoing directions, rather than using decorative tilts.
+    optical_path=[(-.80,.85,3.00),(0,.65,2.99),(-.45,.65,2.84),(.40,.45,2.46),
+                  (-.36,.18,2.05),(.30,-.05,1.70),(0,-.45,1.53),(0,-.45,1.409)]
+    beam_gate='(1 if 36<=((frame-1)%192)<48 or 68<=((frame-1)%192)<80 or 100<=((frame-1)%192)<112 or 132<=((frame-1)%192)<144 else 0)'
+    violet=lamp(w,'Visible exposure ray',(.45,.19,1.0),beam_gate,3.0)
+    for start,end in zip(optical_path,optical_path[1:]):
+        delta=Vector(end)-Vector(start)
+        ray=w.cyl('Exposure beam segment',tuple((Vector(start)+Vector(end))/2),.009,delta.length,violet,vertices=8)
+        ray['diagnostic_nonphysical']=True
+        ray.rotation_euler=delta.to_track_quat('Z','Y').to_euler()
+    for i in range(2,6):
+        x,y,z=optical_path[i]
+        incoming=(Vector(optical_path[i])-Vector(optical_path[i-1])).normalized()
+        outgoing=(Vector(optical_path[i+1])-Vector(optical_path[i])).normalized()
+        normal=(incoming-outgoing).normalized()
+        with w.part('Thin projection mirror',(x,y,z)) as mirror:
+            mirror.rotation_euler=normal.to_track_quat('Z','Y').to_euler()
+            w.cyl('Mirror carrier plate',(0,0,-.025),.27,.035,w.iron)
+            w.cyl('Polished reflective face',(0,0,0),.25,.012,w.steel)
             for side in (-1,1):
-                w.box('Mirror kinematic mount',(side*.29,.07,.05),(.06,.15,.20),w.steel)
-        w.box('Mirror rear support',(x+math.sin(tilt)*.05,(y+.14+1.43)/2,z+math.cos(tilt)*.05),(.07,1.43-y-.14,.07),w.steel)
+                w.box('Mirror gimbal clamp',(side*.28,0,-.02),(.04,.10,.07),w.steel)
+        w.pipe('Mirror rear mount',[(x,y,z-.04),(x,y+.15,z-.04),(x,1.43,z-.04)],.025,w.steel)
     for x in (-.50,.50):
         w.box('Reticle rear cantilever',(x,1.05,2.91),(.10,.86,.08),w.steel)
     w.box('Reticle vacuum stage',(0,.65,2.99),(1.14,.87,.11),w.iron)
@@ -47,12 +61,14 @@ def build(w):
     for x in (-.57,.57):
         w.box('Reticle stage guide',(x,.65,3.04),(.06,1.05,.05),w.steel)
     for x in (-.85,.85):
-        w.box('Projection bridge upright',(x,-.25,1.22),(.10,.18,.56),w.white)
-    w.box('Projection aperture support bridge',(0,-.25,1.49),(1.80,.18,.10),w.steel)
-    w.box('Exposure aperture shroud',(0,-.45,1.58),(.90,.66,.15),w.iron)
+        w.box('Projection bridge upright',(x,-.25,1.295),(.10,.18,.71),w.white)
+    w.box('Projection aperture support bridge',(0,-.25,1.65),(1.80,.08,.07),w.steel)
+    w.ring('Open exposure aperture',(0,-.45,1.53),.14,.018,w.steel)
+    for side in (-1,1):
+        w.pipe('Aperture support strut',[(side*.75,-.25,1.65),(side*.20,-.35,1.65),(side*.14,-.45,1.53)],.018,w.steel)
     exposure=lamp(w,'Contained exposure light',(.34,.48,.83),
                   '(1 if 36<=((frame-1)%192)<48 or 68<=((frame-1)%192)<80 or 100<=((frame-1)%192)<112 or 132<=((frame-1)%192)<144 else 0)',1.2)
-    w.cyl('Exposure aperture',(0,-.45,1.49),.22,.025,exposure)
+    w.box('Exposure activity lens',(.75,-.30,1.68),(.06,.06,.035),exposure)
     for x in (-.59,.59):
         w.box('Air bearing stage rail',(x,-.54,1.02),(.10,1.96,.12),w.steel)
     stage_keys=[(0,(0,-1.36,1.395)),(16,(0,-1.36,1.395)),(32,(-.13,-.58,1.395)),
@@ -78,16 +94,17 @@ def build(w):
                     for dy in (-.035,.035):
                         w.box('Lithographic die pattern',(dx,dy,.022),(.055,.055,.006),w.gold,.001)
     for x in (-.90,.90):
-        w.box('Load-lock sidewall',(x,-1.53,1.085),(.07,.72,1.23),w.white)
-    w.box('Load-lock front wall',(0,-1.91,1.085),(1.86,.07,1.23),w.white)
-    w.box('Load-lock roof',(0,-1.53,1.70),(1.86,.80,.08),w.white)
+        w.box('Load-lock sidewall',(x,-1.53,.925),(.07,.72,.91),w.white)
+    w.box('Load-lock front wall',(0,-1.91,.925),(1.86,.07,.91),w.white)
+    for x in (-.70,.70):
+        w.box('Load-lock service rim',(x,-1.53,1.39),(.46,.80,.05),w.white)
     for x in (-1.55,1.58):
-        service(w,(x,-.36,0),.61,1.50,w.white)
+        service(w,(x,-.36,.51),.61,1.50,w.white)
         for z in (1.03,1.43,1.83):
             w.box('Service module seam',(x,-.69,z),(.44,.015,.012),w.steel,.001)
-    service(w,(1.59,1.24,0),.63,1.65,w.white)
-    w.cyl('Vacuum turbo pump',(1.49,.68,1.13),.25,.46,w.steel,'Y')
-    w.pipe('Vacuum chamber pump elbow',[(1.00,.68,1.13),(1.23,.68,1.13),(1.49,.68,1.13)],.10,w.steel)
+    service(w,(1.59,1.24,.51),.63,1.65,w.white)
+    w.cyl('Vacuum turbo pump',(1.49,.68,1.22),.25,.46,w.steel,'Y')
+    w.pipe('Vacuum chamber pump elbow',[(1.00,.68,1.22),(1.23,.68,1.22),(1.49,.68,1.22)],.10,w.steel)
     w.pipe('Enclosed source service feed',[(-1.45,.65,.84),(-1.45,.84,.84),(-1.32,.84,.84)],.055,w.blue)
     gauge(w,(1.52,-.70,1.72),.08)
     def check(p):
@@ -95,4 +112,9 @@ def build(w):
             if start<=p<start+12:
                 a=sample(p,stage_keys);b=sample(start,stage_keys)
                 assert (Vector(a)-Vector(b)).length<.00001,'Exposure occurs during wafer stage motion'
+    # Keep per-part names selectable in the review model instead of calling a
+    # large material batch 'Connection locking collar'. Geometry is unchanged.
+    for obj in bpy.data.objects:
+        if obj.type in {'MESH','CURVE'} and not (obj.animation_data and obj.animation_data.action):
+            w.driver(obj,'scale',0,str(obj.scale.x))
     return finish(w,check,1.27)

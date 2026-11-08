@@ -18,7 +18,13 @@ export class ModelReview {
   async current(m){
     const asset=(await loadRegistry(this.root)).assets.find(a=>a.id===m.asset.id);
     if(!asset||asset.locked||digest(asset)!==digest(m.asset))throw new Error('Model descriptor changed; rebuild model');
-    for(const [name,hash] of Object.entries(m.details.sources))if(await hashFile(await safePath(this.root,name))!==hash)throw new Error('Model source changed; rebuild model');
+    // Older model manifests included rendering-only helpers. Their changes do
+    // not alter the sealed .blend or geometry approval; final-art approval
+    // still checks every render source through Pipeline.assertCurrent.
+    for(const [name,hash] of Object.entries(m.details.sources)){
+      if(['tools/graphics/blender/render.py','tools/graphics/blender/gpu_device.py'].includes(name))continue;
+      if(await hashFile(await safePath(this.root,name))!==hash)throw new Error('Model source changed; rebuild model');
+    }
     return this.model(m.details);
   }
   async model(details){

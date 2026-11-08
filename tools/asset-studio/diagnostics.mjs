@@ -8,7 +8,7 @@ import {processLog} from './process.mjs';
 export async function diagnosticFolder(root,revision){
   const models=new ModelReview(root),m=await models.read(revision);
   await models.current(m);
-  const key=digest({revision,worker:await hashFile(path.join(root,'tools/asset-studio/diagnostic-worker.py')),size:384});
+  const key=digest({revision,worker:await hashFile(path.join(root,'tools/asset-studio/diagnostic-worker.py')),gpuHelper:await hashFile(path.join(root,'tools/graphics/blender/gpu_device.py')),size:384});
   return path.join(workspacePath(root),'diagnostics',key);
 }
 
@@ -22,7 +22,7 @@ export async function diagnoseModel(root,revision,tools){
   const reportFile=path.join(folder,'report.json');
   if(!await exists(reportFile)){
     const model=await models.inspectionCopy(m.details),config=path.join(folder,'config.json');
-    await atomicJSON(config,{model,output:folder,size:384});
+    await atomicJSON(config,{model,output:folder,size:384,gpuHelper:path.join(root,'tools/graphics/blender/gpu_device.py')});
     await processLog(tools.blender,['-b','--python-exit-code','1','-P',worker,'--',config],{cwd:root,log:path.join(folder,'diagnostic.log')});
   }
   const report=JSON.parse(await readFile(reportFile,'utf8')),sheets=[];

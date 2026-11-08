@@ -46,25 +46,10 @@ model=[o for name in ('Base','Details','Emission','Cables') for o in bpy.data.co
 rotors=[o for o in bpy.data.objects if o.get('animation_channel')=='fan']
 lamps=[m for m in bpy.data.materials if m.get('animation_channel')=='lamp']
 s.render.engine='CYCLES'
-device_name='CPU'
-if a.device != 'cpu':
-    prefs=bpy.context.preferences.addons['cycles'].preferences
-    try:
-        prefs.compute_device_type='HIP'
-        prefs.refresh_devices()
-        candidates=[d for d in prefs.devices if d.type=='HIP' and a.gpu_name.lower() in d.name.lower()]
-        candidates.sort(key=lambda d: ' RX ' not in d.name)
-        if not candidates: raise RuntimeError('No matching HIP GPU found')
-        chosen=candidates[0]
-        for device in prefs.devices: device.use=device.id==chosen.id
-        s.cycles.device='GPU'
-        device_name=chosen.name
-    except Exception as error:
-        if a.device=='hip' or a.gpu_name: raise
-        print('GPU unavailable; using CPU:',error)
-        s.cycles.device='CPU'
-else:
-    s.cycles.device='CPU'
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from gpu_device import configure_device
+device_info=configure_device(s,a.device,a.gpu_name)
+device_name=device_info['name']
 print('RENDER DEVICE:',device_name,flush=True)
 s.cycles.samples=a.samples
 s.cycles.use_denoising=True
@@ -82,6 +67,8 @@ if a.game_view or a.fixed_scale:sprite_scale=.5
 meta={'entity':entity,'footprint':list(s.get('footprint_tiles',[3,3])),'frames':frames,'line_length':math.ceil(math.sqrt(frames)),
       'animation_speed':.5,'sprite_scale':sprite_scale,'fps':s.get('animation_fps',30),'directions':{}}
 meta['device']=device_name
+meta['compute_backend']=device_info['backend']
+meta['gpu_denoising']=device_info['denoising_gpu']
 meta['shadows']=not a.no_shadows
 meta['shadow_direction']='screen-right'
 if a.game_view or a.fixed_scale:

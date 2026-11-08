@@ -76,7 +76,7 @@ app.get('/api/pipeline/model/:revision/diagnostics',async(req,res)=>{
   if(!await exists(path.join(folder,'report.json')))return res.json({available:false});
   const {readFile}=await import('node:fs/promises');
   const report=JSON.parse(await readFile(path.join(folder,'report.json'),'utf8'));
-  res.json({available:true,contacts:report.contacts.length,note:report.note,
+  res.json({available:true,contacts:report.contacts.length,note:report.note,render_device:report.render_device,timings:report.timings,
     images:['game','front','left','right','rear','top','detail'].map(view=>({view,url:`/api/pipeline/model/${req.params.revision}/diagnostic/${view}-sheet.png`}))});
 });
 app.get('/api/pipeline/model/:revision/diagnostic/:file',async(req,res)=>{

@@ -8,7 +8,7 @@ function GeometryInspection({revision,busy,action}){
   return <details onToggle={e=>setOpen(e.currentTarget.open)}><summary>Geometry inspection renders</summary>
     <p>Key poses from seven cameras, including a close-up. These views check geometry and motion; they are separate from final sprite review.</p>
     {error&&<p role="alert">{error.message}</p>}
-    {data?.available?<><label>Inspection camera <select aria-label="Inspection camera" value={view} onChange={e=>setView(e.target.value)}>{data.images.map(i=><option key={i.view}>{i.view}</option>)}</select></label>
+    {data?.available?<>{data.render_device&&<p>GPU renderer: {data.render_device.backend} · {data.render_device.name}. Geometry/contact checks run on the CPU.</p>}<label>Inspection camera <select aria-label="Inspection camera" value={view} onChange={e=>setView(e.target.value)}>{data.images.map(i=><option key={i.view}>{i.view}</option>)}</select></label>
     <p><a href={data.images.find(i=>i.view===view)?.url} target="_blank" rel="noreferrer">Open full-size pose sheet</a> · <a href={`/api/pipeline/model/${revision}/diagnostic/report.json`} target="_blank" rel="noreferrer">Contact report ({data.contacts} pairs)</a></p>
     <img style={{width:'100%',height:'auto'}} src={data.images.find(i=>i.view===view)?.url} alt={`${view} geometry inspection poses`}/>
     <p>{data.note}</p></>:<p>{open?'No inspection renders yet.':''}</p>}

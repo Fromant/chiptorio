@@ -6,6 +6,8 @@ Surface intersections are leads for inspection, not an automatic collision verdi
 import json
 import math
 import sys
+import time
+import runpy
 from pathlib import Path
 import bpy
 from mathutils import Vector
@@ -29,7 +31,7 @@ def moving_group(o):
         o = o.parent
     return groups[-1] if groups else None
 
-meshes = [o for o in s.objects if o.type == 'MESH' and o.name != 'Shadow Plane']
+meshes = [o for o in s.objects if o.type == 'MESH' and o.name != 'Shadow Plane' and not o.get('diagnostic_nonphysical')]
 groups = {o.name:moving_group(o) for o in meshes}
 static = {}
 contacts = {}
@@ -60,6 +62,8 @@ def geometry(o):
     tree = BVHTree.FromPolygons(vertices, faces,all_triangles=True) if min(hi-lo)>.0001 else None
     return lo, hi, tree, labels, part_bounds
 
+started=time.monotonic()
+print('STAGE: CPU geometry/contact checks (not image rendering)',flush=True)
 for phase in range(period):
     s.frame_set(phase+1)
     deps.update()
@@ -89,8 +93,14 @@ for phase in range(period):
                     if phase not in record['phases']:record['phases'].append(phase)
                     record['maxAabbOverlap']=max(record['maxAabbOverlap'],round(depth,4))
 
-# Workbench makes silhouettes and penetrations readable without expensive path tracing.
-s.render.engine = 'BLENDER_WORKBENCH'
+scan_seconds=time.monotonic()-started
+s.render.engine = 'CYCLES'
+device=runpy.run_path(cfg['gpuHelper'])['configure_device'](s)
+s.cycles.samples=8
+s.cycles.use_denoising=True
+s.render.use_persistent_data=True
+render_started=time.monotonic()
+print('STAGE: GPU diagnostic image rendering',flush=True)
 s.render.resolution_x = s.render.resolution_y = cfg.get('size',384)
 s.render.resolution_percentage = 100
 s.render.image_settings.file_format = 'PNG'
@@ -128,6 +138,7 @@ for view,position in views.items():
         bpy.ops.render.render(write_still=True)
         images.append({'view':view,'phase':phase,'file':file})
 report={'name':s.get('asset_name'),'period':period,'phases':phases,'images':images,
+        'render_device':device,'timings':{'cpu_geometry_seconds':scan_seconds,'gpu_render_seconds':time.monotonic()-render_started},
         'contacts':sorted(contacts.values(),key=lambda c:(-len(c['phases']),-c['maxAabbOverlap'])),
         'note':'Surface intersections need review: mounted joints, supports and intentional enclosure occlusion are included.'}
 (out/'report.json').write_text(json.dumps(report,indent=2),encoding='utf-8')

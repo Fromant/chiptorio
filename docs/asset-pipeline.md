@@ -40,6 +40,15 @@ shipping-art approval and cannot publish files. Image-only assets use PNG review
 
 ## Final-art workflow
 
+Cycles image renders select a discrete GPU explicitly (HIP on the Radeon
+workstation), disable CPU render devices, and enable GPU denoising. Automatic
+selection fails if no supported GPU is available; CPU rendering requires the
+explicit renderer option `--device=cpu`. Diagnostic pose sheets use low-sample
+GPU Cycles too. Geometry construction, dependency evaluation and mesh contact
+checks still run on the CPU; diagnostic logs and reports separate that time
+from GPU image rendering. Renderer/device-only changes preserve model approval
+while invalidating rendered-image caches and final-art approval as appropriate.
+
 From `tools/asset-studio`, run `npm run dev`, open **http://127.0.0.1:4173** and
 review the **Review finished assets** queue. It shows one current full-quality,
 unreviewed individual asset at a time. Approving or requesting changes saves the
