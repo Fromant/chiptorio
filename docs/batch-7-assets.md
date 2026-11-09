@@ -9,6 +9,9 @@ capacities, networking and power remain unchanged pending publication.
   controlled pipe elbows and saddles. Four native directions rotate the machine
   and its front input/back output ports together. Native Factorio assembler pipe
   pictures and covers finish the connectors in game; Blender shows their seats.
+  The November 9 revision closes the reviewed fan/casing gap with apertured
+  mounting plates and short annular ducts. Fan planes, motors and guard rims
+  sit close to the radiator; blade clearance is checked over the full cycle.
 - Quantum Fab: a stepped dilution refrigerator, cold-plate feed braids, an
   indexed substrate line, RF probe scan and a carrier test indicator. Insulated
   supply and return lines follow separate service lanes with bounded elbows,

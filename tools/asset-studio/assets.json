@@ -2786,10 +2786,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/3d_nand_module.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch9_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -2799,7 +2800,7 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
         "resolution": 512,
         "width": 64,
@@ -2829,10 +2830,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/accelerator_board.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch9_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -2842,7 +2844,7 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
         "resolution": 512,
         "width": 64,
@@ -2872,10 +2874,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/advanced_circuit.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch9_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -2885,7 +2888,7 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
         "resolution": 512,
         "width": 64,
@@ -2915,10 +2918,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/agi_model.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch9_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -2928,7 +2932,7 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
         "resolution": 512,
         "width": 64,
@@ -2958,10 +2962,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/analytical_engine.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch9_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -2971,7 +2976,7 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
         "resolution": 512,
         "width": 64,
