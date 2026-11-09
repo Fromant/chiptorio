@@ -3282,10 +3282,12 @@
       "activity": null,
       "source": {
         "format": "python",
-        "builder": "tools/graphics/assets/semiconductor/computer_assembler.py",
+        "builder": "tools/graphics/assets/icons/computer_assembler_focused.py",
         "dependencies": [
+          "tools/graphics/assets/semiconductor/computer_assembler.py",
           "tools/graphics/assets/semiconductor/semiconductor_geometry.py",
-          "tools/graphics/assets/semiconductor/review_geometry.py"
+          "tools/graphics/assets/semiconductor/review_geometry.py",
+          "tools/graphics/assets/icons/focused_machine_geometry.py"
         ],
         "placeholder": false
       },
@@ -3420,9 +3422,11 @@
       "activity": null,
       "source": {
         "format": "python",
-        "builder": "tools/graphics/assets/infrastructure/cooling_tower.py",
+        "builder": "tools/graphics/assets/icons/cooling_tower_focused.py",
         "dependencies": [
-          "tools/graphics/assets/infrastructure/common.py"
+          "tools/graphics/assets/infrastructure/cooling_tower.py",
+          "tools/graphics/assets/infrastructure/common.py",
+          "tools/graphics/assets/icons/focused_machine_geometry.py"
         ],
         "placeholder": false
       },
@@ -3601,10 +3605,12 @@
       "activity": null,
       "source": {
         "format": "python",
-        "builder": "tools/graphics/assets/semiconductor/crystal_puller.py",
+        "builder": "tools/graphics/assets/icons/crystal_puller_focused.py",
         "dependencies": [
+          "tools/graphics/assets/semiconductor/crystal_puller.py",
           "tools/graphics/assets/semiconductor/semiconductor_geometry.py",
-          "tools/graphics/assets/semiconductor/review_geometry.py"
+          "tools/graphics/assets/semiconductor/review_geometry.py",
+          "tools/graphics/assets/icons/focused_machine_geometry.py"
         ],
         "placeholder": false
       },
@@ -3741,7 +3747,7 @@
         "format": "python",
         "builder": "tools/graphics/assets/icons/ddr_module.py",
         "dependencies": [
-          "tools/graphics/assets/icons/batch13_16_geometry.py"
+          "tools/graphics/assets/icons/review_revision_geometry.py"
         ],
         "placeholder": false
       },
@@ -3785,7 +3791,7 @@
         "format": "python",
         "builder": "tools/graphics/assets/icons/ddr2_module.py",
         "dependencies": [
-          "tools/graphics/assets/icons/batch13_16_geometry.py"
+          "tools/graphics/assets/icons/review_revision_geometry.py"
         ],
         "placeholder": false
       },
@@ -3829,7 +3835,7 @@
         "format": "python",
         "builder": "tools/graphics/assets/icons/ddr3_module.py",
         "dependencies": [
-          "tools/graphics/assets/icons/batch13_16_geometry.py"
+          "tools/graphics/assets/icons/review_revision_geometry.py"
         ],
         "placeholder": false
       },
@@ -3873,7 +3879,7 @@
         "format": "python",
         "builder": "tools/graphics/assets/icons/ddr4_module.py",
         "dependencies": [
-          "tools/graphics/assets/icons/batch13_16_geometry.py"
+          "tools/graphics/assets/icons/review_revision_geometry.py"
         ],
         "placeholder": false
       },
@@ -3917,7 +3923,7 @@
         "format": "python",
         "builder": "tools/graphics/assets/icons/ddr5_module.py",
         "dependencies": [
-          "tools/graphics/assets/icons/batch13_16_geometry.py"
+          "tools/graphics/assets/icons/review_revision_geometry.py"
         ],
         "placeholder": false
       },
@@ -3961,7 +3967,7 @@
         "format": "python",
         "builder": "tools/graphics/assets/icons/discrete_transistor.py",
         "dependencies": [
-          "tools/graphics/assets/icons/batch13_16_geometry.py"
+          "tools/graphics/assets/icons/review_revision_geometry.py"
         ],
         "placeholder": false
       },
@@ -4093,7 +4099,7 @@
         "format": "python",
         "builder": "tools/graphics/assets/icons/electronic_circuit.py",
         "dependencies": [
-          "tools/graphics/assets/icons/batch13_16_geometry.py"
+          "tools/graphics/assets/icons/review_revision_geometry.py"
         ],
         "placeholder": false
       },
@@ -4538,7 +4544,7 @@
         "format": "python",
         "builder": "tools/graphics/assets/icons/gpu.py",
         "dependencies": [
-          "tools/graphics/assets/icons/batch13_16_geometry.py"
+          "tools/graphics/assets/icons/review_revision_geometry.py"
         ],
         "placeholder": false
       },

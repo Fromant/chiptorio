@@ -17,7 +17,7 @@ test('batches eleven and twelve retain ten icon targets and reuse machine geomet
    assert.equal(a.profile,'image');assert.equal(a.mode,'image');assert.equal(a.render.frames,1);
    assert.equal(a.render.width,64);assert.equal(a.render.height,64);await readFile(path.join(root,a.source.builder));
    assert.deepEqual(a.targets,[{artifact:'image.png',path:`graphics/icons/${a.name}.png`}]);
-   const entity=plan.assets.find(e=>e.id==='entity:'+a.name);if(entity)assert.deepEqual(a.source,entity.source);
+   const entity=plan.assets.find(e=>e.id==='entity:'+a.name);if(entity){if(['computer-assembler','cooling-tower','crystal-puller'].includes(a.name))assert.ok(a.source.dependencies.includes(entity.source.builder));else assert.deepEqual(a.source,entity.source);}
   }
  }
 });

@@ -1,4 +1,4 @@
-from batch13_16_geometry import memory
+from review_revision_geometry import ram
 
 def build(w):
-    return memory(w,1)
+    return ram(w,1)
