@@ -3694,22 +3694,23 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/infrastructure/datacenter.py",
+        "dependencies": [
+          "tools/graphics/assets/infrastructure/common.py"
+        ],
         "placeholder": false
       },
       "render": {
         "frames": 1,
-        "period": 48,
+        "period": 96,
         "footprint": [
-          1,
-          1
+          11,
+          11
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3737,10 +3738,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/ddr_module.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -3750,9 +3752,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3780,10 +3782,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/ddr2_module.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -3793,9 +3796,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3823,10 +3826,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/ddr3_module.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -3836,9 +3840,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3866,10 +3870,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/ddr4_module.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -3879,9 +3884,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3909,10 +3914,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/ddr5_module.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -3922,9 +3928,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3952,10 +3958,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/discrete_transistor.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -3965,9 +3972,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3995,10 +4002,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/disk_pack.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4008,9 +4016,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4038,10 +4046,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/dram_module.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4051,9 +4060,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4081,10 +4090,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/electronic_circuit.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4094,9 +4104,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4124,10 +4134,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/error_corrected_qubit.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4137,9 +4148,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4167,10 +4178,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/etchant.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4180,9 +4192,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4210,10 +4222,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/etched_wafer.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4223,9 +4236,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4253,10 +4266,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/exposed_wafer.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4266,9 +4280,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4296,10 +4310,16 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "legacy-builder",
+        "builder": "tools/graphics/blender/foup-dock/build.py",
+        "model": "tools/graphics/blender/foup-dock/foup-dock.blend",
+        "dependencies": [
+          "tools/graphics/blender/lab_models.py",
+          "tools/graphics/blender/infrastructure_models.py",
+          "tools/graphics/blender/logistics_models.py",
+          "tools/graphics/blender/batch5_models.py",
+          "tools/graphics/blender/batch5_redesign.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4309,9 +4329,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4339,10 +4359,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/foup.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4352,9 +4373,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4382,10 +4403,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/frontier_model.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4395,9 +4417,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4425,10 +4447,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/general_model.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4438,9 +4461,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4468,10 +4491,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/glass.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4481,9 +4505,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4511,10 +4535,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/gpu.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch13_16_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4524,9 +4549,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
