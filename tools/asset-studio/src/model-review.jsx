@@ -24,7 +24,8 @@ export function ModelReviewPanel({data,busy,action}){
   const latest=new Map();
   for(const m of [...(data.models??[])].sort((a,b)=>b.createdAt-a.createdAt))if(!latest.has(m.asset.id))latest.set(m.asset.id,m);
   const queue=[...latest.values()].filter(m=>!m.stale&&!m.renderedRevision&&m.review?.decision!=='rejected');
-  const m=queue.find(m=>m.revision===chosen)??queue[0];
+  const requested=[...latest.values()].filter(m=>!m.stale&&m.review?.decision==='rejected');
+  const m=queue.find(m=>m.revision===chosen)??requested.find(m=>m.revision===chosen)??queue[0];
   const old=new Map();
   for(const c of [...data.candidates].sort((a,b)=>b.createdAt-a.createdAt))if(!c.draft&&!c.members&&!c.error&&!old.has(c.asset))old.set(c.asset,c);
   const history=[...old.values()],previous=history.find(c=>c.revision===historyId)??history[0];
@@ -33,6 +34,7 @@ export function ModelReviewPanel({data,busy,action}){
     <GeometryInspection key={m.revision} revision={m.revision} busy={busy} action={action}/>
     {m.review?.decision==='approved'?<><p>Model accepted. Next: render the final animation for a separate look review.</p><button disabled={busy} onClick={()=>action(`/api/pipeline/model/${m.revision}/render`,{})}>Render final animation</button></>:<><textarea aria-label="Model feedback" placeholder="Geometry, collisions, process and motion feedback" value={comment} onChange={e=>setComment(e.target.value)}/><div className="review-controls"><button disabled={busy} onClick={()=>{action(`/api/pipeline/model/${m.revision}/review`,{decision:'rejected',comment});setComment('');}}>Request model changes</button><button disabled={busy} onClick={()=>{action(`/api/pipeline/model/${m.revision}/review`,{decision:'approved',comment});setComment('');}}>Model looks good</button></div></>}
     <button disabled={queue.length<2} onClick={()=>{setChosen(queue[(queue.indexOf(m)+1)%queue.length].revision);setComment('');}}>Next model</button></article>:<p>No new models awaiting review. Future iterations can stop at the model stage.</p>}
+    {requested.length>0&&<details><summary>Models awaiting changes ({requested.length})</summary>{requested.map(model=><article key={model.revision}><h4>{model.asset.name}</h4><p>{model.review.comment||'Changes requested without a comment.'}</p><ModelLinks revision={model.revision} kind="model" action={action} busy={busy}/><button onClick={()=>{setChosen(model.revision);setComment(model.review.comment??'');}}>Review this model again</button></article>)}</details>}
     <details><summary>Previously reviewed assets - Blender files and feedback</summary><p>These are the exact models behind the existing renders. Opening uses a disposable copy; edits there do not replace the source model.</p>
     <select aria-label="Previously reviewed model" value={previous?.revision??''} onChange={e=>setHistory(e.target.value)}>{history.map(c=><option key={c.revision} value={c.revision}>{data.registry.assets.find(a=>a.id===c.asset)?.name??c.asset}</option>)}</select>
     {previous&&<><p>{previous.review?.comment??'No feedback recorded.'}</p><ModelLinks revision={previous.revision} action={action} busy={busy}/></>}
