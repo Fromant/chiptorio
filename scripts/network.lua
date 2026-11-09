@@ -276,6 +276,9 @@ local function make_network_device(spec)
   entity.icon_draw_specification = { scale = 0.5 }
   entity.max_health = spec.health or 150
   M.set_entity_icon(entity, spec.name)
+  if spec.blender_sprite then
+    M.set_blender_device_graphics(entity, spec.name)
+  end
   data:extend({ entity })
 
   local item = M.item_from("wooden-chest", spec.name, "chiptorio-network", spec.order)
@@ -332,9 +335,10 @@ make_network_device({
   },
 })
 
--- Monitor: 1×1 display panel. Reads the network graph and shows topology.
+-- Monitor: fixed square topology instrument; switch/router footprints stay unchanged.
 make_network_device({
   name = "network-monitor",
+  blender_sprite = true,
   order = "d[network-monitor]",
   health = 150,
   mining_time = 0.2,

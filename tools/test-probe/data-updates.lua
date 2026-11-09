@@ -562,6 +562,26 @@ for _, name in ipairs(LABS) do
   check(lab, "missing research computer " .. name)
   if lab then
     check(not lab.hidden, "research computer is hidden: " .. name)
+    local working = lab.on_animation and lab.on_animation.layers and lab.on_animation.layers[1]
+    local idle = lab.off_animation and lab.off_animation.layers and lab.off_animation.layers[1]
+    check(working and working.frame_count == 24, name .. " needs a native 24-frame working animation")
+    check(idle and idle.frame_count == 1, name .. " needs a distinct native idle still")
+    check(working and idle and working.filename ~= idle.filename,
+      name .. " idle state must not reuse a lit working frame")
+    check(working and idle and working.width == idle.width and working.height == idle.height,
+      name .. " working/idle sprite canvas sizes must match")
+    check(working and idle and working.scale == 0.5 and idle.scale == 0.5,
+      name .. " must use the rendered two-source-pixels-per-game-pixel scale")
+    check(working and idle and working.shift and idle.shift
+      and working.shift[1] == idle.shift[1] and working.shift[2] == idle.shift[2],
+      name .. " must preserve its world origin when changing working/idle state")
+    local fixed_view = false
+    for _, flag in ipairs(lab.flags or {}) do
+      if flag == "not-rotatable" then fixed_view = true end
+    end
+    check(fixed_view, name .. " must use one non-rotatable game view")
+    check(lab.tile_width == (name == "analytical-engine" and 4 or 2) and lab.tile_height == 2,
+      name .. " footprint does not match its game asset")
     local expected = EXPECTED_LAB_INPUTS[name]
     check(expected, "no expected inputs defined for lab " .. name)
     if expected then
@@ -1741,6 +1761,73 @@ for _, tech in pairs(data.raw.technology) do
           end
         end
       end
+    end
+  end
+end
+
+-- Scripted infrastructure has fixed-view idle sprites and registered working
+-- animations. Construction uses native accumulator charge/discharge states.
+for _, name in ipairs({ "metrology-lab", "answer-engine", "qln-storage-drive", "quantum-entanglement-core",
+  "foup-dock", "wireless-access-point", "qln-import-node", "qln-export-node", "qln-provider-node",
+  "qln-requester-node" }) do
+  local entity = data.raw.container[name]
+  local animation = data.raw.animation["chiptorio-device-" .. name]
+  check(entity and entity.picture and entity.picture.layers, name .. " needs generated idle art")
+  check(animation and animation.frame_count == 24, name .. " needs a registered working loop")
+  if entity and entity.picture and entity.picture.layers and animation then
+    local idle = entity.picture.layers[1]
+    check(idle.filename ~= animation.filename, name .. " must have a separate unlit idle sprite")
+    check(idle.width == animation.width and idle.height == animation.height,
+      name .. " idle/working canvases must agree")
+    check(idle.shift[1] == animation.shift[1] and idle.shift[2] == animation.shift[2],
+      name .. " idle/working origins must agree")
+    local size = name == "metrology-lab" and 3 or name == "answer-engine" and 5
+      or (name == "qln-storage-drive" or name == "quantum-entanglement-core") and 2 or 1
+    check(entity.tile_width == size and entity.tile_height == size, name .. " art footprint mismatch")
+  end
+end
+local construction_art = data.raw.accumulator["construction-core"]
+  and data.raw.accumulator["construction-core"].chargable_graphics
+check(construction_art and construction_art.picture and construction_art.picture.layers,
+  "Construction Core needs a generated native idle picture")
+check(construction_art and construction_art.charge_animation and construction_art.charge_animation.frame_count == 24,
+  "Construction Core needs a native charging loop")
+check(construction_art and construction_art.discharge_animation and construction_art.discharge_animation.frame_count == 24,
+  "Construction Core needs a native discharge loop")
+
+-- Batch five is rebuilt, not a revival of the rejected facing cabinets.
+for _, spec in ipairs({ {"qln-terminal", "container", 1, 1, 24}, {"network-monitor", "container", 3, 3, 48},
+  {"training-cluster", "assembling-machine", 9, 9, 24}, {"inference-lab", "lab", 7, 7, 32},
+  {"circuit-assembler", "assembling-machine", 5, 5, 48} }) do
+  local name, kind, width, height, frames = spec[1], spec[2], spec[3], spec[4], spec[5]
+  local entity = data.raw[kind][name]
+  local art = require("__chiptorio__/graphics/entity/" .. name .. "/sprite-def")
+  check(entity ~= nil, name .. " gameplay prototype disappeared")
+  check(art.footprint[1] == width and art.footprint[2] == height, name .. " model footprint mismatch")
+  check(entity.selection_box[2][1] - entity.selection_box[1][1] == width
+    and entity.selection_box[2][2] - entity.selection_box[1][2] == height, name .. " changed physical footprint")
+  local fixed = false
+  for _, flag in ipairs(entity.flags or {}) do if flag == "not-rotatable" then fixed = true end end
+  check(fixed, name .. " needs a single non-rotatable game view")
+  if name ~= "circuit-assembler" then
+    local animation = data.raw.animation["chiptorio-device-" .. name]
+    check(animation and animation.frame_count == frames, name .. " scripted working loop missing")
+  else
+    check(data.raw.animation["chiptorio-device-" .. name] == nil, "Circuit Assembler must use native crafting, not an unowned overlay")
+    local gs = entity.graphics_set
+    check(gs.animation.layers[1].frame_count == frames, "Circuit Assembler needs native working frames")
+    check(gs.idle_animation.layers[1].frame_count == 1 and gs.idle_animation.layers[1].repeat_count == frames,
+      "Circuit Assembler needs a separate unlit native idle state")
+  end
+  if name ~= "qln-terminal" then
+    check(width == height and entity.tile_width == width and entity.tile_height == height,
+      name .. " needs real square tile occupation, not only a larger sprite")
+    check(entity.collision_box[1][1] == -width/2+.15 and entity.collision_box[2][1] == width/2-.15,
+      name .. " collision width does not match its new footprint")
+    check(entity.collision_box[1][2] == -height/2+.15 and entity.collision_box[2][2] == height/2-.15,
+      name .. " collision height does not match its new footprint")
+    if kind == "assembling-machine" then
+      check(not entity.fluid_boxes or #entity.fluid_boxes == 0, name .. " retains obsolete interior fluid connections")
     end
   end
 end

@@ -27,6 +27,7 @@ local entity = M.make_provider_base({
   drawing_box_vertical_extension = 2.5,
 })
 
+M.set_blender_device_graphics(entity, "metrology-lab")
 data:extend({ entity })
 
 local item = M.item_proto("wooden-chest", "metrology-lab", "chiptorio-computers", "f[metrology-lab]")

@@ -1,0 +1,118 @@
+<# Pack game-ready lab sprites. World origin is preserved across idle and work. #>
+param([Parameter(Mandatory)][string]$OutputDirectory,[switch]$Install)
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Drawing
+if (-not ('ChiptorioSpriteBounds' -as [type])) {
+  Add-Type -ReferencedAssemblies System.Drawing.dll -TypeDefinition @'
+using System;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
+public static class ChiptorioSpriteBounds {
+  public static Rectangle Get(Bitmap image) {
+    var data=image.LockBits(new Rectangle(0,0,image.Width,image.Height),ImageLockMode.ReadOnly,PixelFormat.Format32bppArgb);
+    try {
+      if(data.Stride<0) throw new Exception("Negative image stride");
+      var pixels=new byte[data.Stride*image.Height]; Marshal.Copy(data.Scan0,pixels,0,pixels.Length);
+      int left=image.Width,top=image.Height,right=-1,bottom=-1;
+      for(int y=0;y<image.Height;y++) for(int x=0;x<image.Width;x++) {
+        if(pixels[y*data.Stride+x*4+3]>8) { left=Math.Min(left,x);right=Math.Max(right,x);top=Math.Min(top,y);bottom=Math.Max(bottom,y); }
+      }
+      return right<0 ? Rectangle.Empty : Rectangle.FromLTRB(left,top,right+1,bottom+1);
+    } finally { image.UnlockBits(data); }
+  }
+}
+'@
+}
+$out = [IO.Path]::GetFullPath($OutputDirectory)
+$work = Get-Content (Join-Path $out 'working/render-manifest.json') -Raw | ConvertFrom-Json
+$idle = Get-Content (Join-Path $out 'idle/render-manifest.json') -Raw | ConvertFrom-Json
+if (-not $work.game_view -or -not $idle.game_view -or $work.entity -ne $idle.entity -or $idle.frames -ne 1) {
+  throw 'Expected matching fixed game-view working and idle exports'
+}
+if ($work.origin_px[0] -ne $idle.origin_px[0] -or $work.origin_px[1] -ne $idle.origin_px[1] -or
+    ($work.footprint -join ',') -ne ($idle.footprint -join ',')) {
+  throw 'Working/idle exports disagree about their world origin or footprint'
+}
+$entity = $work.entity
+$size = [int]$work.directions.game.size
+$files = @($work.directions.game.files | ForEach-Object { Join-Path $out "working/$_" })
+$idlePath = Join-Path $out "idle/$($idle.directions.game.files[0])"
+$shadowPath = Join-Path $out "idle/$($entity)_game_shadow.png"
+$all = @($files) + @($idlePath,$shadowPath)
+$union = [Drawing.Rectangle]::Empty
+$body = [Drawing.Rectangle]::Empty
+foreach ($path in $all) {
+  $image = [Drawing.Bitmap]::FromFile($path)
+  try {
+    if ($image.Width -ne $size -or $image.Height -ne $size) { throw "Wrong dimensions: $path" }
+    $bounds = [ChiptorioSpriteBounds]::Get($image)
+    if ($bounds.IsEmpty) { throw "Empty sprite: $path" }
+    if ($bounds.Left -lt 2 -or $bounds.Top -lt 2 -or $bounds.Right -gt $size-2 -or $bounds.Bottom -gt $size-2) {
+      throw "Clipped game render: $path (increase canvas resolution, not scale)"
+    }
+    $union = if ($union.IsEmpty) { $bounds } else { [Drawing.Rectangle]::Union($union,$bounds) }
+    if ($path -ne $shadowPath) { $body = if ($body.IsEmpty) { $bounds } else { [Drawing.Rectangle]::Union($body,$bounds) } }
+  } finally { $image.Dispose() }
+}
+$scale = .5
+if ($body.Width*$scale -gt $work.footprint[0]*32+2) { throw 'Body exceeds its physical tile width' }
+$union.Inflate(2,2)
+$width,$height = $union.Width,$union.Height
+$columns = [Math]::Min(8,[int]$work.frames)
+$rows = [int][Math]::Ceiling($work.frames/$columns)
+$sheet = [Drawing.Bitmap]::new($width*$columns,$height*$rows)
+$g = [Drawing.Graphics]::FromImage($sheet)
+$g.CompositingMode = [Drawing.Drawing2D.CompositingMode]::SourceCopy
+try {
+  for ($frame=0; $frame -lt $work.frames; $frame++) {
+    $image = [Drawing.Bitmap]::FromFile($files[$frame])
+    try {
+      $destination = [Drawing.Rectangle]::new(($frame%$columns)*$width,[int][Math]::Floor($frame/$columns)*$height,$width,$height)
+      $g.DrawImage($image,$destination,$union,[Drawing.GraphicsUnit]::Pixel)
+    } finally { $image.Dispose() }
+  }
+  $sheet.Save((Join-Path $out 'working.png'),[Drawing.Imaging.ImageFormat]::Png)
+} finally { $g.Dispose(); $sheet.Dispose() }
+foreach ($pair in @(@($idlePath,'idle.png'),@($shadowPath,'shadow.png'))) {
+  $image = [Drawing.Bitmap]::FromFile($pair[0])
+  try {
+    $crop = $image.Clone($union,[Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    try { $crop.Save((Join-Path $out $pair[1]),[Drawing.Imaging.ImageFormat]::Png) } finally { $crop.Dispose() }
+  } finally { $image.Dispose() }
+}
+$hashes = @($files | ForEach-Object { (Get-FileHash -LiteralPath $_).Hash } | Sort-Object -Unique)
+if ($hashes.Count -lt 2) { throw 'Working sprites are frozen' }
+$shiftX = ($union.X+$width/2-$work.origin_px[0])*$scale/32
+$shiftY = ($union.Y+$height/2-$work.origin_px[1])*$scale/32
+$culture = [Globalization.CultureInfo]::InvariantCulture
+$x = ([double]$shiftX).ToString('R',$culture)
+$y = ([double]$shiftY).ToString('R',$culture)
+$speed = ([double]$work.animation_speed).ToString('R',$culture)
+$prefix = "__chiptorio__/graphics/entity/$entity"
+@"
+-- Generated by pack-game-lab.ps1. Native LabPrototype controls work/idle.
+return {
+  footprint = {$($work.footprint[0]), $($work.footprint[1])},
+  on_animation = { layers = {
+    {filename='$prefix/working.png', width=$width, height=$height, frame_count=$($work.frames), line_length=$columns, animation_speed=$speed, scale=0.5, shift={$x,$y}},
+    {filename='$prefix/shadow.png', width=$width, height=$height, repeat_count=$($work.frames), scale=0.5, shift={$x,$y}, draw_as_shadow=true},
+  } },
+  off_animation = { layers = {
+    {filename='$prefix/idle.png', width=$width, height=$height, frame_count=1, scale=0.5, shift={$x,$y}},
+    {filename='$prefix/shadow.png', width=$width, height=$height, frame_count=1, scale=0.5, shift={$x,$y}, draw_as_shadow=true},
+  } },
+}
+"@ | Set-Content (Join-Path $out 'sprite-def.lua') -Encoding UTF8
+@{entity=$entity; width=$width; height=$height; columns=$columns; frames=$work.frames; fps=$work.fps;
+  scale=$scale; shift=@($shiftX,$shiftY); footprint=$work.footprint; origin=$work.origin_px; crop=@($union.X,$union.Y,$width,$height)} |
+  ConvertTo-Json -Depth 5 | Set-Content (Join-Path $out 'game-sprite.json') -Encoding UTF8
+if ($Install) {
+  $root = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
+  $destination = Join-Path $root "graphics/entity/$entity"
+  New-Item -ItemType Directory -Force $destination | Out-Null
+  foreach ($name in @('working.png','idle.png','shadow.png','sprite-def.lua')) {
+    Copy-Item -LiteralPath (Join-Path $out $name) -Destination $destination
+  }
+}
+Write-Host "$entity : $($work.footprint -join 'x') tiles / $width x $height pixels / $($work.frames) frames / $($work.fps) fps / native idle"

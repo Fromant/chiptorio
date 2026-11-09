@@ -1,10 +1,16 @@
 # Chiptorio — Gap Register
 
-Updated: 2026-11-01 (post lab GUI overhaul and recipe balance)
+Updated: 2026-11-03 (logistics art batch; standalone access-point routing gap recorded)
 
 ---
 
 ## P0 — Critical (Blocks Progression / Causes Confusion / Broken GUI)
+
+- [ ] **P0.7** Standalone Wireless Access Point has no wireless routing behaviour
+  - Discovered during the third Blender asset batch (2026-11-03).
+  - Current wireless reach is supplied by `network-router`; the separate AP was not tracked by the network runtime.
+  - Its art integration now tracks it as a zero-capacity link-status endpoint, not a router or bridge.
+  - Follow-up: decide whether to implement a separate AP role or fold the redundant entity/recipe into the router. No new routing rules were added in the graphics pass.
 
 - [x] **P0.1** Analytical Engine GUI has no slot for punched cards
   - Root cause: `computer_gui.lua` replaces vanilla lab GUI with read-only panel; doesn't render module/input slots.

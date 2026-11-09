@@ -15,6 +15,7 @@ local alloc = require("scripts.runtime.qualification_alloc")
 local meta = require("scripts.research_meta")
 local network = require("scripts.runtime.network_runtime")
 local nodes = require("scripts.process_nodes")
+local visuals = require("scripts.runtime.device_visuals")
 
 local M = {}
 
@@ -122,6 +123,7 @@ local function take_samples(labs, item, wanted)
           removed = want
         end
         taken = taken + removed
+        if removed > 0 then visuals.set_active(lab.device.entity, true) end
       end
     end
   end
@@ -243,6 +245,12 @@ local function advance_force(force, seconds)
         local supported = alloc.support(half.key, lab_network(lab.graph, lab.device))
         if supported and powered(lab.device.entity) then
           gain = gain + alloc.gain(half, seconds, true, true)
+          -- Keep scanning through fractional samples, not only the seconds
+          -- which cross a whole-wafer consumption boundary.
+          local inventory = lab_inventory(lab.device.entity)
+          if inventory and inventory.get_item_count(nodes.qualification_item(half.key)) > 0 then
+            visuals.set_active(lab.device.entity, true)
+          end
         end
       end
 

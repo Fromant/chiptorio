@@ -112,6 +112,13 @@ local function probe_player()
   return game.players[1]
 end
 
+local function art_active(entity)
+  for _, record in ipairs(remote.call("chiptorio-art", "status")) do
+    if record.unit_number == entity.unit_number then return true end
+  end
+  return false
+end
+
 --- The QLN group with at least this much capacity. The runtime keys groups by
 --- surface:network:force, so this also gives the probe a real network id. The
 --- force argument keeps the force-isolation probe from reading the player pool.
@@ -214,6 +221,8 @@ local function check_network()
   check(monitor, "could not place network-monitor")
   if monitor then
     raise(defines.events.script_raised_built, monitor)
+    remote.call("chiptorio-network", "tick")
+    check(art_active(monitor), "connected Network Monitor did not light its topology display")
     if player then
       player.opened = monitor
       check(player.gui.screen["chiptorio-network-monitor"], "monitor window did not open")
@@ -615,7 +624,10 @@ local function check_qualification()
 
   -- The map has no power grid. Fill the lab buffer so the power gate passes;
   -- the probe is testing analysis and network gating, not electricity.
+  remote.call("chiptorio-qualification", "step", 1)
+  check(art_active(metrology), "fractional wafer analysis must keep the scanner working")
   remote.call("chiptorio-qualification", "step", first.samples * first.analysis_time * 2)
+  check(art_active(metrology), "wafer analysis must activate the metrology working art")
 
   local state = remote.call("chiptorio-qualification", "state")
   check(state, "qualification state returned nothing")
@@ -1503,6 +1515,7 @@ local function check_answer()
 
   local before = qln_group(1)
   check(remote.call("chiptorio-answer", "step", 10) == 10, "the Answer Engine step hook did not advance")
+  check(art_active(engine), "running Answer Engine must show its working art")
   local after = qln_group(1)
   local elapsed = remote.call("chiptorio-answer", "evaluate")
   check(
@@ -1519,6 +1532,7 @@ local function check_answer()
   remote.call("chiptorio-answer", "step", 1)
   local paused = remote.call("chiptorio-answer", "evaluate")
   check(paused and paused.state == "paused", "the Answer Engine did not pause on a missing item")
+  check(not art_active(engine), "starved Answer Engine must return to idle art")
   remote.call("chiptorio-answer", "step", 1)
   local decayed = remote.call("chiptorio-answer", "evaluate")
   check(decayed and decayed.stability < 1, "paused stability did not drain")
@@ -1618,15 +1632,27 @@ local function check_ai()
 
   local surface = game.surfaces[1]
   local force = game.forces.player
-  clear_area(surface, { { 146, 48 }, { 172, 62 } })
+  clear_area(surface, { { 146, 48 }, { 184, 66 } })
+  -- Test placement geometry independently of random map water or tile variants.
+  local floor = {}
+  for x = 146, 184 do for y = 48, 66 do
+    floor[#floor+1] = { name="grass-1", position={x,y} }
+  end end
+  surface.set_tiles(floor, true)
 
   local created = {}
-  cable_run(surface, force, created, 148, 168, 54)
+  cable_run(surface, force, created, 148, 182, 54)
 
   local rack = place(surface, force, created, "server-rack", 150.5, 56.5)
   local drive = place(surface, force, created, "qln-storage-drive", 154.5, 56.5)
-  local cluster = place(surface, force, created, "training-cluster", 158.5, 56.5)
-  local inference = place(surface, force, created, "inference-lab", 163.5, 56.5)
+  -- Cable touches the far perimeter, five/four tiles from each centre. This
+  -- verifies the enlarged facilities attach by their actual occupied tiles.
+  check(surface.can_place_entity({name="training-cluster", position={163.5,59.5}, force=force}),
+    "9x9 training facility cannot be placed without overlap")
+  local cluster = place(surface, force, created, "training-cluster", 163.5, 59.5)
+  check(surface.can_place_entity({name="inference-lab", position={176.5,58.5}, force=force}),
+    "7x7 inference facility cannot be placed without overlap")
+  local inference = place(surface, force, created, "inference-lab", 176.5, 58.5)
   if not (rack and drive and cluster and inference) then
     destroy_all(created)
     return
@@ -1685,6 +1711,8 @@ local function check_ai()
   for _ = 1, tier.train_energy do
     remote.call("chiptorio-ai", "tick")
   end
+  check(art_active(cluster), "Training Cluster working art did not follow actual training progress")
+  check(not art_active(inference), "Inference Lab animated without an installed model")
 
   group = qln_group(1)
   check(
@@ -1713,6 +1741,7 @@ local function check_ai()
   check(remote.call("chiptorio-ai", "insight", "player", tier.name) == 0, "insight was active before a model was installed")
   remote.call("chiptorio-ai", "install_model", inference, tier.name)
   remote.call("chiptorio-ai", "tick")
+  check(art_active(inference), "Inference Lab working art did not follow supported inference")
   local insight = remote.call("chiptorio-ai", "insight", "player", tier.name)
   check(
     math.abs(insight - tier.insight.dataset_size_reduction) < 1e-9,
@@ -1737,6 +1766,8 @@ local function check_ai()
   )
 
   remote.call("chiptorio-ai", "uninstall_model", inference)
+  remote.call("chiptorio-ai", "tick")
+  check(not art_active(inference), "Inference Lab working art remained after model removal")
   local removed = remote.call("chiptorio-ai", "status")
   for _, record in ipairs(removed and removed.inference_labs or {}) do
     if record.unit_number == inference.unit_number then
@@ -1780,27 +1811,19 @@ local function check_computer_gui()
     return
   end
 
-  local frame = player.gui.screen["chiptorio-computer-gui"]
+  local frame = player.gui.relative["chiptorio-computer-gui"]
   check(frame and frame.valid, "the computer GUI did not open for a server rack")
   if not (frame and frame.valid) then
     destroy_all(created)
     return
   end
-  check(player.opened == frame, "the computer GUI was not assigned to the player")
+  check(player.opened ~= frame, "the inspector must not replace native inventory access")
   check(find_gui(frame, "chiptorio-computer-gui-body"), "the computer GUI has no body")
 
-  local close = find_gui(frame, "chiptorio-computer-gui-close")
-  check(close, "the computer GUI has no close button")
-  if close then
-    script.raise_event(defines.events.on_gui_click, {
-      player_index = player.index,
-      element = close,
-      button = defines.mouse_button_type.left,
-    })
-  end
-  local remaining = player.gui.screen["chiptorio-computer-gui"]
-  check(not (remaining and remaining.valid), "the computer GUI did not close on the close button")
-  check(player.opened == nil, "the close button did not release the player's open element")
+  check(find_gui(frame, "hardware"), "provider inspector must show installed hardware")
+  script.raise_event(defines.events.on_gui_closed, { player_index = player.index, entity = rack })
+  local remaining = player.gui.relative["chiptorio-computer-gui"]
+  check(not (remaining and remaining.valid), "the inspector must close with the native GUI")
 
   destroy_all(created)
 end
@@ -3198,6 +3221,8 @@ script.on_nth_tick(120, function()
   check_answer_engine_standalone()
   check_qln_drive_standalone()
   check_quantum_core_standalone()
+  check_scripted_device_visuals()
+  check_logistics_device_visuals()
 
   -- --- Computer GUI module validation tests ---
   -- Verify the custom GUI only accepts supported module types in each slot.
@@ -3214,6 +3239,86 @@ end)
 -- ============================================================================
 -- Standalone Prototype Migration Tests
 -- ============================================================================
+
+function check_scripted_device_visuals()
+  local surface, force = game.surfaces[1], game.forces.player
+  local created = {}
+  clear_area(surface, { { 188, 88 }, { 228, 100 } })
+  cable_run(surface, force, created, 190, 205, 94)
+  cable_run(surface, force, created, 214, 225, 94)
+  local drive = place(surface, force, created, "qln-storage-drive", 195.5, 92.5)
+  local core = place(surface, force, created, "quantum-entanglement-core", 202.5, 92.5)
+  if not (drive and core) then destroy_all(created) return end
+  drive.get_inventory(defines.inventory.chest).insert({ name = "sram-module", count = 1 })
+  raise_built(created)
+  qln_step(1)
+  check(art_active(drive), "connected populated Storage Drive must show online activity")
+  check(not art_active(core), "unpaired quantum core must stay idle")
+  drive.get_inventory(defines.inventory.chest).clear()
+  qln_step(1)
+  check(not art_active(drive), "empty Storage Drive must return to unlit idle")
+  local peer = place(surface, force, created, "quantum-entanglement-core", 221.5, 92.5)
+  if peer then
+    raise(defines.events.script_raised_built, peer)
+    qln_step(1)
+    check(art_active(core) and art_active(peer), "paired quantum cores must activate their link art")
+    raise(defines.events.script_raised_destroy, peer)
+    peer.destroy()
+    qln_step(1)
+    check(not art_active(core), "quantum link art must stop when its peer is removed")
+  end
+  destroy_all(created)
+end
+
+function check_logistics_device_visuals()
+  local surface, force = game.surfaces[1], game.forces.player
+  local created = {}
+  clear_area(surface, { { 188, 106 }, { 240, 120 } })
+  cable_run(surface, force, created, 190, 224, 114)
+  local drive = place(surface, force, created, "qln-storage-drive", 195.5, 112.5)
+  local ingress = place(surface, force, created, "qln-import-node", 201.5, 112.5)
+  local supply = place(surface, force, created, "wooden-chest", 201.5, 111.5)
+  local egress = place(surface, force, created, "qln-export-node", 209.5, 112.5)
+  local receiver = place(surface, force, created, "wooden-chest", 209.5, 111.5)
+  local provider = place(surface, force, created, "qln-provider-node", 217.5, 112.5)
+  local dock = place(surface, force, created, "foup-dock", 229.5, 112.5)
+  local access = place(surface, force, created, "wireless-access-point", 235.5, 112.5)
+  if not (drive and ingress and supply and egress and receiver and provider and dock and access) then
+    destroy_all(created) return
+  end
+  drive.get_inventory(defines.inventory.chest).insert({ name = "sram-module", count = 1 })
+  supply.insert({ name = "iron-plate", count = 1 })
+  provider.get_inventory(defines.inventory.chest).insert({ name = "copper-plate", count = 1 })
+  local dock_inventory = dock.get_inventory(defines.inventory.chest)
+  dock_inventory.insert({ name = "foup", count = 1 })
+  dock_inventory.insert({ name = "node-" .. nodes.NODES[1].key .. "-wafer", count = qmeta.FOUP_BATCH })
+  raise_built(created)
+  remote.call("chiptorio-network", "tick")
+  check(not art_active(access), "disconnected access point must not indicate a link")
+  qln_step(1)
+  check(art_active(ingress), "Import Node lights must follow actual item insertion")
+  check(art_active(egress), "Export Node lights must follow actual delivered items")
+  check(art_active(provider), "Provider Node lights must follow actual cargo supply")
+  check(art_active(dock), "FOUP Dock must animate a completed seal operation")
+  check(receiver.get_item_count("iron-plate") == 1, "art hooks must preserve real export delivery")
+  qln_step(1)
+  check(not art_active(dock), "FOUP Dock must idle when no complete batch is available")
+  qln_step(2)
+  check(not art_active(ingress) and not art_active(egress) and not art_active(provider),
+    "empty transfer nodes must not show phantom activity")
+  remote.call("chiptorio-qln", "set_foup_mode", dock, "unseal")
+  qln_step(1)
+  check(art_active(dock), "FOUP Dock must animate a completed unseal operation")
+  access.teleport({ 223.5, 112.5 })
+  raise(defines.events.script_raised_built, access)
+  remote.call("chiptorio-network", "tick")
+  check(art_active(access), "connected access point must indicate network link status")
+  access.teleport({ 235.5, 112.5 })
+  raise(defines.events.script_raised_built, access)
+  remote.call("chiptorio-network", "tick")
+  check(not art_active(access), "access point link indicator must stop after disconnection")
+  destroy_all(created)
+end
 
 --- Verify all compute providers are standalone containers, not lab clones.
 function check_provider_standalone()
@@ -3282,8 +3387,48 @@ function check_qln_drive_standalone()
       "qln-storage-drive is an container, got " .. tostring(entity.type))
     check(entity.prototype.type ~= "lab",
       "qln-storage-drive is not a lab prototype")
+    local inv = entity.get_inventory(defines.inventory.chest)
+    check(#inv == 4, "QLN drive has four hardware bays")
+    check(inv.insert({ name = "sram-module", count = 200 }) == 4,
+      "QLN drive accepts only four modules from a full stack")
+    for slot = 1, #inv do
+      check(inv[slot].count == 1, "QLN drive holds one module per bay")
+    end
+    check(inv.insert({ name = "sram-module", count = 1 }) == 0,
+      "full QLN drive refuses additional modules")
+    check(prototypes.item["sram-module"].stack_size > 1,
+      "memory modules still stack outside hardware bays")
+    raise_built(created)
+    remote.call("chiptorio-network", "tick")
+    local function graph_cells()
+      local graph = remote.call("chiptorio-network", "topology")[surface.index]
+      for _, device in pairs(graph and graph.devices or {}) do
+        if device.entity == entity then return device.qln_cells end
+      end
+    end
+    check(graph_cells() == 4096, "network reads drive capacity from native chest inventory")
+    inv.clear()
+    remote.call("chiptorio-network", "tick")
+    check(graph_cells() == 0, "removing drive memory invalidates cached network capacity")
   end
   destroy_all(created)
+
+  -- Template slots are one item; actual cargo and consumable buffers still stack.
+  for _, spec in ipairs({
+    { name = "qln-requester-node", item = "iron-plate", count = 1 },
+    { name = "qln-provider-node", item = "iron-plate", count = 50 },
+    { name = "foup-dock", item = "iron-plate", count = 50 },
+    { name = "metrology-lab", item = "sram-module", count = 50 },
+  }) do
+    local buffers = {}
+    local buffer = place(surface, force, buffers, spec.name, 151.5, 67.5)
+    if buffer then
+      local inv = buffer.get_inventory(defines.inventory.chest)
+      check(inv.insert({ name = spec.item, count = 50 }) == spec.count,
+        spec.name .. " uses the intended template/cargo stack limit")
+    end
+    destroy_all(buffers)
+  end
 end
 
 --- Verify quantum-entanglement-core is a standalone container, not a lab clone.
@@ -3303,8 +3448,70 @@ function check_quantum_core_standalone()
   destroy_all(created)
 end
 
---- Verify the computer GUI only accepts supported module types in each slot.
+--- Hardware limits apply to native chest stacks, including automated inserts.
 function check_provider_gui_module_validation()
+  local test_surface = game.surfaces[1]
+  local test_force = game.forces["player"]
+  local hardware = {}
+  clear_area(test_surface, { { 145, 76 }, { 170, 84 } })
+  for index, name in ipairs({ "server-rack", "memory-bank", "datacenter" }) do
+    local entity = place(test_surface, test_force, hardware, name, 147.5 + index * 5, 80.5)
+    if entity then
+      local inv = entity.get_inventory(defines.inventory.chest)
+      local profile = research_meta.PROVIDERS[name]
+      check(#inv == profile.computer_slots + profile.memory_slots,
+        name .. " native inventory includes every hardware bay")
+      check(inv.insert({ name = "microcomputer", count = 200 }) == #inv,
+        name .. " accepts only one component per inventory slot")
+      for slot = 1, #inv do
+        check(inv[slot].count == 1, name .. " slot stack size is one")
+      end
+      check(inv.insert({ name = "microcomputer", count = 1 }) == 0,
+        name .. " refuses extra components when all bays are occupied")
+      inv.clear()
+      if profile.computer_slots > 0 then
+        inv.insert({ name = "microcomputer", count = profile.computer_slots })
+      end
+      if profile.memory_slots > 0 then
+        inv.insert({ name = "sram-module", count = profile.memory_slots })
+      end
+      check(prototypes.item["microcomputer"].stack_size > 1,
+        "computers remain stackable outside provider inventories")
+    end
+  end
+  raise_built(hardware)
+  remote.call("chiptorio-network", "tick")
+  local graphs = remote.call("chiptorio-network", "topology")
+  local graph = graphs[test_surface.index]
+  for _, entity in ipairs(hardware) do
+    local found
+    for _, device in pairs(graph and graph.devices or {}) do
+      if device.entity == entity then found = device break end
+    end
+    check(found ~= nil, entity.name .. " is indexed for hardware-limit test")
+    if found then
+      local profile = research_meta.PROVIDERS[entity.name]
+      check(found.computers == profile.computer_slots, entity.name .. " caps installed computer stacks")
+      check(found.memory_modules == profile.memory_slots, entity.name .. " caps installed memory stacks")
+    end
+  end
+  for _, entity in ipairs(hardware) do
+    local inv = entity.get_inventory(defines.inventory.chest)
+    inv.clear()
+    inv.insert({ name = "iron-plate", count = 1 })
+  end
+  -- No build event/mark_dirty: native inventory changes must invalidate caches.
+  remote.call("chiptorio-network", "tick")
+  graph = remote.call("chiptorio-network", "topology")[test_surface.index]
+  for _, entity in ipairs(hardware) do
+    for _, device in pairs(graph and graph.devices or {}) do
+      if device.entity == entity then
+        check(device.compute == 0 and device.memory == 0,
+          entity.name .. " polls removed hardware and ignores unsupported items")
+      end
+    end
+  end
+  destroy_all(hardware)
   local player = probe_player()
   if not player then
     log("CHIPTORIO-TEST SKIP provider-gui-validation: the benchmark map has no player")
@@ -3336,73 +3543,22 @@ function check_provider_gui_module_validation()
     return
   end
 
-  local frame = player.gui.screen["chiptorio-computer-gui"]
+  local frame = player.gui.relative["chiptorio-computer-gui"]
   check(frame and frame.valid, "the computer GUI opened for a server rack")
 
-  -- Verify module slots exist (4 compute slots for server-rack)
+  -- Native inventory remains available even without a network.
   local body = find_gui(frame, "chiptorio-computer-gui-body")
   check(body and body.valid, "the computer GUI has a body")
 
-  -- Count slot labels (should be 4 for server-rack: 4 compute + 0 memory)
-  local slot_count = 0
-  if body and body.valid then
-    for _, child in ipairs(body.children or {}) do
-      if child.type == "label" and child.caption and
-          type(child.caption) == "string" and child.caption:find("Slot ", 1, true) then
-        slot_count = slot_count + 1
-      end
-    end
-  end
-  check(slot_count == 4, "server-rack GUI shows 4 module slots, got " .. tostring(slot_count))
-
-  -- Try inserting a compute module (should work)
-  local microcomputer = game.item_prototype["microcomputer"]
-  if microcomputer then
-    player.cursor_stack.set_stack({ name = "microcomputer", count = 1 })
-    local insert_btn = find_gui(frame, "chiptorio-computer-gui-insert-1")
-    if insert_btn and insert_btn.valid then
-      script.raise_event(defines.events.on_gui_click, {
-        player_index = player.index,
-        element = insert_btn,
-        button = defines.mouse_button_type.left,
-      })
-    end
-    local inv = rack.get_inventory(defines.inventory.chest)
-    check(inv and inv[1] and inv[1].valid_for_read and inv[1].name == "microcomputer",
-      "compute module can be inserted into compute slot 1")
-  end
-
-  -- Try inserting a memory module into compute slot (should fail)
-  player.cursor_stack.clear()
-  local sram = game.item_prototype["sram-module"]
-  if sram then
-    player.cursor_stack.set_stack({ name = "sram-module", count = 1 })
-    local insert_btn = find_gui(frame, "chiptorio-computer-gui-insert-1")
-    if insert_btn and insert_btn.valid then
-      script.raise_event(defines.events.on_gui_click, {
-        player_index = player.index,
-        element = insert_btn,
-        button = defines.mouse_button_type.left,
-      })
-    end
-    local inv = rack.get_inventory(defines.inventory.chest)
-    -- Slot 1 should still have microcomputer, not sram
-    check(inv and inv[1] and inv[1].valid_for_read and inv[1].name == "microcomputer",
-      "memory module is rejected from compute slot")
-  end
-
-  -- Close GUI
-  local close = find_gui(frame, "chiptorio-computer-gui-close")
-  if close and close.valid then
-    script.raise_event(defines.events.on_gui_click, {
-      player_index = player.index,
-      element = close,
-      button = defines.mouse_button_type.left,
-    })
-  end
-  check(not (player.gui.screen["chiptorio-computer-gui"] and
-    player.gui.screen["chiptorio-computer-gui"].valid),
-    "the computer GUI closes on close button")
+  check(find_gui(frame, "hardware"), "rack exposes hardware status while disconnected")
+  check(not find_gui(frame, "chiptorio-computer-gui-slot-1"),
+    "inspector must not imitate native inventory slots")
+  local inv = rack.get_inventory(defines.inventory.chest)
+  check(#inv == 4, "rack has four native inventory slots")
+  check(inv.insert({ name = "microcomputer", count = 1 }) == 1,
+    "native inventory accepts a computer without cursor GUI buttons")
+  script.raise_event(defines.events.on_gui_closed, { player_index = player.index, entity = rack })
+  check(not player.gui.relative["chiptorio-computer-gui"], "inspector closes with entity GUI")
 
   destroy_all(created)
 end

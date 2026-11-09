@@ -1,5 +1,26 @@
 # Chiptorio — Generated Assets, Locale, Release
 
+## Planned scale and art direction
+
+The post-Batch-5 discussion is recorded in
+**[Machine scale and art direction](machine-scale-and-art-direction.md)**:
+square non-rotatable floor plans, industrial hypercomputing scale, a robotic
+Circuit Assembler, distinct GPU-training/model-serving facilities, Ethernet-style
+network lights, optional small component props, and a limited external reference
+review. The subsequent [Batch 5 redo](batch-5-redo.md) selects only assembler 5×5,
+training 9×9, inference 7×7 and monitor 3×3; Terminal is protected and unchanged.
+All other sizes remain proposals. No earlier batch is authorized for redesign by
+the discussion document alone.
+
+## Live graphics inventory
+
+**[Asset Studio](asset-studio.md)** is the React/Vite/Node application for browsing
+every shipped graphic, installed/inherited machine sprites, Blender models, and
+the proposed render batches. Run `npm ci` then `npm run dev` in
+`tools/asset-studio`; open `http://127.0.0.1:4173`. Its Blender buttons open models
+or render isolated previews, never install sprites. `npm run export` writes the
+offline, self-contained root `asset-overview.html`.
+
 ## Icon generation
 
 `tools/make-icons.ps1` regenerates all item icons, technology icons, the
@@ -35,6 +56,23 @@ Bump `info.json` `version` and add a dated `changelog.txt` entry under
 Features/Balance/Bugfixes, newest first.
 
 ## Blender entity sprites
+
+The first five labs use `tools/graphics/blender/render-game-labs.ps1 -Build -Install`.
+It builds editable models and exports one fixed game view with native working and
+unlit idle states. The Analytical Engine is 4×2; the other four labs are 2×2.
+The exact-sheet viewer compares the exported game sprites, not hero renders.
+See `tools/graphics/blender/LAB-PREVIEWS.md` for materials, geometry budgets and
+packing/alignment checks. `preview-labs.ps1` delegates to the same game pipeline.
+
+The next five infrastructure machines use
+`tools/graphics/blender/render-game-infrastructure.ps1 -Build -Install`.
+See `tools/graphics/blender/INFRASTRUCTURE-ASSETS.md` for their models, gameplay
+activity hooks, native accumulator charge animation and exact-sheet viewer.
+
+The third five assets use `tools/graphics/blender/render-game-logistics.ps1 -Build -Install`.
+They retain their existing 1×1 utility-node footprints. See
+`tools/graphics/blender/LOGISTICS-ASSETS.md` for actual transfer/FOUP activity,
+access-point link-status scope, geometry counts and the exact-sheet viewer.
 
 The server enclosure uses the standalone pipeline in
 [`tools/graphics/blender/README.md`](../tools/graphics/blender/README.md).

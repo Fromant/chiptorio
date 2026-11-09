@@ -29,6 +29,7 @@
 | | `step <seconds>` | Runs the transfer loop |
 | | `group_status <entity>` | Inspects one entity's pool |
 | | `set_foup_mode <entity> <seal\|unseal>` | Switches a dock for headless tests |
+| `chiptorio-art` | `status` | Returns active scripted-device art, unit/force IDs and activity-lease expiry |
 
 ## In-game shortcuts
 

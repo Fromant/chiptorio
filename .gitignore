@@ -13,3 +13,8 @@ tools/asset-studio/.cache/
 tools/asset-studio/test-results/
 tools/asset-studio/playwright-report/
 tools/asset-studio/workspace/
+
+# Generated offline inventory and Python caches
+/asset-overview.html
+__pycache__/
+*.pyc

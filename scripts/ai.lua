@@ -104,7 +104,10 @@ local function make_training_cluster(spec)
   entity.energy_usage = spec.power
   entity.module_slots = spec.modules
   M.set_entity_icon(entity, spec.name)
-  if spec.tint then
+  if spec.blender_sprite then
+    entity.fluid_boxes = nil
+    M.set_blender_device_graphics(entity, spec.name)
+  elseif spec.tint then
     M.tint_entity(entity, spec.tint)
   end
   data:extend({ entity })
@@ -156,7 +159,9 @@ local function make_inference_lab(spec)
   entity.energy_usage = spec.energy_usage
   entity.module_slots = spec.modules
   M.set_entity_icon(entity, spec.name)
-  if spec.tint then
+  if spec.blender_sprite then
+    M.set_blender_device_graphics(entity, spec.name)
+  elseif spec.tint then
     M.tint_entity(entity, spec.tint)
   end
   data:extend({ entity })

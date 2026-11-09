@@ -146,7 +146,10 @@ local function make_circuit_assembler(spec)
   entity.energy_usage = spec.power
   entity.module_slots = spec.modules
   M.set_entity_icon(entity, spec.name)
-  if spec.custom_graphics then
+  if spec.blender_sprite then
+    entity.fluid_boxes = nil
+    M.set_blender_device_graphics(entity, spec.name, { native_crafting = true })
+  elseif spec.custom_graphics then
     M.set_custom_graphics(entity, spec.custom_graphics or spec.name, spec.size_w or 160, spec.size_h or 160, spec.scale or 0.5, spec.shift)
   elseif spec.tint then
     M.tint_entity(entity, spec.tint)

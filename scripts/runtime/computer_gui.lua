@@ -1,484 +1,180 @@
--- Runtime: custom GUI for Chiptorio computer buildings.
---
--- All Chiptorio computers are standalone assembling-machine prototypes with
--- module slots, so Factorio's default entity GUI would show crafting tabs and
--- a vanilla module panel. Research is managed by the network allocator, not by
--- the player clicking in individual buildings, so we replace the entire entity
--- GUI with a custom panel: read-only status (network, compute, memory,
--- bandwidth) plus interactive module slots that accept only supported modules.
-
+-- Keep Factorio's inventory/lab UI and attach a read-only network inspector.
+-- No copied stacks, cursor buttons, or per-player module-local state.
 local meta = require("scripts.research_meta")
+local qmeta = require("scripts.qln_meta")
 local network = require("scripts.runtime.network_runtime")
-
 local M = {}
+local NAME = "chiptorio-computer-gui"
 
-local COMPUTER_GUI = "chiptorio-computer-gui"
-
--- Per-player: the entity whose custom GUI is currently open.
-local open_entity = {}
-
-local COMPUTER_NAME_SET = nil
-local function is_computer(entity)
-  if not (entity and entity.valid) then
-    return false
+local function hardware_profile(entity)
+  if entity.name == "qln-storage-drive" then
+    return { computer_slots = 0, memory_slots = qmeta.DRIVE_SLOTS }
   end
-  if meta.LAB_DEMAND[entity.name] then
-    return false
-  end
-  if not COMPUTER_NAME_SET then
-    COMPUTER_NAME_SET = {}
-    for _, name in ipairs({ "server-rack", "memory-bank", "datacenter" }) do
-      COMPUTER_NAME_SET[name] = true
-    end
-    COMPUTER_NAME_SET["metrology-lab"] = true
-  end
-  return COMPUTER_NAME_SET[meta.provider_name(entity.name)] == true
+  return meta.PROVIDERS[entity.name]
 end
 
---- Which module categories each slot index accepts, based on the provider
---- profile. Returns { computer = count, memory = count }.
-local function slot_layout(entity)
-  local profile = meta.PROVIDERS[meta.provider_name(entity.name)]
-  if not profile then
-    return { computer = 0, memory = 0 }
+local function supported(entity)
+  return entity and entity.valid and (hardware_profile(entity)
+    or meta.LAB_DEMAND[entity.name] or entity.name == "metrology-lab")
+end
+
+local function destroy(player)
+  for _, root in pairs({ player.gui.relative, player.gui.screen }) do
+    local frame = root[NAME]
+    if frame then frame.destroy() end
   end
-  return {
-    computer = profile.computer_slots or 0,
-    memory = profile.memory_slots or 0,
-  }
 end
 
-local function is_compute_module(item_name)
-  return meta.COMPUTER_PROFILES[item_name] ~= nil
+local function number(value)
+  value = value or 0
+  return value >= 1000 and string.format("%.1fk", value / 1000) or string.format("%g", value)
 end
 
-local function is_memory_module(item_name)
-  return meta.MEMORY_PROFILES[item_name] ~= nil
-end
-
---- Find the cached device for an entity and the graph it lives in.
 local function find_device(entity)
   for _, graph in pairs(network.graphs() or {}) do
     for _, device in pairs(graph.devices or {}) do
       if device.entity == entity then
-        return device, graph
+        local id = (graph.device_network or {})[device.id]
+        return device, id and graph.networks[id]
       end
     end
   end
-  return nil, nil
 end
 
---- Find the network that contains a given device id.
-local function find_network_for_device(graph, device_id)
-  for _, net in ipairs(graph.networks or {}) do
-    for _, lab_id in ipairs(net.labs or {}) do
-      if lab_id == device_id then
-        return net
-      end
-    end
-  end
-  return nil
+local function label(parent, name, caption)
+  return parent.add({ type = "label", name = name, caption = caption })
 end
 
-local function format_number(value)
-  if value >= 1000 then
-    return string.format("%.1fk", value / 1000)
-  end
-  return string.format("%g", value)
-end
-
-local function destroy_gui(player)
-  local frame = player.gui.screen[COMPUTER_GUI]
-  if frame and frame.valid then
-    frame.destroy()
-  end
-  open_entity[player.index] = nil
-end
-
---- Insert a module from the player cursor into a provider slot. Validates
---- that the module type matches the slot category (computer vs memory).
-local function try_insert_module(player, entity, slot_index)
-  local stack = player.cursor_stack
-  if not (stack and stack.valid_for_read) then
-    return false
-  end
-  local layout = slot_layout(entity)
-  local is_compute_slot = slot_index <= layout.computer
-  local name = stack.name
-
-  if is_compute_slot then
-    if not is_compute_module(name) then
-      player.print({ "chiptorio.computer-wrong-slot", "compute" })
-      return false
-    end
-  else
-    if not is_memory_module(name) then
-      player.print({ "chiptorio.computer-wrong-slot", "memory" })
-      return false
-    end
-  end
-
-  local inv = entity.get_module_inventory()
-  if not inv then return false end
-  local slot = inv[slot_index]
-  if slot and slot.valid_for_read and slot.name == name then
-    local room = slot.prototype.stack_size - slot.count
-    local to_move = math.min(stack.count, room)
-    if to_move > 0 then
-      slot.count = slot.count + to_move
-      stack.count = stack.count - to_move
-    end
-  elseif not (slot and slot.valid_for_read) then
-    local to_move = math.min(stack.count, stack.prototype.stack_size)
-    slot.set_stack{ name = name, count = to_move, quality = stack.quality }
-    stack.count = stack.count - to_move
-  else
-    player.print({ "chiptorio.computer-slot-occupied" })
-    return false
-  end
-  return true
-end
-
---- Remove a module from a provider slot into the player cursor.
-local function try_remove_module(player, entity, slot_index)
-  local inv = entity.get_module_inventory()
-  if not inv then return false end
-  local slot = inv[slot_index]
-  if not (slot and slot.valid_for_read) then
-    return false
-  end
-  local stack = player.cursor_stack
-  if stack and stack.valid_for_read then
-    if stack.name == slot.name and stack.count < stack.prototype.stack_size then
-      local room = stack.prototype.stack_size - stack.count
-      local to_move = math.min(slot.count, room)
-      stack.count = stack.count + to_move
-      slot.count = slot.count - to_move
-      if slot.count <= 0 then slot.clear() end
-    else
-      player.print({ "chiptorio.computer-cursor-full" })
-      return false
-    end
-  else
-    stack.set_stack{ name = slot.name, count = slot.count, quality = slot.quality }
-    slot.clear()
-  end
-  return true
-end
-
-local function rebuild_gui(player, entity)
-  destroy_gui(player)
-
-  local frame = player.gui.screen.add({
-    type = "frame",
-    name = COMPUTER_GUI,
-    direction = "vertical",
-    caption = entity.localised_name or entity.name,
-  })
-  frame.auto_center = true
-
-  local body = frame.add({
-    type = "scroll-pane",
-    name = COMPUTER_GUI .. "-body",
-    direction = "vertical",
-  })
-  body.style.maximal_height = 420
-  body.style.minimal_width = 340
-
-  local device, graph = find_device(entity)
-
-  local kind_label = body.add({ type = "label", caption = { "chiptorio.computer-kind", entity.name } })
-  kind_label.style.font = "default-bold"
-  kind_label.style.top_margin = 4
-  kind_label.style.bottom_margin = 4
-
-  body.add({ type = "line" })
-
-  if not device then
-    body.add({ type = "label", caption = { "chiptorio.computer-not-on-network" } })
-  else
-    local net = find_network_for_device(graph, device.id)
-    if net then
-      body.add({ type = "label", caption = { "chiptorio.computer-network", net.id } })
-      body.add({ type = "line" })
-    end
-
-    if device.compute > 0 then
-      local header = body.add({ type = "label", caption = { "chiptorio.computer-compute" } })
-      header.style.font = "default-bold"
-      header.style.top_margin = 4
-
-      if device.scalar > 0 then
-        body.add({ type = "label", caption = { "chiptorio.computer-scalar", format_number(device.scalar) } })
-      end
-      if device.vector > 0 then
-        body.add({ type = "label", caption = { "chiptorio.computer-vector", format_number(device.vector) } })
-      end
-      if device.tensor > 0 then
-        body.add({ type = "label", caption = { "chiptorio.computer-tensor", format_number(device.tensor) } })
-      end
-      if device.quantum > 0 then
-        body.add({ type = "label", caption = { "chiptorio.computer-quantum", format_number(device.quantum) } })
-      end
-      body.add({ type = "label", caption = { "chiptorio.computer-total-compute", format_number(device.compute) } })
-      body.add({ type = "line" })
-    end
-
-    if device.memory > 0 then
-      body.add({ type = "label", caption = { "chiptorio.computer-memory", format_number(device.memory) } })
-    end
-    if device.bandwidth > 0 then
-      body.add({ type = "label", caption = { "chiptorio.computer-bandwidth", format_number(device.bandwidth) } })
-    end
-    if device.memory > 0 or device.bandwidth > 0 then
-      body.add({ type = "line" })
-    end
-
-    if device.kind == "lab" and net then
-      local header = body.add({ type = "label", caption = { "chiptorio.computer-network-labs" } })
-      header.style.font = "default-bold"
-      header.style.top_margin = 4
-
-      body.add({ type = "label", caption = { "chiptorio.computer-labs-on-network", #(net.labs or {}) } })
-
-      local active = 0
-      for _, lab_id in ipairs(net.labs or {}) do
-        local d = graph.devices[lab_id]
-        if d and d.entity and d.entity.valid and not d.entity.disabled_by_script then
-          active = active + 1
-        end
-      end
-      body.add({ type = "label", caption = { "chiptorio.computer-labs-active", active } })
-    end
-
-    -- Module slots: clickable inventory slots. Click with items in hand to
-    -- insert, click filled slot to eject to cursor. Only accepted module
-    -- types can go in each slot (compute vs memory).
+local function update(player, entity)
+  local frame = player.gui.relative[NAME]
+  if not frame then return end
+  local body = frame[NAME .. "-body"]
+  local device, net = find_device(entity)
+  local status = body["status"]
+  status.caption = net and { "chiptorio.computer-network", net.id }
+    or { "chiptorio.computer-connect-cable" }
+  status.style.font_color = net and { 0.6, 1, 0.6 } or { 1, 0.8, 0.4 }
+  local drive = entity.name == "qln-storage-drive"
+  local profile = hardware_profile(entity)
+  body["capacity-title"].caption = drive and { "chiptorio.computer-storage-title" }
+    or profile and { "chiptorio.computer-capacity-title" }
+    or { "chiptorio.computer-demand-title" }
+  if profile then
     local inv = entity.get_inventory(defines.inventory.chest)
-    local module_slots = inv and inv.size or 0
-    if device.kind == "provider" and module_slots > 0 then
-      local layout = slot_layout(entity)
-      local module_header = body.add({ type = "label", caption = { "chiptorio.computer-module-slots" } })
-      module_header.style.font = "default-bold"
-      module_header.style.top_margin = 4
-
-      local module_inv = entity.get_module_inventory()
-      if module_inv then
-        local total = layout.computer + layout.memory
-        for i = 1, total do
-          local is_compute_slot = i <= layout.computer
-          local slot_flow = body.add({ type = "flow", direction = "horizontal" })
-          slot_flow.style.vertical_align = "center"
-
-          local slot_label = slot_flow.add({ type = "label", caption = "Slot " .. i .. ":" })
-          slot_label.style.minimal_width = 60
-
-          local slot = module_inv[i]
-          local has_module = slot and slot.valid_for_read
-
-          -- Clickable sprite-button: click with items in hand to insert,
-          -- click filled slot to eject to cursor.
-          local slot_btn = slot_flow.add({
-            type = "sprite-button",
-            name = COMPUTER_GUI .. "-slot-" .. i,
-            sprite = has_module and ("item/" .. slot.name) or "utility/slot",
-            style = "slot_button",
-          })
-          slot_btn.style.size = 32
-
-          -- Count label.
-          if has_module then
-            local count_label = slot_flow.add({ type = "label", caption = "x" .. slot.count })
-            count_label.style.minimal_width = 30
-          end
-
-          -- Status text.
-          local status_label = slot_flow.add({ type = "label", caption = "" })
-          status_label.style.minimal_width = 220
-
-          if has_module then
-            local name = slot.name
-            local ok = is_compute_slot and is_compute_module(name) or is_memory_module(name)
-            if ok then
-              status_label.caption = { "chiptorio.computer-module-ok" }
-              status_label.style.font_color = { 0.6, 1, 0.6 }
-            else
-              status_label.caption = { "chiptorio.computer-module-wrong" }
-              status_label.style.font_color = { 1, 0.6, 0.6 }
-            end
-          else
-            local hint = is_compute_slot and { "chiptorio.computer-slot-empty-compute" } or { "chiptorio.computer-slot-empty-memory" }
-            status_label.caption = hint
-            status_label.style.font_color = { 0.6, 0.6, 0.6 }
-          end
+    local computers, memory, ignored = 0, 0, 0
+    for i = 1, #inv do
+      local stack = inv[i]
+      if stack.valid_for_read then
+        if meta.COMPUTER_PROFILES[stack.name] then
+          local count = math.min(stack.count, math.max(0, profile.computer_slots - computers))
+          computers = computers + count
+          ignored = ignored + stack.count - count
+        elseif meta.MEMORY_PROFILES[stack.name] then
+          local count = math.min(stack.count, math.max(0, profile.memory_slots - memory))
+          memory = memory + count
+          ignored = ignored + stack.count - count
+        else
+          ignored = ignored + stack.count
         end
       end
-      body.add({ type = "line" })
     end
+    body["hardware"].caption = drive and { "chiptorio.computer-drive-installed", memory, profile.memory_slots }
+      or { "chiptorio.computer-installed", computers, profile.computer_slots, memory, profile.memory_slots }
+    body["warning"].caption = ignored > 0 and { "chiptorio.computer-ignored", ignored }
+      or ((computers + memory == 0) and { "chiptorio.computer-install-hardware" } or "")
+    body["warning"].visible = ignored > 0 or computers + memory == 0
   end
-
-  -- Player inventory: show player's main inventory so items can be dragged
-  -- into rack slots. Click a player slot to pick up, click a rack slot with
-  -- items in hand to insert.
-  local player_inv = player.get_inventory(defines.inventory.character_main)
-  if player_inv and player_inv.valid_for_read then
-    local player_header = body.add({ type = "label", caption = { "chiptorio.computer-player-inventory" } })
-    player_header.style.font = "default-bold"
-    player_header.style.top_margin = 8
-    player_header.style.bottom_margin = 4
-
-    local player_flow = body.add({ type = "flow", direction = "horizontal" })
-    player_flow.style.vertical_align = "center"
-    local player_label = player_flow.add({ type = "label", caption = { "chiptorio.computer-your-inventory" } })
-    player_label.style.font_color = { 0.8, 0.8, 0.8 }
-
-    body.add({ type = "line" })
-
-    -- Player inventory grid: 10 columns
-    local player_cols = 10
-    local row_flow = body.add({ type = "flow", direction = "horizontal" })
-    row_flow.style.vertical_align = "center"
-
-    local col = 0
-    for i = 1, player_inv.get_size() do
-      local stack = player_inv[i]
-      local has_item = stack and stack.valid_for_read
-
-      local slot_btn = row_flow.add({
-        type = "sprite-button",
-        name = COMPUTER_GUI .. "-player-" .. i,
-        sprite = has_item and ("item/" .. stack.name) or "utility/slot",
-        style = "slot_button",
-        tooltip = has_item
-          and stack.prototype.localised_name
-          or { "chiptorio.computer-player-slot-empty" },
-      })
-      slot_btn.style.size = 32
-
-      col = col + 1
-      if col >= player_cols then
-        col = 0
-        row_flow = body.add({ type = "flow", direction = "horizontal" })
-        row_flow.style.vertical_align = "center"
-      end
+  for _, key in ipairs({ "compute", "memory", "bandwidth" }) do
+    local value = device and device[key]
+    if not profile then
+      value = device and device["demand_" .. key]
     end
+    body[key].caption = { "chiptorio.computer-" .. (key == "compute" and "total-compute" or key),
+      device and number(value) or { "chiptorio.computer-unavailable" } }
+    body[key].visible = not drive
   end
-
-  local toolbar = frame.add({ type = "flow", direction = "horizontal" })
-  toolbar.style.horizontally_stretchable = true
-  toolbar.add({
-    type = "button",
-    name = COMPUTER_GUI .. "-close",
-    caption = { "chiptorio.computer-close" },
-  })
-
-  open_entity[player.index] = entity
-  player.opened = frame
-  frame.bring_to_front()
+  body["qln-cells"].visible = drive
+  body["qln-cells"].caption = { "chiptorio.computer-storage-cells",
+    device and number(device.qln_cells) or { "chiptorio.computer-unavailable" } }
+  for _, key in ipairs(meta.COMPUTE_PROFILES) do
+    local field = body["profile-" .. key]
+    local value = device and device[key] or 0
+    field.caption = { "chiptorio.computer-" .. key, number(value) }
+    field.visible = profile ~= nil and value > 0
+  end
+  body["lab-hint"].visible = profile == nil
+  if not profile then
+    body["lab-hint"].caption = entity.name == "metrology-lab"
+      and { "chiptorio.computer-qualification-hint" } or { "chiptorio.computer-research-hint" }
+  end
+  body["capacity-note"].visible = profile ~= nil
+  body["capacity-note"].caption = drive and { "chiptorio.computer-drive-note" }
+    or { "chiptorio.computer-capacity-note" }
 end
 
 function M.on_gui_opened(event)
-  local player = game.players[event.player_index]
-  if not player then
-    return
-  end
+  local player = game.get_player(event.player_index)
+  if not player then return end
+  destroy(player)
   local entity = event.entity
-  if entity and entity.valid and is_computer(entity) then
-    destroy_gui(player)
-    rebuild_gui(player, entity)
+  if not supported(entity) then return end
+  local frame = player.gui.relative.add({
+    type = "frame", name = NAME, direction = "vertical",
+    caption = { "chiptorio.computer-panel-title" },
+    anchor = { gui = entity.type == "container" and defines.relative_gui_type.container_gui
+      or defines.relative_gui_type.lab_gui, position = defines.relative_gui_position.right },
+  })
+  frame.style.width = 300
+  local body = frame.add({ type = "flow", name = NAME .. "-body", direction = "vertical" })
+  body.style.vertical_spacing = 8
+  local status = label(body, "status", "")
+  status.style.font = "default-bold"
+  status.style.single_line = false
+  status.style.maximal_width = 270
+  if hardware_profile(entity) then
+    body.add({ type = "line" })
+    label(body, "hardware-title", { "chiptorio.computer-hardware-title" }).style.font = "default-bold"
+    label(body, "hardware", "")
+    local hint = label(body, "hint", entity.name == "qln-storage-drive"
+      and { "chiptorio.computer-drive-transfer-hint" } or { "chiptorio.computer-transfer-hint" })
+    hint.style.single_line = false
+    hint.style.maximal_width = 270
+    local warning = label(body, "warning", "")
+    warning.style.single_line = false
+    warning.style.maximal_width = 270
+    warning.style.font_color = { 1, 0.8, 0.4 }
   end
+  body.add({ type = "line" })
+  label(body, "capacity-title", { "chiptorio.computer-capacity-title" }).style.font = "default-bold"
+  for _, key in ipairs({ "compute", "memory", "bandwidth" }) do label(body, key, "") end
+  label(body, "qln-cells", "")
+  for _, key in ipairs(meta.COMPUTE_PROFILES) do label(body, "profile-" .. key, "") end
+  local lab_hint = label(body, "lab-hint", "")
+  lab_hint.style.single_line = false
+  lab_hint.style.maximal_width = 270
+  local note = label(body, "capacity-note", { "chiptorio.computer-capacity-note" })
+  note.style.single_line = false
+  note.style.maximal_width = 270
+  update(player, entity)
 end
 
 function M.on_gui_closed(event)
-  local player = game.players[event.player_index]
-  if not player then
-    return
-  end
-  local element = event.element
-  if element and element.valid and element.name == COMPUTER_GUI then
-    destroy_gui(player)
-  end
+  local player = game.get_player(event.player_index)
+  if player then destroy(player) end
 end
 
-function M.on_gui_click(event)
-  local player = game.players[event.player_index]
-  local element = event.element
-  if not (player and element and element.valid) then
-    return
-  end
-
-  if element.name == COMPUTER_GUI .. "-close" then
-    destroy_gui(player)
-    player.opened = nil
-    return
-  end
-
-  -- Module slot click: click with items in hand to insert, click filled slot
-  -- to eject to cursor.
-  local slot_index = tonumber(element.name:match("^" .. COMPUTER_GUI .. "-slot-(%d+)$"))
-  if slot_index then
-    local entity = open_entity[player.index]
-    if not (entity and entity.valid) then
-      player.print({ "chiptorio.computer-gui-closed" })
-      return
-    end
-    local inv = entity.get_module_inventory()
-    if not inv then
-      return
-    end
-    local slot = inv[slot_index]
-    local cursor = player.cursor_stack
-
-    if cursor and cursor.valid_for_read then
-      -- Try to insert cursor item into this slot.
-      local ok = try_insert_module(player, entity, slot_index)
-      if ok then
-        rebuild_gui(player, entity)
-      end
-    elseif slot and slot.valid_for_read then
-      -- Eject slot contents to empty cursor.
-      cursor.set_stack{ name = slot.name, count = slot.count, quality = slot.quality }
-      slot.clear()
-      rebuild_gui(player, entity)
-    end
-    return
-  end
-
-  -- Player inventory slot click: pick up items to cursor.
-  local player_slot_index = tonumber(element.name:match("^" .. COMPUTER_GUI .. "-player-(%d+)$"))
-  if player_slot_index then
-    local entity = open_entity[player.index]
-    if not (entity and entity.valid) then
-      player.print({ "chiptorio.computer-gui-closed" })
-      return
-    end
-    local player_inv = player.get_inventory(defines.inventory.character_main)
-    if not player_inv then
-      return
-    end
-    local stack = player_inv[player_slot_index]
-    local cursor = player.cursor_stack
-
-    if cursor and cursor.valid_for_read then
-      -- Swap: if same item, add to cursor; if different, swap stacks
-      if cursor.name == stack.name then
-        local room = cursor.prototype.stack_size - cursor.count
-        local to_move = math.min(stack.count, room)
-        cursor.count = cursor.count + to_move
-        stack.count = stack.count - to_move
-        if stack.count <= 0 then stack.clear() end
+function M.tick()
+  for _, player in pairs(game.players) do
+    local entity = player.opened
+    if player.opened_gui_type == defines.gui_type.entity and supported(entity) then
+      if not player.gui.relative[NAME] then
+        M.on_gui_opened({ player_index = player.index, entity = entity })
       else
-        local temp = { name = stack.name, count = stack.count, quality = stack.quality }
-        stack.set_stack(cursor.name, cursor.count, cursor.quality)
-        cursor.set_stack(temp.name, temp.count, temp.quality)
+        update(player, entity)
       end
-    else
-      -- Pick up to cursor
-      cursor.set_stack{ name = stack.name, count = stack.count, quality = stack.quality }
-      stack.clear()
+    elseif player.gui.relative[NAME] then
+      destroy(player)
     end
-    rebuild_gui(player, entity)
-    return
   end
 end
 

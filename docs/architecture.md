@@ -64,6 +64,68 @@ consume from QLN storage and read final network capacities.
 - `network_runtime` rebuilds at most once per second. Provider module polling
   uses signature comparison once per second.
 
+## Machine interfaces
+
+`device_visuals` owns working overlays for scripted containers (Metrology Lab,
+Answer Engine, QLN Storage Drive, Quantum Entanglement Core, FOUP Dock, transfer
+nodes and access-point link status). Their simulation owners report actual
+work/online/pair/transfer state. Activity leases expire on the next
+60-tick dispatcher pass; repeated reports reuse the same rendering object. The
+module persists references in `storage`, performs no world scans, registers no
+events, and resets on configuration change. `chiptorio-art.status` exposes active
+art for debug/contract checks. Construction Core art uses native accumulator
+charge/discharge animation, not this overlay.
+
+Import/export/provider art uses actual moved-item counts; blocked nodes stay idle.
+FOUP art follows successful seal/unseal operations. The access point is a
+zero-capacity monitor-role endpoint for link status only: it does not bridge
+segments or grant wireless range. Routers retain the existing wireless behaviour.
+
+The five research labs use native `LabPrototype.on_animation` / `off_animation`
+from Blender-generated sprite definitions. Working/idle selection follows the
+actual lab state (including power and `disabled_by_script`); no scripted lab
+animation overlay is needed. Each has one non-rotatable game view. The Analytical
+Engine footprint is 4×2; the four later labs are 2×2. Working and unlit idle
+frames share the same crop, projected ground origin, scale and sprite shift.
+
+`computer_gui` attaches a read-only relative panel to native provider and lab
+windows. It never replaces `player.opened` or implements item transfers: native
+machine and player inventories retain normal click/quick-transfer behaviour.
+The dispatcher refreshes labels once per second without rebuilding the window.
+No per-player Lua-local entity cache is needed; open windows recover after load
+from `player.opened`, and invalid/closed entities remove their panel.
+
+Providers use `defines.inventory.chest`, including their change signatures.
+Inventory size is the sum of computer and memory bays and does not scale with
+quality. A native custom stack-size limit holds one item per bay without
+changing item stack sizes in player inventories or ordinary chests.
+Only the chassis's computer/memory limits contribute capacity;
+unsupported/excess items remain recoverable and are explicitly reported in the
+panel. When several hardware types exceed the limit, inventory order determines
+which are active. This applies equally to manual and automated transfers.
+
+The QLN Storage Drive follows the same one-item-per-bay rule. Both QLN transport
+and the network descriptor read its chest inventory; drive signatures invalidate
+the network cache when modules change. Its relative panel reports installed
+memory modules and QLN item cells (not research memory).
+
+| Inventory role | Stack policy |
+| --- | --- |
+| Rack, memory bank, datacenter hardware | One item per bay |
+| QLN Storage Drive memory hardware | One item per bay |
+| QLN Requester Node template | One item in its filter slot |
+| Native lab/assembler module inventories, including AI machines | Native single-module slots |
+| Science packs, qualification wafers, manufacturing inputs/outputs | Normal stacks |
+| QLN Provider Node cargo and FOUP Dock buffers | Normal stacks |
+
+AI model selection is runtime configuration (`ai_runtime`), not a chest of
+installed computer modules. It does not require changing Model item stack sizes.
+Ordinary item stack sizes remain unchanged everywhere.
+
+Headless probes verify hardware limits and inventory-change detection. GUI
+probes require a real player and explicitly skip on benchmark-only saves;
+visually check panel placement, quick transfers, and small-screen scaling in-game.
+
 ## Research
 
 - Labs are paused with `disabled_by_script`, never deleted.

@@ -13,6 +13,7 @@ local answer = require("scripts.answer_meta")
 local meta = require("scripts.research_meta")
 local network = require("scripts.runtime.network_runtime")
 local qln = require("scripts.runtime.qln_runtime")
+local device_visuals = require("scripts.runtime.device_visuals")
 
 local M = {}
 
@@ -530,11 +531,14 @@ local function update_record(record)
     return
   end
 
+  local working = false
+
   if record.state == "running" then
     local ok, _, _, scale = check_engine(record)
     if ok then
       local consumed = consume_items(record, scale)
       if consumed then
+        working = true
         record.elapsed = record.elapsed + 60
         record.stability = math.min(1, (record.stability or 1) + 0.01)
         if record.elapsed >= DURATION_TICKS then
@@ -554,6 +558,7 @@ local function update_record(record)
       force_print(entity.force, { "chiptorio.answer-resumed" })
     end
   end
+  device_visuals.set_active(entity, working)
 end
 
 function M.tick()

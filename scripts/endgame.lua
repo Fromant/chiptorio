@@ -70,6 +70,7 @@ local entity = M.make_provider_base({
   max_health = 5000,
 })
 
+M.set_blender_device_graphics(entity, "answer-engine")
 data:extend({ entity })
 
 local item = M.item_proto("wooden-chest", "answer-engine", "chiptorio-computers", "f[answer-engine]")

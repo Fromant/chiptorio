@@ -313,6 +313,65 @@ function M.set_custom_accumulator(entity, name, width, height, scale, shift)
   entity.chargable_graphics = cg
 end
 
+--- Fixed-view Blender art for devices, native crafting and accumulators.
+--- Containers retain their idle body/shadow; runtime
+--- overlays only the working body, never a second shadow. Charge/discharge are
+--- native for accumulators.
+function M.set_blender_device_graphics(entity, name, options)
+  options = options or {}
+  local art = require("graphics.entity." .. name .. ".sprite-def")
+  local idle = M.copy(art.off_animation)
+  for _, layer in ipairs(idle.layers) do
+    layer.frame_count, layer.line_length, layer.repeat_count, layer.animation_speed = nil, nil, nil, nil
+  end
+  local body = M.copy(art.on_animation.layers[1])
+  if entity.type == "accumulator" then
+    entity.chargable_graphics = {
+      picture = idle,
+      charge_animation = M.copy(body),
+      discharge_animation = M.copy(body),
+      charge_animation_is_looped = true,
+      charge_cooldown = 120,
+      discharge_cooldown = 120,
+    }
+  elseif entity.type == "assembling-machine" and options.native_crafting then
+    -- Idle animation needs the same effective frame count as the working loop.
+    local rest = M.copy(art.off_animation)
+    for _, layer in ipairs(rest.layers) do
+      layer.frame_count = 1
+      layer.repeat_count = art.on_animation.layers[1].frame_count
+    end
+    entity.graphics_set = {
+      animation = M.copy(art.on_animation), idle_animation = rest,
+    }
+  else
+    if entity.type == "assembling-machine" then
+      -- Training is scripted, not the cloned assembler's crafting clock.
+      entity.graphics_set = { animation = M.copy(art.off_animation) }
+    elseif entity.type == "lab" then
+      -- Inference is scripted, not vanilla research activity.
+      entity.on_animation = M.copy(art.off_animation)
+      entity.off_animation = M.copy(art.off_animation)
+      entity.light = nil
+    else
+      entity.picture = idle
+    end
+    body.type, body.name = "animation", "chiptorio-device-" .. name
+    data:extend({ body })
+  end
+  entity.flags = M.copy(entity.flags or {})
+  local fixed = false
+  for _, flag in ipairs(entity.flags) do if flag == "not-rotatable" then fixed = true end end
+  if not fixed then entity.flags[#entity.flags + 1] = "not-rotatable" end
+  if not options.preserve_bounds then
+    local width, height = art.footprint[1], art.footprint[2]
+    entity.tile_width, entity.tile_height = width, height
+    entity.collision_box = { { -width / 2 + 0.15, -height / 2 + 0.15 }, { width / 2 - 0.15, height / 2 - 0.15 } }
+    entity.selection_box = { { -width / 2, -height / 2 }, { width / 2, height / 2 } }
+  end
+  entity.drawing_box_vertical_extension = 2
+end
+
 --- Build a from-scratch assembling-machine prototype for Chiptorio devices
 --- that are not factories: compute providers, qualification stations, QLN
 --- storage nodes, the Answer Engine, etc.
@@ -325,16 +384,12 @@ end
 --- Fields set explicitly:
 ---   * identity: type, name, localised_name, localised_description
 ---   * placement: minable, placeable_by, next_upgrade, fast_replaceable_group
----   * visuals: corpse, hidden, hidden_in_factoriopedia, graphics_set
+---   * visuals: corpse, hidden, hidden_in_factoriopedia, picture
 ---   * physics: collision_box, selection_box, drawing_box_vertical_extension,
 ---     tile_width, tile_height
----   * power: energy_usage, energy_source (electric with drain)
----   * crafting: crafting_categories = {"crafting"}, crafting_speed = 0.001
----     (Factorio requires a category and positive speed; 0.001 is effectively
----     no crafting)
----   * modules: module_slots, allowed_module_categories, allowed_effects = nil
----   * inputs: optional list of input item names (for metrology-lab wafers)
----   * misc: max_health, working_sound, water_reflection, icons_positioning
+---   * inventory: inventory_size, optional inventory_stack_size limit and
+---     quality_affects_inventory_size (hardware bays do not grow with quality)
+---   * misc: max_health
 --- Build a from-scratch container prototype for Chiptorio compute providers
 --- and storage nodes. Containers are the correct base type: they have
 --- inventory slots, native direction support, and no crafting/crafting-speed
@@ -357,7 +412,9 @@ function M.make_provider_base(spec)
     -- Inventory slots (0 for pure devices, >0 for providers/storage nodes).
     -- Containers use defines.inventory.chest for inventory access.
     inventory_size = spec.inventory_size or 0,
-    allowed_module_categories = spec.allowed_module_categories or {},
+    inventory_type = spec.inventory_stack_size and "with_custom_stack_size" or nil,
+    inventory_properties = spec.inventory_stack_size and { stack_size_max = spec.inventory_stack_size } or nil,
+    quality_affects_inventory_size = spec.quality_affects_inventory_size,
 
     -- Picture with direction support. Containers use picture.north/east/south/west.
     picture = spec.picture,
@@ -441,65 +498,6 @@ end
 
 M.fluid = function(name, amount)
   return { type = "fluid", name = name, amount = amount }
-end
-
---- Fixed-view Blender art for devices, native crafting and accumulators.
---- Containers retain their idle body/shadow; runtime
---- overlays only the working body, never a second shadow. Charge/discharge are
---- native for accumulators.
-function M.set_blender_device_graphics(entity, name, options)
-  options = options or {}
-  local art = require("graphics.entity." .. name .. ".sprite-def")
-  local idle = M.copy(art.off_animation)
-  for _, layer in ipairs(idle.layers) do
-    layer.frame_count, layer.line_length, layer.repeat_count, layer.animation_speed = nil, nil, nil, nil
-  end
-  local body = M.copy(art.on_animation.layers[1])
-  if entity.type == "accumulator" then
-    entity.chargable_graphics = {
-      picture = idle,
-      charge_animation = M.copy(body),
-      discharge_animation = M.copy(body),
-      charge_animation_is_looped = true,
-      charge_cooldown = 120,
-      discharge_cooldown = 120,
-    }
-  elseif entity.type == "assembling-machine" and options.native_crafting then
-    -- Idle animation needs the same effective frame count as the working loop.
-    local rest = M.copy(art.off_animation)
-    for _, layer in ipairs(rest.layers) do
-      layer.frame_count = 1
-      layer.repeat_count = art.on_animation.layers[1].frame_count
-    end
-    entity.graphics_set = {
-      animation = M.copy(art.on_animation), idle_animation = rest,
-    }
-  else
-    if entity.type == "assembling-machine" then
-      -- Training is scripted, not the cloned assembler's crafting clock.
-      entity.graphics_set = { animation = M.copy(art.off_animation) }
-    elseif entity.type == "lab" then
-      -- Inference is scripted, not vanilla research activity.
-      entity.on_animation = M.copy(art.off_animation)
-      entity.off_animation = M.copy(art.off_animation)
-      entity.light = nil
-    else
-      entity.picture = idle
-    end
-    body.type, body.name = "animation", "chiptorio-device-" .. name
-    data:extend({ body })
-  end
-  entity.flags = M.copy(entity.flags or {})
-  local fixed = false
-  for _, flag in ipairs(entity.flags) do if flag == "not-rotatable" then fixed = true end end
-  if not fixed then entity.flags[#entity.flags + 1] = "not-rotatable" end
-  if not options.preserve_bounds then
-    local width, height = art.footprint[1], art.footprint[2]
-    entity.tile_width, entity.tile_height = width, height
-    entity.collision_box = { { -width / 2 + 0.15, -height / 2 + 0.15 }, { width / 2 - 0.15, height / 2 - 0.15 } }
-    entity.selection_box = { { -width / 2, -height / 2 }, { width / 2, height / 2 } }
-  end
-  entity.drawing_box_vertical_extension = 2
 end
 
 return M

@@ -11,6 +11,7 @@ local ai_meta = require("scripts.ai_meta")
 local meta = require("scripts.research_meta")
 local network = require("scripts.runtime.network_runtime")
 local qln = require("scripts.runtime.qln_runtime")
+local visuals = require("scripts.runtime.device_visuals")
 
 local M = {}
 
@@ -208,6 +209,7 @@ local function tick_training_cluster(record)
     -- Produce one model into QLN storage.
     qln.deposit(entity, model_name, 1)
   end
+  return true
 end
 
 --- Tick one Inference Lab.
@@ -255,6 +257,7 @@ local function tick_inference_lab(record)
   local multipliers = storage.ai.insight_multipliers[force_index] or {}
   multipliers[model_name] = record.insight_until
   storage.ai.insight_multipliers[force_index] = multipliers
+  return true
 end
 
 --- Reconcile Training Cluster records (remove invalid entities).
@@ -302,10 +305,10 @@ function M.tick()
   reconcile_inference_labs()
 
   for _, record in pairs(storage.ai.training_clusters) do
-    tick_training_cluster(record)
+    visuals.set_active(record.entity, tick_training_cluster(record) == true)
   end
   for _, record in pairs(storage.ai.inference_labs) do
-    tick_inference_lab(record)
+    visuals.set_active(record.entity, tick_inference_lab(record) == true)
   end
 end
 

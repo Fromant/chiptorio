@@ -17,6 +17,7 @@ local network = require("scripts.runtime.network_runtime")
 local qmeta = require("scripts.qln_meta")
 local transport = require("scripts.runtime.qln_transport")
 local nodes = require("scripts.process_nodes")
+local visuals = require("scripts.runtime.device_visuals")
 
 local M = {}
 
@@ -130,9 +131,8 @@ local function drive_record(entity)
   return record
 end
 
---- Storage cells installed in one drive. Only the first DRIVE_SLOTS memory
---- modules count; extra modules are stored but ignored, exactly like a
---- provider's slot limit.
+--- Storage cells installed in one drive's single-item hardware bays. Retain
+--- the count cap defensively for inventories from older saves.
 local function drive_capacity(entity)
   local inventory = entity.get_inventory(defines.inventory.chest)
   if not inventory then
@@ -369,6 +369,7 @@ local function collect_force(force, graphs)
           if device.kind == "qln-drive" then
             local record = drive_record(device.entity)
             record.capacity = drive_capacity(device.entity)
+            visuals.set_active(device.entity, record.capacity > 0)
             info.drives[#info.drives + 1] = record
           elseif device.kind == "qln" then
             info.nodes[#info.nodes + 1] = device
@@ -434,6 +435,7 @@ local function group_networks(infos, cores)
 
   local find, union = new_union(#keys)
   local pairs_possible = math.min(math.floor(#cores / 2), qmeta.QUANTUM_PAIRS)
+  local linked = {}
   for pair = 1, pairs_possible do
     local first = cores[pair * 2 - 1]
     local second = cores[pair * 2]
@@ -441,8 +443,11 @@ local function group_networks(infos, cores)
     local second_key = second.qln_network_key
     if first_key and second_key and index[first_key] and index[second_key] then
       union(index[first_key], index[second_key])
+      linked[first.id], linked[second.id] = true, true
     end
   end
+
+  for _, core in ipairs(cores) do visuals.set_active(core.entity, linked[core.id] == true) end
 
   local groups = {}
   for position, key in ipairs(keys) do
@@ -575,7 +580,7 @@ local function import_node(node, drives, count)
         end)
         for _, stack in ipairs(contents) do
           if remaining <= 0 then
-            return
+            return count - remaining
           end
           if other.name ~= FOUP_DOCK or dock_outputs(other, stack.name) then
             local moved = group_insert(drives, stack.name, math.min(stack.count, remaining))
@@ -588,12 +593,13 @@ local function import_node(node, drives, count)
       end
     end
   end
+  return count - remaining
 end
 
 local function provider_node(node, drives, count)
   local inventory = node.entity.get_inventory(defines.inventory.chest)
   if not inventory then
-    return
+    return 0
   end
   local contents = inventory.get_contents()
   table.sort(contents, function(a, b)
@@ -602,7 +608,7 @@ local function provider_node(node, drives, count)
   local remaining = count
   for _, stack in ipairs(contents) do
     if remaining <= 0 then
-      return
+      return count - remaining
     end
     local moved = group_insert(drives, stack.name, math.min(stack.count, remaining))
     if moved > 0 then
@@ -610,17 +616,18 @@ local function provider_node(node, drives, count)
       remaining = remaining - moved
     end
   end
+  return count - remaining
 end
 
 local function export_node(node, drives, count)
   local inventories = collect_inventories(node, ACCEPT_INVENTORIES)
   if #inventories == 0 then
-    return
+    return 0
   end
   local remaining = count
   for _, name in ipairs(transport.sorted_names(group_items(drives))) do
     if remaining <= 0 then
-      return
+      return count - remaining
     end
     local have = group_count(drives, name)
     if have > 0 then
@@ -632,35 +639,37 @@ local function export_node(node, drives, count)
       remaining = remaining - inserted
     end
   end
+  return count - remaining
 end
 
 local function requester_node(node, drives, count)
   local filter = node.entity.get_inventory(defines.inventory.chest)
   if not filter then
-    return
+    return false
   end
   local contents = filter.get_contents()
   local name = contents[1] and contents[1].name
   if not name then
-    return
+    return false
   end
   local inventories = collect_inventories(node, ACCEPT_INVENTORIES)
   if #inventories == 0 then
-    return
+    return false
   end
   local wanted = qmeta.REQUESTER_TARGET - inventory_total(inventories, name)
   if wanted <= 0 then
-    return
+    return false
   end
   wanted = math.min(wanted, count, group_count(drives, name))
   if wanted <= 0 then
-    return
+    return false
   end
   local removed = group_remove(drives, name, wanted)
   local inserted = insert_into_inventories(inventories, name, removed)
   if inserted < removed then
     group_insert(drives, name, removed - inserted)
   end
+  return inserted > 0
 end
 
 local function base_rate(name)
@@ -691,15 +700,17 @@ local function process_transfer_nodes(group)
   for _, node in ipairs(active) do
     local count = math.min(base_rate(node.name), shares[node.id] or 0)
     if count > 0 then
+      local moved = 0
       if node.name == IMPORT then
-        import_node(node, group.drives, count)
+        moved = import_node(node, group.drives, count)
       elseif node.name == PROVIDER then
-        provider_node(node, group.drives, count)
+        moved = provider_node(node, group.drives, count)
       elseif node.name == EXPORT then
-        export_node(node, group.drives, count)
+        moved = export_node(node, group.drives, count)
       elseif node.name == REQUESTER then
-        requester_node(node, group.drives, count)
+        moved = requester_node(node, group.drives, count) and count or 0
       end
+      visuals.set_active(node.entity, (moved or 0) > 0)
     end
   end
 end
@@ -959,9 +970,9 @@ local function process_foup(entity)
     return
   end
   if foup_mode(entity) == "seal" then
-    seal_foup(inventory)
+    visuals.set_active(entity, seal_foup(inventory))
   else
-    unseal_foup(inventory)
+    visuals.set_active(entity, unseal_foup(inventory))
   end
 end
 
@@ -1088,6 +1099,7 @@ end
 local function open_terminal(player, entity)
   close_terminal(player)
   storage.qln.terminals[player.index] = { entity = entity, filter = "" }
+  visuals.set_active(entity, true)
 
   local frame = player.gui.screen.add({
     type = "frame",
@@ -1264,6 +1276,8 @@ local function refresh_open_terminals()
     local player = game.players[index]
     local frame = player and player.gui.screen[TERMINAL_GUI]
     if player and player.valid and frame and frame.valid then
+      local entity = storage.qln.terminals[index].entity
+      if entity and entity.valid then visuals.set_active(entity, true) end
       rebuild_terminal(player)
     else
       storage.qln.terminals[index] = nil

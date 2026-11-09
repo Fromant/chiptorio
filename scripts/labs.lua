@@ -35,7 +35,19 @@ local function make_lab(spec)
   entity.hidden_in_factoriopedia = false
   entity.corpse = nil
   M.set_entity_icon(entity, spec.name)
-  if spec.custom_animation then
+  if spec.blender_sprite then
+    local art = require("graphics.entity." .. spec.name .. ".sprite-def")
+    entity.on_animation = M.copy(art.on_animation)
+    entity.off_animation = M.copy(art.off_animation)
+    entity.light = nil
+    entity.flags = M.copy(entity.flags or {})
+    entity.flags[#entity.flags + 1] = "not-rotatable"
+    local width, height = art.footprint[1], art.footprint[2]
+    entity.tile_width, entity.tile_height = width, height
+    entity.collision_box = { { -width / 2 + 0.15, -height / 2 + 0.15 }, { width / 2 - 0.15, height / 2 - 0.15 } }
+    entity.selection_box = { { -width / 2, -height / 2 }, { width / 2, height / 2 } }
+    entity.drawing_box_vertical_extension = 1
+  elseif spec.custom_animation then
     M.set_custom_animation(entity, spec.custom_animation or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
   elseif spec.tint then
     M.tint_animation(entity.on_animation, spec.tint)
@@ -66,6 +78,7 @@ end
 
 make_lab({
   name = "analytical-engine",
+  blender_sprite = true,
   order = "a[analytical-engine]",
   speed = 0.5,
   power = "240kW",
@@ -85,6 +98,7 @@ make_lab({
 
 make_lab({
   name = "tube-mainframe",
+  blender_sprite = true,
   order = "b[tube-mainframe]",
   speed = 1.0,
   power = "240kW",
@@ -105,6 +119,7 @@ make_lab({
 
 make_lab({
   name = "mainframe-cluster",
+  blender_sprite = true,
   order = "c[mainframe-cluster]",
   speed = 1.75,
   power = "600kW",
@@ -126,6 +141,7 @@ make_lab({
 
 make_lab({
   name = "datacenter-lab",
+  blender_sprite = true,
   order = "d[datacenter-lab]",
   speed = 2.5,
   power = "1.5MW",
@@ -148,6 +164,7 @@ make_lab({
 
 make_lab({
   name = "cryostat",
+  blender_sprite = true,
   order = "e[cryostat]",
   speed = 4.0,
   power = "3MW",

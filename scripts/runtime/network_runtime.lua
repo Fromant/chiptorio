@@ -36,6 +36,7 @@ local METROLOGY = "metrology-lab"
 local ANSWER = "answer-engine"
 local AI_TRAINING = "training-cluster"
 local AI_INFERENCE = "inference-lab"
+local ACCESS_POINT = "wireless-access-point"
 
 local PROVIDER_NAMES = { "server-rack", "memory-bank", "datacenter" }
 
@@ -47,7 +48,7 @@ table.sort(LAB_NAMES)
 
 -- Every entity the network layer tracks. Repeater is dropped; it is folded
 -- into the switch's junction-box role.
-local NETWORK_NAMES = { CABLE, COAXIAL, FIBER_MM, FIBER_SM, SWITCH, ROUTER, MONITOR, METROLOGY, ANSWER, AI_TRAINING, AI_INFERENCE }
+local NETWORK_NAMES = { CABLE, COAXIAL, FIBER_MM, FIBER_SM, SWITCH, ROUTER, MONITOR, METROLOGY, ANSWER, AI_TRAINING, AI_INFERENCE, ACCESS_POINT }
 for _, name in ipairs(PROVIDER_NAMES) do
   NETWORK_NAMES[#NETWORK_NAMES + 1] = name
 end
@@ -85,6 +86,9 @@ local NETWORK_KINDS = {
   [ANSWER] = "answer",
   [AI_TRAINING] = "ai",
   [AI_INFERENCE] = "ai",
+  -- Link-status endpoint only. Actual wireless reach remains the router's;
+  -- this art integration deliberately adds no new routing/bridging behaviour.
+  [ACCESS_POINT] = "monitor",
 }
 for _, name in ipairs(PROVIDER_NAMES) do
   NETWORK_KINDS[name] = "provider"
@@ -311,15 +315,18 @@ local function provider_descriptor(entity)
   local computer_count = 0
   local memory_count = 0
 
-  for _, item in ipairs(inventory.get_contents()) do
-    local computer = meta.COMPUTER_PROFILES[item.name]
-    local memory = meta.MEMORY_PROFILES[item.name]
+  for i = 1, #inventory do
+    local item = inventory[i]
+    local computer = item.valid_for_read and meta.COMPUTER_PROFILES[item.name]
+    local memory = item.valid_for_read and meta.MEMORY_PROFILES[item.name]
     if computer then
-      computer_count = computer_count + item.count
-      add_profile(device, computer, item.count, scaled)
+      local count = math.min(item.count, math.max(0, profile.computer_slots - computer_count))
+      computer_count = computer_count + count
+      add_profile(device, computer, count, scaled)
     elseif memory then
-      memory_count = memory_count + item.count
-      add_profile(device, memory, item.count, scaled)
+      local count = math.min(item.count, math.max(0, profile.memory_slots - memory_count))
+      memory_count = memory_count + count
+      add_profile(device, memory, count, scaled)
     end
   end
 
@@ -352,13 +359,12 @@ local function metrology_descriptor(entity)
   return device
 end
 
---- A Storage Drive contributes QLN item cells, not research memory. It is a
--- lab clone with four memory slots; extra modules beyond the slot count are
--- stored but ignored, exactly like a provider.
+--- A Storage Drive holds one memory module per native chest slot and contributes
+--- QLN item cells, not research memory.
 local function qln_drive_descriptor(entity)
   local device = new_device(entity, "qln-drive")
   device.qln_cells = 0
-  local inventory = entity.get_module_inventory()
+  local inventory = entity.get_inventory(defines.inventory.chest)
   if not inventory then
     return device
   end
@@ -554,9 +560,11 @@ end
 -- of listening to every inventory event. Only a change marks the graph dirty.
 local function provider_signature(surface)
   local parts = {}
-  for _, entity in ipairs(surface.find_entities_filtered({ name = PROVIDER_NAMES })) do
+  for _, entity in ipairs(surface.find_entities_filtered({
+    name = { "server-rack", "memory-bank", "datacenter", "qln-storage-drive" },
+  })) do
     if entity.valid then
-      local inventory = entity.get_module_inventory()
+      local inventory = entity.get_inventory(defines.inventory.chest)
       local contents = {}
       if inventory then
         for _, item in ipairs(inventory.get_contents()) do

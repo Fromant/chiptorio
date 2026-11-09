@@ -98,6 +98,7 @@ M.TRAINING_CLUSTER = {
   modules = 2,
   craft_time = 15,
   order = "a[training-cluster]",
+  blender_sprite = true,
   tint = { r = 0.40, g = 0.60, b = 0.80 },
   ingredients = {
     { type = "item", name = "server", amount = 2 },
@@ -113,6 +114,7 @@ M.INFERENCE_LAB = {
   base_type = "lab",
   base = "lab",
   order = "b[inference-lab]",
+  blender_sprite = true,
   tint = { r = 0.60, g = 0.40, b = 0.80 },
   researching_speed = 1.0,
   energy_usage = "200kW",

@@ -2,7 +2,10 @@ import { test, expect } from '@playwright/test';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { root, directory } from '../../host.mjs';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
+
+// UI fixtures must not inherit a user's active Blender job and disable their controls.
+test.beforeEach(async({page})=>{await page.route('**/api/jobs',route=>route.fulfill({json:[]}));});
 
 test('live catalog filters, inspects, animates and adapts to mobile', async ({ page }) => {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
@@ -41,7 +44,9 @@ test('live catalog filters, inspects, animates and adapts to mobile', async ({ p
 test('export works without the server and loads embedded images', async ({ page }) => {
   const errors = [], external = []; page.on('pageerror', e => errors.push(e.message));
   page.on('request', req => { if (/^https?:/.test(req.url())) external.push(req.url()); });
-  await page.goto(pathToFileURL(path.join(root, 'asset-overview.html')).href);
+  const exported=await page.request.get('/api/export');expect(exported.ok()).toBe(true);
+  const offline=path.join(directory,'.cache/test-offline-export.html');await writeFile(offline,await exported.text());
+  await page.goto(pathToFileURL(offline).href);
   await expect(page.getByRole('heading', { name: 'The graphics atlas.' })).toBeVisible();
   const expected = await page.locator('#asset-data').evaluate(el => JSON.parse(el.textContent).entries.length);
   await expect(page.locator('article.card')).toHaveCount(expected);

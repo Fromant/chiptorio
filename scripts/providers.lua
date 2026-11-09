@@ -59,8 +59,9 @@ local function make_provider(spec)
     minable = { mining_time = 0.5, result = spec.name },
     placeable_by = { item = spec.name, count = 1 },
     fast_replaceable_group = "chiptorio-providers",
-    inventory_size = spec.inventory_size or 0,
-    allowed_module_categories = spec.allowed_module_categories or {},
+    inventory_size = inventory_size,
+    inventory_stack_size = 1,
+    quality_affects_inventory_size = false,
     picture = picture,
     collision_box = spec.collision_box or { { -1.4, -1.4 }, { 1.4, 1.4 } },
     selection_box = spec.selection_box or { { -1.5, -1.5 }, { 1.5, 1.5 } },
@@ -96,8 +97,6 @@ make_provider({
   order = "a[server-rack]",
   craft_time = 12,
   blender_sprite = true,
-  inventory_size = 4,
-  allowed_module_categories = { "chiptorio-computer" },
   ingredients = {
     M.item("steel-plate", 20),
     M.item("electronic-circuit", 10),   -- Control Board
@@ -113,8 +112,6 @@ make_provider({
   size_w = 128,
   size_h = 128,
   scale = 0.5,
-  inventory_size = 4,
-  allowed_module_categories = { "chiptorio-computer" },
   ingredients = {
     M.item("steel-plate", 16),
     M.item("electronic-circuit", 8),    -- Control Board
@@ -130,8 +127,6 @@ make_provider({
   size_w = 160,
   size_h = 160,
   scale = 0.5,
-  inventory_size = 8,
-  allowed_module_categories = { "chiptorio-computer" },
   ingredients = {
     M.item("server-rack", 4),
     M.item("cooling-unit", 8),

@@ -26,7 +26,7 @@ M.DRIVE_CELLS = {
   ["3d-nand-module"] = 262144,
 }
 
--- A Storage Drive is a lab clone with four memory slots. Keeping the slot
+-- A Storage Drive is a container with four single-item memory bays. Keeping the slot
 -- count here means the data stage and the runtime cannot disagree.
 M.DRIVE_SLOTS = 4
 

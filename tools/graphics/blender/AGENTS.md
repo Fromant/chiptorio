@@ -1,5 +1,17 @@
 # Chiptorio — Blender entity pipeline
 
+## Current production workflow (supersedes legacy install/copy instructions below)
+
+Use `tools/asset-studio/assets.json` and the shared Node pipeline described in
+`docs/asset-pipeline.md` for **all** batches and graphics profiles. New geometry is
+a module exporting `build(w)`; no per-batch allowlist, copied renderer or new
+PowerShell wrapper is needed. Builders run only inside source snapshots.
+`npm run pipeline -- build --asset=<id>` stages exact-artifact review candidates;
+`--draft` is optional. Never run legacy `-Install` commands for new production work.
+Visual approval, isolated validation and explicit publication are separate gates.
+Approved assets (especially QLN Terminal) stay locked unless explicitly unlocked.
+The rest of this document records the historical dedicated rack implementation.
+
 This directory holds the standalone Blender pipeline that produces the **3 x 3 twin-bay server enclosure** entity art (rotating fans, blinking lamps, four cardinal directions, ground shadows). The pipeline is 100% working: build → render → pack → install, with no image-generation service and no hand-edited PNGs.
 
 User-facing docs: [`docs/assets.md`](../../docs/assets.md). The canonical model is `server-rack.blend`; `build.py` rebuilds it from native geometry.

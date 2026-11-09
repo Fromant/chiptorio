@@ -1,8 +1,7 @@
 -- QLN prototypes: the pre-quantum Data Bus and the phase-six quantum layer.
 --
--- DESIGN §9. Storage Drives and the Quantum Entanglement Core are built from
--- scratch (assembling-machine prototypes with module slots) because that is
--- the only way to expose a module inventory without research-lab baggage. The Construction Core is an accumulator clone, because it reads
+-- DESIGN §9. Storage Drives and the Quantum Entanglement Core are containers
+-- without crafting/research baggage. The Construction Core is an accumulator clone, because it reads
 -- and spends `entity.energy` while idle. Every other node is a 1x1 container.
 --
 -- The runtime never learns any of these numbers from this file: the tuning
@@ -46,6 +45,11 @@ local function make_node(spec)
   entity.hidden = false
   entity.hidden_in_factoriopedia = false
   entity.inventory_size = spec.inventory_size or 0
+  if spec.inventory_stack_size then
+    entity.inventory_type = "with_custom_stack_size"
+    entity.inventory_properties = { stack_size_max = spec.inventory_stack_size }
+    entity.quality_affects_inventory_size = false
+  end
   Mutil.set_world_picture(entity, donor(spec.donor_type or "container", spec.donor or "wooden-chest"), spec.tint)
   if spec.custom_picture then
     Mutil.set_custom_picture(entity, spec.custom_picture or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
@@ -55,6 +59,7 @@ local function make_node(spec)
   entity.collision_box = spec.collision_box or { { -0.35, -0.35 }, { 0.35, 0.35 } }
   entity.selection_box = spec.selection_box or { { -0.5, -0.5 }, { 0.5, 0.5 } }
   Mutil.set_entity_icon(entity, spec.icon)
+  if spec.blender_sprite then Mutil.set_blender_device_graphics(entity, spec.name) end
   data:extend({ entity })
 
   local item = Mutil.item_from("wooden-chest", spec.name, "chiptorio-qln", spec.order)
@@ -72,8 +77,7 @@ local function make_node(spec)
   })
 end
 
--- The QLN is a from-scratch assembling-machine-based storage machine: it needs
--- module slots for memory cells but must never be usable as a research lab.
+-- Hardware holders use native container inventories, not crafting/module slots.
 local function make_provider_node(spec)
   local entity = Mutil.make_provider_base({
     name = spec.name,
@@ -82,6 +86,8 @@ local function make_provider_node(spec)
     minable = { mining_time = spec.mining_time or 0.5, result = spec.name },
     placeable_by = { item = spec.name, count = 1 },
     inventory_size = spec.inventory_size or 0,
+    inventory_stack_size = spec.inventory_stack_size,
+    quality_affects_inventory_size = spec.quality_affects_inventory_size,
     picture = spec.custom_animation and {
       filename = "__chiptorio__/graphics/entity/" .. spec.custom_animation .. ".png",
       width = spec.size_w or 128,
@@ -93,6 +99,7 @@ local function make_provider_node(spec)
     selection_box = spec.selection_box or { { -1.5, -1.5 }, { 1.5, 1.5 } },
   })
 
+  if spec.blender_sprite then Mutil.set_blender_device_graphics(entity, spec.name) end
   data:extend({ entity })
 
   local item = Mutil.item_proto("wooden-chest", spec.name, "chiptorio-qln", spec.order)
@@ -138,7 +145,9 @@ local function make_accumulator_node(spec)
   entity.energy_source.buffer_capacity = spec.buffer_capacity or qmeta.CONSTRUCTION_BUFFER
   entity.energy_source.input_flow_limit = spec.input_flow_limit or qmeta.CONSTRUCTION_POWER
   Mutil.set_entity_icon(entity, spec.icon)
-  if spec.custom_accumulator then
+  if spec.blender_sprite then
+    Mutil.set_blender_device_graphics(entity, spec.name)
+  elseif spec.custom_accumulator then
     Mutil.set_custom_accumulator(entity, spec.custom_accumulator or spec.name, spec.size_w or 128, spec.size_h or 128, spec.scale or 0.5, spec.shift)
   elseif spec.tint then
     local graphics = entity.chargable_graphics
@@ -178,6 +187,7 @@ end
 
 make_node({
   name = "qln-import-node",
+  blender_sprite = true,
   icon = "qln-import-node",
   order = "a[qln-import]",
   donor = "wooden-chest",
@@ -196,6 +206,7 @@ make_node({
 
 make_node({
   name = "qln-export-node",
+  blender_sprite = true,
   icon = "qln-export-node",
   order = "b[qln-export]",
   donor = "iron-chest",
@@ -214,6 +225,7 @@ make_node({
 
 make_node({
   name = "qln-provider-node",
+  blender_sprite = true,
   icon = "qln-provider-node",
   order = "c[qln-provider]",
   donor = "steel-chest",
@@ -245,6 +257,8 @@ make_node({
   -- One slot holds the filter item. The requester never consumes it; it is the
   -- "request this" template, the same trick as a filtered inserter.
   inventory_size = 1,
+  inventory_stack_size = 1,
+  blender_sprite = true,
   ingredients = {
     Mutil.item("network-cable", 4),
     Mutil.item("advanced-circuit", 4),
@@ -254,15 +268,9 @@ make_node({
 
 make_node({
   name = "qln-terminal",
+  blender_sprite = true,
   icon = "qln-terminal",
   order = "e[qln-terminal]",
-  donor_type = "display-panel",
-  donor = "display-panel",
-  tint = rgba(0.45, 1.0, 0.90),
-  custom_picture = "qln-terminal",
-  size_w = 128,
-  size_h = 128,
-  scale = 0.5,
   craft_time = 6,
   ingredients = {
     Mutil.item("network-monitor", 1),
@@ -273,6 +281,7 @@ make_node({
 
 make_provider_node({
   name = "qln-storage-drive",
+  blender_sprite = true,
   icon = "qln-storage-drive",
   order = "f[qln-storage-drive]",
   craft_time = 8,
@@ -281,6 +290,8 @@ make_provider_node({
   size_h = 128,
   scale = 0.5,
   inventory_size = qmeta.DRIVE_SLOTS,
+  inventory_stack_size = 1,
+  quality_affects_inventory_size = false,
   allowed_module_categories = { "chiptorio-memory" },
   energy_usage = "25kW",
   drain = "5kW",
@@ -295,6 +306,7 @@ make_provider_node({
 
 make_accumulator_node({
   name = "construction-core",
+  blender_sprite = true,
   icon = "construction-core",
   order = "g[construction-core]",
   craft_time = 30,
@@ -317,6 +329,7 @@ make_accumulator_node({
 
 make_provider_node({
   name = "quantum-entanglement-core",
+  blender_sprite = true,
   icon = "quantum-entanglement-core",
   order = "h[quantum-entanglement-core]",
   craft_time = 60,
@@ -339,6 +352,7 @@ make_provider_node({
 
 make_node({
   name = "foup-dock",
+  blender_sprite = true,
   icon = "foup-dock",
   order = "i[foup-dock]",
   donor_type = "constant-combinator",
@@ -359,6 +373,7 @@ make_node({
 
 make_node({
   name = "wireless-access-point",
+  blender_sprite = true,
   icon = "wireless-access-point",
   order = "j[wireless-access-point]",
   donor_type = "display-panel",
