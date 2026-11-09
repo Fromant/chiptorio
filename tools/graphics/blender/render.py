@@ -126,7 +126,14 @@ try:
             bpy.ops.render.render(write_still=True)
             names.append(filename)
         meta['directions'][direction]={'size':size,'files':names,'sprite_scale':sprite_scale if a.game_view or a.fixed_scale else sprite_scale*384/size}
-        if not a.no_shadows:
+    # Render every body before enabling the shadow catcher. Cycles persistent
+    # data can leak a faint catcher alpha into later body views after a shadow pass.
+    if not a.no_shadows:
+        s.render.use_persistent_data=False
+        for direction in requested:
+            turntable.rotation_euler.z=-math.radians(angles[direction])
+            size=a.resolution*(2 if direction=='hero' else 1)
+            s.render.resolution_x=s.render.resolution_y=size
             pose(0)
             ground.hide_render=False
             for o in model:o.visible_camera=False

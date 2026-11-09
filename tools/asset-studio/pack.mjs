@@ -4,11 +4,11 @@ import sharp from 'sharp';
 import { digest } from './registry.mjs';
 
 const union=(a,b)=>!a?b:{left:Math.min(a.left,b.left),top:Math.min(a.top,b.top),right:Math.max(a.right,b.right),bottom:Math.max(a.bottom,b.bottom)};
-async function alpha(file,size) {
+async function alpha(file,size,shadow=false) {
   const {data,info}=await sharp(file).ensureAlpha().raw().toBuffer({resolveWithObject:true});
   if(info.width!==size||info.height!==size)throw new Error('Render dimensions mismatch');
   let left=size,top=size,right=0,bottom=0,mass=0,xsum=0;
-  for(let y=0;y<size;y++)for(let x=0;x<size;x++){const a=data[(y*size+x)*4+3];if(a>8){left=Math.min(left,x);top=Math.min(top,y);right=Math.max(right,x+1);bottom=Math.max(bottom,y+1);mass+=a;xsum+=x*a;}}
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){const a=data[(y*size+x)*4+3];if(a>(shadow?32:8)){left=Math.min(left,x);top=Math.min(top,y);right=Math.max(right,x+1);bottom=Math.max(bottom,y+1);mass+=a;xsum+=x*a;}}
   if(!mass)throw new Error(`Empty sprite: ${path.basename(file)}`);
   if(left<2||top<2||right>size-2||bottom>size-2)throw new Error(`Clipped sprite: ${path.basename(file)}; increase render.resolution, never shrink the physical machine`);
   return {left,top,right,bottom,centroid:xsum/mass};
@@ -35,7 +35,7 @@ export async function pack(asset,renderFolder,output) {
     if(!w||!rest||w.size!==rest.size)throw new Error('Missing render direction');
     const files=w.files.map(f=>path.join(renderFolder,'working',f));
     const still=path.join(renderFolder,'idle',rest.files[0]),shadow=path.join(renderFolder,'idle',`${asset.name}_${view}_shadow.png`);
-    for(const file of [...files,still,shadow]){const b=await alpha(file,w.size);total=union(total,b);if(file!==shadow)body=union(body,b);else if(b.centroid<=w.size/2+.5)throw new Error('Shadow must cast screen-right');}
+    for(const file of [...files,still,shadow]){const b=await alpha(file,w.size,file===shadow);total=union(total,b);if(file!==shadow)body=union(body,b);else if(b.centroid<=w.size/2+.5)throw new Error('Shadow must cast screen-right');}
     sources[view]={files,still,shadow};
   }
   const size=work.directions[views[0]].size;

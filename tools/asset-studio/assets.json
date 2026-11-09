@@ -3006,22 +3006,28 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "legacy-builder",
+        "builder": "tools/graphics/blender/answer-engine/build.py",
+        "model": "tools/graphics/blender/answer-engine/answer-engine.blend",
+        "dependencies": [
+          "tools/graphics/blender/lab_models.py",
+          "tools/graphics/blender/infrastructure_models.py",
+          "tools/graphics/blender/logistics_models.py",
+          "tools/graphics/blender/batch5_models.py",
+          "tools/graphics/blender/batch5_redesign.py"
+        ],
         "placeholder": false
       },
       "render": {
         "frames": 1,
         "period": 48,
         "footprint": [
-          1,
-          1
+          5,
+          5
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3049,22 +3055,24 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/semiconductor/assembly_fab.py",
+        "dependencies": [
+          "tools/graphics/assets/semiconductor/semiconductor_geometry.py",
+          "tools/graphics/assets/semiconductor/review_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
         "frames": 1,
-        "period": 48,
+        "period": 192,
         "footprint": [
-          1,
-          1
+          5,
+          5
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3092,10 +3100,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/bare_die.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch10_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -3105,9 +3114,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3135,10 +3144,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/chiplet.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch10_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -3148,9 +3158,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3178,22 +3188,28 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "legacy-builder",
+        "builder": "tools/graphics/blender/circuit-assembler/build.py",
+        "model": "tools/graphics/blender/circuit-assembler/circuit-assembler.blend",
+        "dependencies": [
+          "tools/graphics/blender/lab_models.py",
+          "tools/graphics/blender/infrastructure_models.py",
+          "tools/graphics/blender/logistics_models.py",
+          "tools/graphics/blender/batch5_models.py",
+          "tools/graphics/blender/batch5_redesign.py"
+        ],
         "placeholder": false
       },
       "render": {
         "frames": 1,
-        "period": 48,
+        "period": 96,
         "footprint": [
-          1,
-          1
+          5,
+          5
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",

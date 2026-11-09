@@ -48,6 +48,11 @@ GPU Cycles too. Geometry construction, dependency evaluation and mesh contact
 checks still run on the CPU; diagnostic logs and reports separate that time
 from GPU image rendering. Renderer/device-only changes preserve model approval
 while invalidating rendered-image caches and final-art approval as appropriate.
+Directional bodies are rendered before any shadow-catcher pass, avoiding Cycles
+persistent-data alpha leaking from a previous shadow pass into later body views.
+Shadow bounds ignore alpha at or below 32/255 to exclude faint catcher noise;
+body bounds retain the strict 8/255 threshold. This changes bounds detection,
+not the source shadow pixels, and avoids repeated full-animation reframing.
 
 From `tools/asset-studio`, run `npm run dev`, open **http://127.0.0.1:4173** and
 review the **Review finished assets** queue. It shows one current full-quality,

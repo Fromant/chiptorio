@@ -37,6 +37,15 @@ test('directional adapter packs every view using the established layers contract
   assert.equal(Object.keys(meta.views).length,4);for(const view of views)assert.ok(lua.includes(`${view}={layers={`));assert.ok(!lua.includes('north={animation='));
 });
 
+test('faint shadow-catcher noise does not trigger full-animation reframing',async t=>{
+  const root=await fixture(t);await renders(root);
+  const file=path.join(root,'idle/fixture_game_shadow.png');
+  const bytes=await sharp(file).composite([{input:await sharp({create:{width:64,height:64,channels:4,background:{r:0,g:0,b:0,alpha:.045}}}).png().toBuffer()}]).png().toBuffer();
+  await writeFile(file,bytes);
+  const asset={name:'fixture',profile:'entity',mode:'native-crafting',render:{footprint:[1,1]},targets:['working.png','idle.png','shadow.png','sprite-def.lua'].map(f=>({artifact:f,path:`graphics/entity/fixture/${f}`}))};
+  const meta=await pack(asset,root,path.join(root,'packed'));assert.ok(meta.width<64);assert.ok(meta.height<64);
+});
+
 test('rotatable native machines retain working and idle animations in every direction',async t=>{
   const root=await fixture(t);await renders(root,true);const out=path.join(root,'packed'),views=['north','east','south','west'];
   const asset={name:'fixture',profile:'entity',mode:'native-crafting',integration:{directional:true},render:{footprint:[1,1],views},targets:[...views.flatMap(v=>['working.png','idle.png','shadow.png'].map(f=>({artifact:`${v}/${f}`,path:`graphics/entity/fixture/${v}-${f}`}))),{artifact:'sprite-def.lua',path:'graphics/entity/fixture/sprite-def.lua'}]};
