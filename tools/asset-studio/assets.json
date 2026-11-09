@@ -3282,12 +3282,9 @@
       "activity": null,
       "source": {
         "format": "python",
-        "builder": "tools/graphics/assets/icons/computer_assembler_focused.py",
+        "builder": "tools/graphics/assets/icons/computer_assembler_nov10.py",
         "dependencies": [
-          "tools/graphics/assets/semiconductor/computer_assembler.py",
-          "tools/graphics/assets/semiconductor/semiconductor_geometry.py",
-          "tools/graphics/assets/semiconductor/review_geometry.py",
-          "tools/graphics/assets/icons/focused_machine_geometry.py"
+          "tools/graphics/assets/icons/nov10_geometry.py"
         ],
         "placeholder": false
       },
@@ -3965,9 +3962,9 @@
       "activity": null,
       "source": {
         "format": "python",
-        "builder": "tools/graphics/assets/icons/discrete_transistor.py",
+        "builder": "tools/graphics/assets/icons/discrete_transistor_nov10.py",
         "dependencies": [
-          "tools/graphics/assets/icons/review_revision_geometry.py"
+          "tools/graphics/assets/icons/nov10_geometry.py"
         ],
         "placeholder": false
       },
@@ -4542,8 +4539,9 @@
       "activity": null,
       "source": {
         "format": "python",
-        "builder": "tools/graphics/assets/icons/gpu.py",
+        "builder": "tools/graphics/assets/icons/gpu_nov10.py",
         "dependencies": [
+          "tools/graphics/assets/icons/nov10_geometry.py",
           "tools/graphics/assets/icons/review_revision_geometry.py"
         ],
         "placeholder": false
@@ -4585,10 +4583,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/hbm_module_nov10.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/nov10_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4598,9 +4597,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4628,10 +4627,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/hbm_science_nov10.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/nov10_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4641,9 +4641,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4671,10 +4671,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/hbm_stack_nov10.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/nov10_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4684,9 +4685,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4714,10 +4715,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/hbm3_module_nov10.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/nov10_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -4727,9 +4729,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -4757,22 +4759,28 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "legacy-builder",
+        "builder": "tools/graphics/blender/inference-lab/build.py",
+        "model": "tools/graphics/blender/inference-lab/inference-lab.blend",
+        "dependencies": [
+          "tools/graphics/blender/lab_models.py",
+          "tools/graphics/blender/infrastructure_models.py",
+          "tools/graphics/blender/logistics_models.py",
+          "tools/graphics/blender/batch5_models.py",
+          "tools/graphics/blender/batch5_redesign.py"
+        ],
         "placeholder": false
       },
       "render": {
         "frames": 1,
-        "period": 48,
+        "period": 64,
         "footprint": [
-          1,
-          1
+          7,
+          7
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
