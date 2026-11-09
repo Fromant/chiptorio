@@ -3237,10 +3237,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/cmp_slurry.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch11_12_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -3250,9 +3251,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3280,22 +3281,24 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/semiconductor/computer_assembler.py",
+        "dependencies": [
+          "tools/graphics/assets/semiconductor/semiconductor_geometry.py",
+          "tools/graphics/assets/semiconductor/review_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
         "frames": 1,
-        "period": 48,
+        "period": 192,
         "footprint": [
-          1,
-          1
+          5,
+          5
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3323,22 +3326,28 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "legacy-builder",
+        "builder": "tools/graphics/blender/construction-core/build.py",
+        "model": "tools/graphics/blender/construction-core/construction-core.blend",
+        "dependencies": [
+          "tools/graphics/blender/lab_models.py",
+          "tools/graphics/blender/infrastructure_models.py",
+          "tools/graphics/blender/logistics_models.py",
+          "tools/graphics/blender/batch5_models.py",
+          "tools/graphics/blender/batch5_redesign.py"
+        ],
         "placeholder": false
       },
       "render": {
         "frames": 1,
         "period": 48,
         "footprint": [
-          1,
-          1
+          2,
+          2
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3366,10 +3375,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/coolant.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch11_12_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -3379,9 +3389,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3409,22 +3419,23 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/infrastructure/cooling_tower.py",
+        "dependencies": [
+          "tools/graphics/assets/infrastructure/common.py"
+        ],
         "placeholder": false
       },
       "render": {
         "frames": 1,
-        "period": 48,
+        "period": 192,
         "footprint": [
-          1,
-          1
+          7,
+          7
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3452,10 +3463,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/cooling_unit.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch11_12_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -3465,9 +3477,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3495,10 +3507,11 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/icons/cryogen.py",
+        "dependencies": [
+          "tools/graphics/assets/icons/batch11_12_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
@@ -3508,9 +3521,9 @@
           1,
           1
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3538,22 +3551,28 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "legacy-builder",
+        "builder": "tools/graphics/blender/cryostat/build.py",
+        "model": "tools/graphics/blender/cryostat/cryostat.blend",
+        "dependencies": [
+          "tools/graphics/blender/lab_models.py",
+          "tools/graphics/blender/infrastructure_models.py",
+          "tools/graphics/blender/logistics_models.py",
+          "tools/graphics/blender/batch5_models.py",
+          "tools/graphics/blender/batch5_redesign.py"
+        ],
         "placeholder": false
       },
       "render": {
         "frames": 1,
         "period": 48,
         "footprint": [
-          1,
-          1
+          2,
+          2
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3581,22 +3600,24 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "python",
+        "builder": "tools/graphics/assets/semiconductor/crystal_puller.py",
+        "dependencies": [
+          "tools/graphics/assets/semiconductor/semiconductor_geometry.py",
+          "tools/graphics/assets/semiconductor/review_geometry.py"
+        ],
         "placeholder": false
       },
       "render": {
         "frames": 1,
-        "period": 48,
+        "period": 192,
         "footprint": [
-          1,
-          1
+          5,
+          5
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
@@ -3624,22 +3645,28 @@
       "prototype": null,
       "activity": null,
       "source": {
-        "format": "unconfigured",
-        "builder": null,
-        "model": null,
-        "dependencies": [],
+        "format": "legacy-builder",
+        "builder": "tools/graphics/blender/datacenter-lab/build.py",
+        "model": "tools/graphics/blender/datacenter-lab/datacenter-lab.blend",
+        "dependencies": [
+          "tools/graphics/blender/lab_models.py",
+          "tools/graphics/blender/infrastructure_models.py",
+          "tools/graphics/blender/logistics_models.py",
+          "tools/graphics/blender/batch5_models.py",
+          "tools/graphics/blender/batch5_redesign.py"
+        ],
         "placeholder": false
       },
       "render": {
         "frames": 1,
         "period": 48,
         "footprint": [
-          1,
-          1
+          2,
+          2
         ],
-        "samples": 32,
+        "samples": 64,
         "draftSamples": 8,
-        "resolution": 512,
+        "resolution": 1024,
         "width": 64,
         "height": 64,
         "fit": "contain",
